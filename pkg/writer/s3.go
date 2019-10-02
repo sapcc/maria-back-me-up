@@ -1,0 +1,249 @@
+/**
+ * Copyright 2019 SAP SE
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package writer
+
+import (
+	"archive/tar"
+	"compress/gzip"
+	"errors"
+	"fmt"
+	"io"
+	"mime"
+	"os"
+	"path"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/prometheus/common/log"
+	"github.com/sapcc/maria-back-me-up/pkg/config"
+)
+
+type S3 struct {
+	cfg     config.S3
+	session *session.Session
+}
+
+func NewS3(c config.S3) (s3 *S3, err error) {
+	s, err := session.NewSession(&aws.Config{
+		Endpoint:    aws.String(c.AwsEndpoint),
+		Region:      aws.String(c.Region),
+		Credentials: credentials.NewStaticCredentials(c.AwsAccessKeyID, c.AwsSecretAccessKey, ""),
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return &S3{
+		cfg:     c,
+		session: s,
+	}, err
+}
+
+func (s *S3) WriteBytes(f string, b []byte) (err error) {
+	pr, pw := io.Pipe()
+	go func() {
+		gw := gzip.NewWriter(pw)
+		_, err := gw.Write(b)
+		gw.Close()
+		pw.Close()
+		if err != nil {
+			log.Fatalln("Failed to upload", err)
+		}
+	}()
+
+	uploader := s3manager.NewUploader(s.session)
+	result, err := uploader.Upload(&s3manager.UploadInput{
+		Body:   pr,
+		Bucket: aws.String(s.cfg.BucketName),
+		Key:    aws.String(path.Join(s.cfg.ServiceName, f)),
+	})
+	if err != nil {
+		log.Fatalln("Failed to upload", err)
+	}
+
+	log.Infoln("Successfully uploaded to", result.Location)
+
+	return nil
+}
+
+func (s *S3) WriteFile(path string) {
+	fn := filepath.Dir(path)
+	extension := filepath.Ext(path)
+	mimeType := mime.TypeByExtension(extension)
+	body, err := os.Open(path)
+	fmt.Println(fn, path, body)
+	if err != nil {
+		log.Error(err)
+	} else {
+		err := s.WriteStream(fn, mimeType, body)
+		if err != nil {
+			log.Error(err)
+		}
+	}
+}
+
+func (s *S3) WriteFolder(p string) (err error) {
+	r, err := s.zipFolderPath(p)
+	if err != nil {
+		return
+	}
+	filepath.Base(p)
+	return s.WriteStream(path.Join(filepath.Base(p), "dump.tar"), "zip", r)
+}
+
+func (s *S3) WriteStream(name, mimeType string, body io.Reader) (err error) {
+	fmt.Println("UPLOADING", name)
+
+	uploader := s3manager.NewUploader(s.session, func(u *s3manager.Uploader) {
+		u.PartSize = 20 << 20 // 20MB
+		u.MaxUploadParts = 10000
+	})
+	input := s3manager.UploadInput{
+		Bucket: aws.String(s.cfg.BucketName),
+		Key:    aws.String(path.Join(s.cfg.ServiceName, name)),
+		Body:   body,
+		//ContentType: &mimeType,
+	}
+	_, err = uploader.Upload(&input)
+
+	return
+}
+
+func (s *S3) GetBackupByTimestamp(t time.Time) (path string, err error) {
+	var backup *s3.Object
+	minAge := -100.0
+	svc := s3.New(s.session)
+	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(s.cfg.ServiceName + "/")})
+	if err != nil {
+		return
+	}
+
+	for _, listObj := range listRes.Contents {
+		if err != nil {
+			continue
+		}
+		if t.Before(*listObj.LastModified) {
+			age := t.Sub(*listObj.LastModified).Minutes()
+			log.Info("BEFORE", age, *listObj.Key)
+			if age > minAge {
+				minAge = age
+				backup = listObj
+			}
+			continue
+		}
+		if t.After(*listObj.LastModified) {
+			continue
+		}
+	}
+
+	if backup == nil {
+		return path, errors.New("No backup found for given time")
+	}
+	listRes, err = svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(*backup.Key)})
+	if err != nil {
+		return
+	}
+	for _, listObj := range listRes.Contents {
+		if !strings.HasSuffix(*listObj.Key, "/") {
+			if t.Before(*listObj.LastModified) {
+				log.Info(*listObj.Key)
+				s.downloadFile("./restore", listObj)
+			}
+		}
+	}
+	path = *backup.Key
+	return
+}
+
+func (s *S3) downloadFile(path string, obj *s3.Object) (err error) {
+	fmt.Println(filepath.Join(path, *obj.Key))
+	file, err := os.Create(filepath.Join(path, *obj.Key))
+	if err != nil {
+		fmt.Printf("Error in downloading from file: %v \n", err)
+		os.Exit(1)
+	}
+
+	defer file.Close()
+	// Create a downloader with the session and custom options
+	downloader := s3manager.NewDownloader(s.session, func(d *s3manager.Downloader) {
+		d.PartSize = 64 * 1024 * 1024 // 64MB per part
+		d.Concurrency = 6
+	})
+	_, err = downloader.Download(file,
+		&s3.GetObjectInput{
+			Bucket: aws.String(s.cfg.BucketName),
+			Key:    aws.String(*obj.Key),
+		})
+	return
+}
+
+func (s *S3) zipFolderPath(pathToZip string) (pr *io.PipeReader, err error) {
+	dir, err := os.Open(pathToZip)
+	if err != nil {
+		return
+	}
+	defer dir.Close()
+
+	// get list of files
+	files, err := dir.Readdir(0)
+	if err != nil {
+		return
+	}
+
+	pr, pw := io.Pipe()
+	tarfileWriter := tar.NewWriter(pw)
+	go func() {
+		for _, fileInfo := range files {
+
+			if fileInfo.IsDir() {
+				continue
+			}
+
+			file, err := os.Open(dir.Name() + string(filepath.Separator) + fileInfo.Name())
+			if err != nil {
+				return
+			}
+			defer file.Close()
+
+			// prepare the tar header
+			header := new(tar.Header)
+			header.Name = filepath.Base(file.Name())
+			header.Size = fileInfo.Size()
+			header.Mode = int64(fileInfo.Mode())
+			header.ModTime = fileInfo.ModTime()
+
+			err = tarfileWriter.WriteHeader(header)
+			if err != nil {
+				return
+			}
+
+			_, err = io.Copy(tarfileWriter, file)
+			if err != nil {
+				return
+			}
+		}
+		tarfileWriter.Close()
+		pw.Close()
+	}()
+	return
+}
