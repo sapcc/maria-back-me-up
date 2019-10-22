@@ -1,23 +1,36 @@
-package discovery
+package server
 
 import (
+	"context"
 	"net/http"
 
+	"github.com/labstack/echo"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/sapcc/maria-back-me-up/pkg/log"
 )
 
 type Server struct {
+	echo *echo.Echo
 }
 
-func NewServer() *Server {
-	return &Server{}
+func NewServer(e *echo.Echo) *Server {
+	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
+	return &Server{
+		echo: e,
+	}
 }
 
-func (s *Server) Start() {
-	http.Handle("/metrics", promhttp.Handler())
-	http.HandleFunc("/healthz", s.health)
-	if err := http.ListenAndServe(":8080", nil); err != nil {
-		panic(err)
+func (s *Server) Start() (err error) {
+	if err = s.echo.Start(":8081"); err != nil {
+		log.Error("shutting down the server")
+		return
+	}
+	return
+}
+
+func (s *Server) Stop(ctx context.Context) {
+	if err := s.echo.Shutdown(ctx); err != nil {
+		log.Fatal(err)
 	}
 }
 

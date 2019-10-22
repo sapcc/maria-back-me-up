@@ -22,16 +22,16 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/labstack/echo"
 	"github.com/namsral/flag"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sapcc/maria-back-me-up/pkg/backup"
-	"github.com/sapcc/maria-back-me-up/pkg/restore"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	log "github.com/sapcc/maria-back-me-up/pkg/log"
 	"github.com/sapcc/maria-back-me-up/pkg/metrics"
+	"github.com/sapcc/maria-back-me-up/pkg/route"
+	"github.com/sapcc/maria-back-me-up/pkg/server"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 )
 
 var opts config.Options
@@ -48,8 +48,6 @@ func init() {
 }
 
 func main() {
-	// Echo instance
-	e := echo.New()
 	cfg, err := config.GetConfig(opts)
 	if err != nil {
 		log.Fatal("cannot load config file")
@@ -61,19 +59,36 @@ func main() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGSTOP)
 
-	u := make(chan []string, 50)
-	errCh := make(chan error, 0)
-	m := backup.NewMaria(cfg)
+	m, err := backup.NewManager(cfg)
+	if err != nil {
+		log.Fatal("cannot create backup handler: ", err.Error())
+	}
 
 	prometheus.MustRegister(metrics.NewMetricsCollector(cfg.MariaDB))
-	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
-	restore.NewMaria(cfg, e)
 
-	go m.RunBackup(ctx, u, errCh)
-	// Start server
+	//_ = restore.NewRestore(cfg, s3, b)
+	//if err != nil {
+	//	log.Fatal("cannot create restore handler", err.Error())
+	//}
+
+	//v, err := backup.NewVerifier("test")
+	//v.CreateMariaService()
+	e := route.Init(m)
+	var eg errgroup.Group
+	s := server.NewServer(e)
+	eg.Go(func() error {
+		return s.Start()
+	})
+	eg.Go(func() error {
+		return m.StartBackup()
+	})
+	eg.Go(func() error {
+		return m.StartVerifyBackup(ctx)
+	})
+
 	go func() {
-		if err := e.Start(":1323"); err != nil {
-			e.Logger.Info("shutting down the server")
+		if err = eg.Wait(); err != nil {
+			log.Fatal(err)
 		}
 	}()
 
@@ -83,9 +98,8 @@ func main() {
 
 	select {
 	case <-c:
-		if err := e.Shutdown(ctx); err != nil {
-			e.Logger.Fatal(err)
-		}
+		s.Stop(ctx)
+		m.StopBackup()
 		cancel()
 	case <-ctx.Done():
 	}

@@ -13,62 +13,51 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package health
+package backup
 
 import (
+	"fmt"
 	"os/exec"
 	"strconv"
 	"strings"
 
 	"github.com/sapcc/maria-back-me-up/pkg/config"
-	"github.com/sapcc/maria-back-me-up/pkg/log"
 )
-
-type Maria struct {
-	cfg    config.MariaDB
-	Status Status
-}
 
 type Status struct {
 	Ok      bool
 	Details map[string]int
 }
 
-func NewMaria(c config.MariaDB) *Maria {
-	return &Maria{
-		cfg: c,
-		Status: Status{
-			Ok:      true,
-			Details: make(map[string]int, 0),
-		},
+func HealthCheck(c config.MariaDB) (status Status, err error) {
+	status = Status{
+		Ok:      true,
+		Details: make(map[string]int, 0),
 	}
-}
-
-func (m *Maria) Check() (status Status, err error) {
 	cmd := exec.Command("mysqlcheck",
 		"-A",
-		"-u"+m.cfg.User,
-		"-p"+m.cfg.Password,
-		"-h"+m.cfg.Host,
-		"-P"+strconv.Itoa(m.cfg.Port),
+		"-u"+c.User,
+		"-p"+c.Password,
+		"-h"+c.Host,
+		"-P"+strconv.Itoa(c.Port),
 	)
 
 	out, err := cmd.Output()
 	if err != nil {
-		log.Error("mysqlcheck failed with %s\n", err)
-		return
+		status.Ok = false
+		return status, fmt.Errorf("mysqlcheck failed with %s", err)
 	}
 	outa := strings.Fields(string(out))
 	for i := 0; i < len(outa)-1; i++ {
 		if i%2 == 0 {
 			if outa[i+1] == "OK" {
-				m.Status.Details[outa[i]] = 1
+				status.Details[outa[i]] = 1
 			} else {
-				m.Status.Ok = false
-				m.Status.Details[outa[i]] = 0
+				status.Ok = false
+				status.Details[outa[i]] = 0
 			}
 		}
 	}
 
-	return m.Status, err
+	return
 }

@@ -24,12 +24,15 @@ import (
 )
 
 type Config struct {
-	Version           string  `yaml:"version"`
-	MariaDB           MariaDB `yaml:"maria_db"`
-	S3                S3      `yaml:"s3"`
-	BackupDir         string  `yaml:"backup_dir"`
-	AutomaticRecovery bool    `yaml:"automatic_recovery"`
-	IntervalInSeconds int     `yaml:"interval_in_seconds"`
+	Version                            string  `yaml:"version"`
+	MariaDB                            MariaDB `yaml:"maria_db"`
+	S3                                 S3      `yaml:"s3"`
+	BackupDir                          string  `yaml:"backup_dir"`
+	AutomaticRecovery                  bool    `yaml:"automatic_recovery"`
+	ServiceName                        string  `yaml:"service_name"`
+	FullBackupIntervalInSeconds        int     `yaml:"full_backup_interval_in_seconds"`
+	IncrementalBackupIntervalInSeconds int     `yaml:"incremental_backup_interval_in_seconds"`
+	VerifyBackupIntervalInSeconds      int     `yaml:"verify_backup_interval_in_seconds"`
 }
 
 type MariaDB struct {
@@ -47,7 +50,6 @@ type S3 struct {
 	AwsEndpoint        string `yaml:"aws_endpoint"`
 	Region             string `yaml:"region"`
 	BucketName         string `yaml:"bucket_name"`
-	ServiceName        string `yaml:"service_name"`
 }
 
 func GetConfig(opts Options) (cfg Config, err error) {

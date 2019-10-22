@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package writer
+package storage
 
 import (
 	"archive/tar"
@@ -39,11 +39,12 @@ import (
 )
 
 type S3 struct {
-	cfg     config.S3
-	session *session.Session
+	cfg         config.S3
+	session     *session.Session
+	serviceName string
 }
 
-func NewS3(c config.S3) (s3 *S3, err error) {
+func NewS3(c config.S3, sn string) (s3 *S3, err error) {
 	s, err := session.NewSession(&aws.Config{
 		Endpoint:    aws.String(c.AwsEndpoint),
 		Region:      aws.String(c.Region),
@@ -54,8 +55,9 @@ func NewS3(c config.S3) (s3 *S3, err error) {
 	}
 
 	return &S3{
-		cfg:     c,
-		session: s,
+		cfg:         c,
+		session:     s,
+		serviceName: sn,
 	}, err
 }
 
@@ -67,39 +69,37 @@ func (s *S3) WriteBytes(f string, b []byte) (err error) {
 		gw.Close()
 		pw.Close()
 		if err != nil {
-			log.Fatalln("Failed to upload", err)
+			fmt.Errorf("WriteBytes: Failed to upload to s3. Error: %s", err.Error())
 		}
 	}()
-
 	uploader := s3manager.NewUploader(s.session)
 	result, err := uploader.Upload(&s3manager.UploadInput{
 		Body:   pr,
 		Bucket: aws.String(s.cfg.BucketName),
-		Key:    aws.String(path.Join(s.cfg.ServiceName, f)),
+		Key:    aws.String(path.Join(s.serviceName, f)),
 	})
 	if err != nil {
-		log.Fatalln("Failed to upload", err)
+		return fmt.Errorf("WriteBytes: Failed to upload to s3. Error: %s", err.Error())
 	}
-
 	log.Infoln("Successfully uploaded to", result.Location)
 
-	return nil
+	return
 }
 
-func (s *S3) WriteFile(path string) {
+func (s *S3) WriteFile(path string) (err error) {
 	fn := filepath.Dir(path)
 	extension := filepath.Ext(path)
 	mimeType := mime.TypeByExtension(extension)
 	body, err := os.Open(path)
 	fmt.Println(fn, path, body)
 	if err != nil {
-		log.Error(err)
-	} else {
-		err := s.WriteStream(fn, mimeType, body)
-		if err != nil {
-			log.Error(err)
-		}
+		return
 	}
+	err = s.WriteStream(fn, mimeType, body)
+	if err != nil {
+		return err
+	}
+	return
 }
 
 func (s *S3) WriteFolder(p string) (err error) {
@@ -112,28 +112,88 @@ func (s *S3) WriteFolder(p string) (err error) {
 }
 
 func (s *S3) WriteStream(name, mimeType string, body io.Reader) (err error) {
-	fmt.Println("UPLOADING", name)
-
 	uploader := s3manager.NewUploader(s.session, func(u *s3manager.Uploader) {
 		u.PartSize = 20 << 20 // 20MB
 		u.MaxUploadParts = 10000
 	})
 	input := s3manager.UploadInput{
 		Bucket: aws.String(s.cfg.BucketName),
-		Key:    aws.String(path.Join(s.cfg.ServiceName, name)),
+		Key:    aws.String(path.Join(s.serviceName, name)),
 		Body:   body,
 		//ContentType: &mimeType,
 	}
 	_, err = uploader.Upload(&input)
+	if err != nil {
+		err = fmt.Errorf("WriteStream: Failed to upload to s3. Error: %s", err.Error())
+		return err
+	}
+	return
+}
+
+func (s *S3) WriteStreamConcurrent(name, mimeType string, body io.Reader, errc chan<- *error) {
+	uploader := s3manager.NewUploader(s.session, func(u *s3manager.Uploader) {
+		u.PartSize = 20 << 20 // 20MB
+		u.MaxUploadParts = 10000
+	})
+	input := s3manager.UploadInput{
+		Bucket: aws.String(s.cfg.BucketName),
+		Key:    aws.String(path.Join(s.serviceName, name)),
+		Body:   body,
+		//ContentType: &mimeType,
+	}
+	_, err := uploader.Upload(&input)
+	if err != nil {
+		err = fmt.Errorf("WriteStream: Failed to upload to s3. Error: %s", err.Error())
+		errc <- &err
+	} else {
+		errc <- nil
+	}
+	close(errc)
+}
+
+func (s *S3) GetLatestBackup() (path string, err error) {
+	var newestBackup *s3.Object
+	var newestTime int64 = 0
+	svc := s3.New(s.session)
+	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(s.serviceName + "/")})
+	if err != nil {
+		return
+	}
+	for _, listObj := range listRes.Contents {
+		if err != nil {
+			continue
+		}
+
+		if strings.Contains(*listObj.Key, "dump.tar") {
+			currTime := listObj.LastModified.Unix()
+			if currTime > newestTime {
+				newestTime = currTime
+				newestBackup = listObj
+			}
+		}
+	}
+
+	listRes, err = svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.Replace(*newestBackup.Key, "dump.tar", "", -1))})
+	if err != nil {
+		return
+	}
+
+	for _, listObj := range listRes.Contents {
+		if !strings.HasSuffix(*listObj.Key, "/") {
+			log.Info(*listObj.Key)
+			s.downloadFile("./restore", listObj)
+		}
+	}
+	path = *newestBackup.Key
 
 	return
 }
 
 func (s *S3) GetBackupByTimestamp(t time.Time) (path string, err error) {
 	var backup *s3.Object
-	minAge := -100.0
+	minAge := 100.0
 	svc := s3.New(s.session)
-	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(s.cfg.ServiceName + "/")})
+	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(s.serviceName + "/")})
 	if err != nil {
 		return
 	}
@@ -142,10 +202,10 @@ func (s *S3) GetBackupByTimestamp(t time.Time) (path string, err error) {
 		if err != nil {
 			continue
 		}
-		if t.Before(*listObj.LastModified) {
+
+		if strings.Contains(*listObj.Key, "dump.tar") && t.After(*listObj.LastModified) {
 			age := t.Sub(*listObj.LastModified).Minutes()
-			log.Info("BEFORE", age, *listObj.Key)
-			if age > minAge {
+			if age < minAge {
 				minAge = age
 				backup = listObj
 			}
@@ -157,15 +217,17 @@ func (s *S3) GetBackupByTimestamp(t time.Time) (path string, err error) {
 	}
 
 	if backup == nil {
-		return path, errors.New("No backup found for given time")
+		return path, errors.New("No backup found for given timestamp")
 	}
-	listRes, err = svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(*backup.Key)})
+
+	listRes, err = svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.Replace(*backup.Key, "dump.tar", "", -1))})
 	if err != nil {
 		return
 	}
+
 	for _, listObj := range listRes.Contents {
 		if !strings.HasSuffix(*listObj.Key, "/") {
-			if t.Before(*listObj.LastModified) {
+			if listObj.LastModified.Before(t) {
 				log.Info(*listObj.Key)
 				s.downloadFile("./restore", listObj)
 			}
@@ -176,11 +238,13 @@ func (s *S3) GetBackupByTimestamp(t time.Time) (path string, err error) {
 }
 
 func (s *S3) downloadFile(path string, obj *s3.Object) (err error) {
-	fmt.Println(filepath.Join(path, *obj.Key))
+	err = os.MkdirAll(filepath.Join(path, filepath.Dir(*obj.Key)), os.ModePerm)
+	if err != nil {
+		return
+	}
 	file, err := os.Create(filepath.Join(path, *obj.Key))
 	if err != nil {
-		fmt.Printf("Error in downloading from file: %v \n", err)
-		os.Exit(1)
+		return fmt.Errorf("error in downloading from file: %v", err)
 	}
 
 	defer file.Close()

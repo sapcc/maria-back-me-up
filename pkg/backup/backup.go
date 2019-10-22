@@ -1,0 +1,179 @@
+package backup
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path"
+	"strconv"
+	"time"
+
+	"github.com/docker/docker/client"
+	"github.com/sapcc/maria-back-me-up/pkg/config"
+	"github.com/sapcc/maria-back-me-up/pkg/log"
+	"github.com/sapcc/maria-back-me-up/pkg/storage"
+	"github.com/siddontang/go-mysql/mysql"
+	"github.com/siddontang/go-mysql/replication"
+	"golang.org/x/sync/errgroup"
+)
+
+const (
+	FullBackup = 0
+	IncBackup  = 2
+)
+
+type (
+	Backup struct {
+		cfg     config.Config
+		docker  *client.Client
+		storage storage.Storage
+		updatec chan<- Update
+	}
+	metadata struct {
+		Status binlog `yaml:"SHOW MASTER STATUS"`
+	}
+	binlog struct {
+		Log  string `yaml:"Log"`
+		Pos  uint32 `yaml:"Pos"`
+		GTID string `yaml:"GTID"`
+	}
+	Update struct {
+		Err    error
+		Backup map[int]string
+	}
+)
+
+func NewBackup(c config.Config, s storage.Storage) (m *Backup, err error) {
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return
+	}
+
+	m = &Backup{
+		cfg:     c,
+		docker:  cli,
+		storage: s,
+	}
+
+	return
+}
+
+func (b *Backup) createMysqlDump(p string) (err error) {
+	mydumperCmd := exec.Command(
+		"mydumper",
+		"--port="+strconv.Itoa(b.cfg.MariaDB.Port),
+		"--host="+b.cfg.MariaDB.Host,
+		"--user="+b.cfg.MariaDB.User,
+		"--password="+b.cfg.MariaDB.Password,
+		"--outputdir="+p,
+		//"--regex='^(?!(mysql))'",
+		"--compress",
+	)
+	err = mydumperCmd.Run()
+	if err != nil {
+		return
+	}
+	if err = b.storage.WriteFolder(p); err != nil {
+		return
+	}
+	return
+}
+
+func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string) (err error) {
+	var binlogFile string
+	cfg := replication.BinlogSyncerConfig{
+		ServerID: 100,
+		Flavor:   "mysql",
+		Host:     b.cfg.MariaDB.Host,
+		Port:     uint16(b.cfg.MariaDB.Port),
+		User:     b.cfg.MariaDB.User,
+		Password: b.cfg.MariaDB.Password,
+	}
+	syncer := replication.NewBinlogSyncer(cfg)
+	pr, pw := io.Pipe()
+	defer func() {
+		pw.Close()
+		syncer.Close()
+	}()
+	// Start sync with specified binlog file and position
+	streamer, err := syncer.StartSync(mp)
+	if err != nil {
+		return fmt.Errorf("Cannot start binlog stream: %w", err)
+	}
+	for {
+		ev, inerr := streamer.GetEvent(ctx)
+		if inerr != nil {
+			if inerr == ctx.Err() {
+				return nil
+			}
+			return fmt.Errorf("Error reading binlog stream: %w", err)
+		}
+		offset := ev.Header.LogPos
+
+		if ev.Header.EventType == replication.ROTATE_EVENT {
+			rotateEvent := ev.Event.(*replication.RotateEvent)
+			if ev.Header.Timestamp == 0 || offset == 0 {
+				// fake rotate event
+				fmt.Println("FAKE", offset, string(rotateEvent.NextLogName))
+				continue
+			}
+			if binlogFile != "" {
+				pw.Close()
+				time.Sleep(100 * time.Millisecond)
+				pr, pw = io.Pipe()
+			}
+			binlogFile = string(rotateEvent.NextLogName)
+			var eg errgroup.Group
+			eg.Go(func() error {
+				return b.storage.WriteStream(path.Join(dir, binlogFile), "", pr)
+			})
+			go func() error {
+				if err = eg.Wait(); err != nil {
+					return err
+				}
+				return nil
+			}()
+			continue
+		} else if ev.Header.EventType == replication.FORMAT_DESCRIPTION_EVENT {
+			if binlogFile != "" {
+				pw.Write(replication.BinLogFileHeader)
+			}
+		} else {
+			pw.Write(ev.RawData)
+		}
+		select {
+		case <-ctx.Done():
+			log.Info("stop binlog streaming")
+			return
+		default:
+			continue
+		}
+	}
+}
+
+func (b *Backup) flushLogs(ctx context.Context) (err error) {
+	flushLogs := exec.Command(
+		"mysqladmin",
+		"flush-logs",
+		"--port="+strconv.Itoa(b.cfg.MariaDB.Port),
+		"--host="+b.cfg.MariaDB.Host,
+		"--user="+b.cfg.MariaDB.User,
+		"--password="+b.cfg.MariaDB.Password,
+	)
+	_, err = flushLogs.CombinedOutput()
+	if err != nil {
+		log.Error("Error flushing binlogs: ", err)
+		return
+	}
+	return
+}
+
+func (b *Backup) checkBackupDirExistsAndCreate() (p string, err error) {
+	if _, err := os.Stat(b.cfg.BackupDir); os.IsNotExist(err) {
+		err = os.MkdirAll(b.cfg.BackupDir, os.ModePerm)
+		return b.cfg.BackupDir, err
+	}
+	return
+}

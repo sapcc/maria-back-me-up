@@ -1,0 +1,29 @@
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: {{.Host}}
+  labels:
+    app: {{.Host}}
+    type: database
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: {{.Host}}
+        type: database
+    spec:
+      containers:
+        - name: mariadb
+          image: mariadb
+          ports:
+            - containerPort: 3306
+              name: dbport
+              protocol: TCP
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: {{.Password}}
+            - name: MYSQL_USER
+              value: {{.Password}}
+            - name: MYSQL_PASSWORD
+              value: {{.Password}}

@@ -14,28 +14,22 @@
  * limitations under the License.
  */
 
-package handler
+package route
 
 import (
-	"context"
+	"github.com/labstack/echo"
+	"github.com/sapcc/maria-back-me-up/pkg/api"
+	"github.com/sapcc/maria-back-me-up/pkg/backup"
 )
 
-type ErrorHandler struct {
-	Errors []string
-}
+func Init(m *backup.Manager) *echo.Echo {
+	e := echo.New()
+	g := e.Group("/backup")
+	g.GET("/stop", api.GetGackup(m))
+	g.GET("/start", api.GetGackup(m))
 
-func NewErrorHandler() *ErrorHandler {
-	return &ErrorHandler{}
-}
-
-func (h *ErrorHandler) Run(ctx context.Context, errCh <-chan error) {
-	for {
-		select {
-		case err, ok := <-errCh:
-			if !ok {
-				return
-			}
-			h.Errors = append(h.Errors, err.Error())
-		}
-	}
+	gr := e.Group("/restore")
+	gr.GET("/soft", api.GetRestore(m))
+	gr.GET("/hard", api.GetRestore(m))
+	return e
 }

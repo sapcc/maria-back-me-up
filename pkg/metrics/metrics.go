@@ -18,22 +18,31 @@ package metrics
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sapcc/maria-back-me-up/pkg/backup"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
-	"github.com/sapcc/maria-back-me-up/pkg/health"
 )
 
 type MetricsCollector struct {
-	upGauge *prometheus.Desc
-	targets *prometheus.Desc
-	mariadb *health.Maria
+	upGauge    *prometheus.Desc
+	targets    *prometheus.Desc
+	backup     *prometheus.Desc
+	errorCount *prometheus.Desc
+	cfg        config.MariaDB
 }
+
+var (
+	errors       []string
+	incBackupUp  int
+	fullBackupUp int
+	results      []backup.Update
+)
 
 func (c *MetricsCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.upGauge
 }
 
 func (c *MetricsCollector) Collect(ch chan<- prometheus.Metric) {
-	s, err := c.mariadb.Check()
+	s, err := backup.HealthCheck(c.cfg)
 	if err == nil || !s.Ok {
 		ch <- prometheus.MustNewConstMetric(
 			c.upGauge,
@@ -47,7 +56,7 @@ func (c *MetricsCollector) Collect(ch chan<- prometheus.Metric) {
 			float64(1),
 		)
 	}
-	for key, value := range c.mariadb.Status.Details {
+	for key, value := range s.Details {
 		ch <- prometheus.MustNewConstMetric(
 			c.targets,
 			prometheus.GaugeValue,
@@ -55,11 +64,52 @@ func (c *MetricsCollector) Collect(ch chan<- prometheus.Metric) {
 			key,
 		)
 	}
+	ch <- prometheus.MustNewConstMetric(
+		c.errorCount,
+		prometheus.GaugeValue,
+		float64(len(errors)),
+	)
+	ch <- prometheus.MustNewConstMetric(
+		c.backup,
+		prometheus.GaugeValue,
+		float64(fullBackupUp),
+		"full_backup",
+	)
+	ch <- prometheus.MustNewConstMetric(
+		c.backup,
+		prometheus.GaugeValue,
+		float64(incBackupUp),
+		"inc_backup",
+	)
 }
 
+/*
+func (c *MetricsCollector) startUpdateHandler() {
+	for {
+		select {
+		case u, ok := <-c.updatec:
+			if !ok {
+				return
+			}
+			up := 1
+			for r := range u.Backup {
+				if u.Err != nil {
+					errors = append(errors, u.Err.Error())
+					up = 0
+				}
+				if r == 1 {
+					incBackupUp = up
+				} else {
+					fullBackupUp = up
+				}
+			}
+		}
+	}
+}
+*/
 func NewMetricsCollector(c config.MariaDB) *MetricsCollector {
-	return &MetricsCollector{
-		mariadb: health.NewMaria(c),
+	m := MetricsCollector{
+		cfg: c,
 		targets: prometheus.NewDesc(
 			"maria_health_status",
 			"Health status of mariadb",
@@ -70,5 +120,17 @@ func NewMetricsCollector(c config.MariaDB) *MetricsCollector {
 			"Shows if mariadb is running",
 			nil,
 			prometheus.Labels{}),
+		errorCount: prometheus.NewDesc(
+			"error_count",
+			"Shows number of errors accured in the past",
+			nil,
+			prometheus.Labels{}),
+		backup: prometheus.NewDesc(
+			"maria_backup_status",
+			"backup status of mariadb",
+			[]string{"kind"},
+			prometheus.Labels{}),
 	}
+	//go m.startUpdateHandler()
+	return &m
 }
