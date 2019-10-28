@@ -130,27 +130,6 @@ func (s *S3) WriteStream(name, mimeType string, body io.Reader) (err error) {
 	return
 }
 
-func (s *S3) WriteStreamConcurrent(name, mimeType string, body io.Reader, errc chan<- *error) {
-	uploader := s3manager.NewUploader(s.session, func(u *s3manager.Uploader) {
-		u.PartSize = 20 << 20 // 20MB
-		u.MaxUploadParts = 10000
-	})
-	input := s3manager.UploadInput{
-		Bucket: aws.String(s.cfg.BucketName),
-		Key:    aws.String(path.Join(s.serviceName, name)),
-		Body:   body,
-		//ContentType: &mimeType,
-	}
-	_, err := uploader.Upload(&input)
-	if err != nil {
-		err = fmt.Errorf("WriteStream: Failed to upload to s3. Error: %s", err.Error())
-		errc <- &err
-	} else {
-		errc <- nil
-	}
-	close(errc)
-}
-
 func (s *S3) GetLatestBackup() (path string, err error) {
 	var newestBackup *s3.Object
 	var newestTime int64 = 0
@@ -171,6 +150,10 @@ func (s *S3) GetLatestBackup() (path string, err error) {
 				newestBackup = listObj
 			}
 		}
+	}
+
+	if newestBackup == nil {
+		return path, errors.New("No backup found for given timestamp")
 	}
 
 	listRes, err = svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.Replace(*newestBackup.Key, "dump.tar", "", -1))})
