@@ -8,7 +8,7 @@ RUN make all
 FROM alpine:3.9
 LABEL maintainer="Stefan Hipfel <stefan.hipfel@sap.com>"
 
-ENV PACKAGES="mysql-client curl" \
+ENV PACKAGES="mysql-client mariadb curl" \
     LIB_PACKAGES="glib-dev mariadb-dev zlib-dev pcre-dev libressl-dev" \
     BUILD_PACKAGES="cmake build-base git" \
     BUILD_PATH="/opt/mydumper-src/"
