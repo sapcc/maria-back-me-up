@@ -23,11 +23,9 @@ import (
 	"syscall"
 
 	"github.com/namsral/flag"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sapcc/maria-back-me-up/pkg/backup"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	log "github.com/sapcc/maria-back-me-up/pkg/log"
-	"github.com/sapcc/maria-back-me-up/pkg/metrics"
 	"github.com/sapcc/maria-back-me-up/pkg/route"
 	"github.com/sapcc/maria-back-me-up/pkg/server"
 	"github.com/sirupsen/logrus"
@@ -64,28 +62,16 @@ func main() {
 		log.Fatal("cannot create backup handler: ", err.Error())
 	}
 
-	prometheus.MustRegister(metrics.NewMetricsCollector(cfg.MariaDB))
-
-	//_ = restore.NewRestore(cfg, s3, b)
-	//if err != nil {
-	//	log.Fatal("cannot create restore handler", err.Error())
-	//}
-
-	//v, err := backup.NewVerifier("test")
-	//v.CreateMariaService()
 	e := route.Init(m)
+
 	var eg errgroup.Group
 	s := server.NewServer(e)
 	eg.Go(func() error {
 		return s.Start()
 	})
 	eg.Go(func() error {
-		return m.StartBackup()
+		return m.Start()
 	})
-	eg.Go(func() error {
-		return m.StartVerifyBackup(ctx)
-	})
-
 	go func() {
 		if err = eg.Wait(); err != nil {
 			log.Fatal(err)
@@ -99,7 +85,7 @@ func main() {
 	select {
 	case <-c:
 		s.Stop(ctx)
-		m.StopBackup()
+		m.Stop()
 		cancel()
 	case <-ctx.Done():
 	}
