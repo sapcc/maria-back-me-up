@@ -111,7 +111,7 @@ func (r *Restore) Restore(p string) (err error) {
 func (r *Restore) restoreIncBackupFromPath(p string) (err error) {
 	var binlogFiles []string
 	defer func() {
-		os.RemoveAll(p)
+		//os.RemoveAll(p)
 	}()
 	filepath.Walk(p, func(p string, f os.FileInfo, err error) error {
 		if f.IsDir() && f.Name() == "dump" {
