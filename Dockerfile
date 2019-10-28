@@ -5,7 +5,7 @@ COPY . .
 ARG VERSION
 RUN make all
 
-FROM alpine:3.9
+FROM alpine:3.10.3
 LABEL maintainer="Stefan Hipfel <stefan.hipfel@sap.com>"
 
 ENV PACKAGES="mysql-client mariadb curl" \
