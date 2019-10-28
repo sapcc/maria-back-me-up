@@ -28,6 +28,7 @@ import (
 
 	"github.com/coreos/etcd/client"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
+	"github.com/sapcc/maria-back-me-up/pkg/log"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -68,20 +69,21 @@ func (r *Restore) Restore(p string) (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
 		s, err := HealthCheck(r.cfg.MariaDB)
 		if err != nil || !s.Ok {
-			fmt.Println("CHECK", s.Ok)
 			return false, nil
 		}
 		return true, nil
 	})
-	if err = wait.Poll(5*time.Second, 1*time.Minute, cf); err != nil {
-		return
+	if err = wait.Poll(5*time.Second, 5*time.Minute, cf); err != nil {
+		return fmt.Errorf("Timed out waiting for mariadb to become healthy")
 	}
 
 	backupPath := path.Join("restore", filepath.Dir(p))
+	log.Debug("Restore path: ", backupPath)
 	if err = os.MkdirAll(
 		filepath.Join(backupPath, "dump"), os.ModePerm); err != nil {
 		return
 	}
+	log.Debug("tar path: ", path.Join("restore", p), path.Join(backupPath, "dump"))
 	if err = exec.Command(
 		"tar",
 		"-xvf", path.Join("restore", p),
