@@ -82,7 +82,7 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 	var binlogFile string
 	cfg := replication.BinlogSyncerConfig{
 		ServerID: 100,
-		Flavor:   "mysql",
+		Flavor:   "mariadb",
 		Host:     b.cfg.MariaDB.Host,
 		Port:     uint16(b.cfg.MariaDB.Port),
 		User:     b.cfg.MariaDB.User,
@@ -95,6 +95,7 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 		syncer.Close()
 		close(c)
 	}()
+
 	// Start sync with specified binlog file and position
 	streamer, err := syncer.StartSync(mp)
 	if err != nil {
@@ -112,17 +113,18 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 
 		if ev.Header.EventType == replication.ROTATE_EVENT {
 			rotateEvent := ev.Event.(*replication.RotateEvent)
+			binlogFile = string(rotateEvent.NextLogName)
+			log.Debug("Binlog syncer rotation. next log file", offset, string(rotateEvent.NextLogName))
 			if ev.Header.Timestamp == 0 || offset == 0 {
-				// fake rotate event
-				fmt.Println("FAKE", offset, string(rotateEvent.NextLogName))
 				continue
 			}
+		} else if ev.Header.EventType == replication.FORMAT_DESCRIPTION_EVENT {
+			// FormateDescriptionEvent is the first event in binlog, we will close old one and create a new
 			if binlogFile != "" {
 				pw.Close()
 				time.Sleep(100 * time.Millisecond)
-				pr, pw = io.Pipe()
 			}
-			binlogFile = string(rotateEvent.NextLogName)
+			pr, pw = io.Pipe()
 			var eg errgroup.Group
 			eg.Go(func() error {
 				return b.storage.WriteStream(path.Join(dir, binlogFile), "", pr)
@@ -136,14 +138,11 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 				}
 				return nil
 			}()
-			continue
-		} else if ev.Header.EventType == replication.FORMAT_DESCRIPTION_EVENT {
-			if binlogFile != "" {
-				pw.Write(replication.BinLogFileHeader)
-			}
-		} else {
-			pw.Write(ev.RawData)
+
+			pw.Write(replication.BinLogFileHeader)
+
 		}
+		pw.Write(ev.RawData)
 		select {
 		case <-ctx.Done():
 			log.Info("stop binlog streaming")
