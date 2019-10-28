@@ -16,6 +16,7 @@ spec:
       containers:
         - name: mariadb
           image: mariadb
+          args: ["--log-bin", "--binlog-format=ROW"]
           ports:
             - containerPort: 3306
               name: dbport
