@@ -103,6 +103,7 @@ func (r *Restore) Restore(p string) (err error) {
 	).Run(); err != nil {
 		return
 	}
+	log.Debug("myloader restore finished")
 
 	return r.restoreIncBackupFromPath(backupPath)
 }
@@ -124,6 +125,7 @@ func (r *Restore) restoreIncBackupFromPath(p string) (err error) {
 	if len(binlogFiles) == 0 {
 		return
 	}
+	log.Debug("start mysqlbinlog", binlogFiles)
 	binlogCMD := exec.Command(
 		"mysqlbinlog", binlogFiles...,
 	)
