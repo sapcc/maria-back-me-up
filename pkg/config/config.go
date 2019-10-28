@@ -30,18 +30,20 @@ type Config struct {
 	BackupDir                          string  `yaml:"backup_dir"`
 	AutomaticRecovery                  bool    `yaml:"automatic_recovery"`
 	ServiceName                        string  `yaml:"service_name"`
+	Namespace                          string  `yaml:"namespace"`
 	FullBackupIntervalInSeconds        int     `yaml:"full_backup_interval_in_seconds"`
 	IncrementalBackupIntervalInSeconds int     `yaml:"incremental_backup_interval_in_seconds"`
-	VerifyBackupIntervalInSeconds      int     `yaml:"verify_backup_interval_in_seconds"`
 }
 
 type MariaDB struct {
-	Flavor   string `yaml:"flavor"`
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	User     string `yaml:"user"`
-	Password string `yaml:"password"`
-	DataDir  string `yaml:"data_dir"`
+	Flavor       string   `yaml:"flavor"`
+	Host         string   `yaml:"host"`
+	Port         int      `yaml:"port"`
+	User         string   `yaml:"user"`
+	Password     string   `yaml:"password"`
+	DataDir      string   `yaml:"data_dir"`
+	Database     string   `yaml:"database"`
+	VerifyTables []string `yaml:"verify_tables"`
 }
 
 type S3 struct {
