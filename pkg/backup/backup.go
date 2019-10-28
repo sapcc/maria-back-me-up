@@ -20,8 +20,8 @@ import (
 )
 
 const (
-	FullBackup = 0
-	IncBackup  = 2
+	fullBackup = 0
+	incBackup  = 2
 )
 
 type (
@@ -29,7 +29,6 @@ type (
 		cfg     config.Config
 		docker  *client.Client
 		storage storage.Storage
-		updatec chan<- Update
 	}
 	metadata struct {
 		Status binlog `yaml:"SHOW MASTER STATUS"`
@@ -38,10 +37,6 @@ type (
 		Log  string `yaml:"Log"`
 		Pos  uint32 `yaml:"Pos"`
 		GTID string `yaml:"GTID"`
-	}
-	Update struct {
-		Err    error
-		Backup map[int]string
 	}
 )
 
@@ -75,13 +70,15 @@ func (b *Backup) createMysqlDump(p string) (err error) {
 	if err != nil {
 		return
 	}
+	log.Debug("Uploading full backup")
 	if err = b.storage.WriteFolder(p); err != nil {
 		return
 	}
+	log.Debug("Done uploading full backup")
 	return
 }
 
-func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string) (err error) {
+func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c chan time.Time) (err error) {
 	var binlogFile string
 	cfg := replication.BinlogSyncerConfig{
 		ServerID: 100,
@@ -96,6 +93,7 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string) (
 	defer func() {
 		pw.Close()
 		syncer.Close()
+		close(c)
 	}()
 	// Start sync with specified binlog file and position
 	streamer, err := syncer.StartSync(mp)
@@ -132,6 +130,9 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string) (
 			go func() error {
 				if err = eg.Wait(); err != nil {
 					return err
+				}
+				if ctx.Err() == nil {
+					c <- time.Now()
 				}
 				return nil
 			}()
