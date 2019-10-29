@@ -34,10 +34,10 @@ type jsonResponse struct {
 func GetGackup(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		if c.Path() == "/backup/stop" {
-			m.StopBackup()
+			m.Stop()
 			return c.JSON(http.StatusOK, "Stopped")
 		} else if c.Path() == "/backup/start" {
-			go m.StartBackup()
+			go m.Start()
 			return c.JSON(http.StatusOK, "Started")
 		}
 		return
@@ -61,43 +61,50 @@ func GetRestore(m *backup.Manager) echo.HandlerFunc {
 		}
 		backupPath, err = m.Storage.GetBackupByTimestamp(t)
 		if err != nil {
-			if err = sendJSONResponse(c, "Restore Error", err.Error()); err != nil {
-				return
-			}
+			return sendJSONResponse(c, "Restore Error", err.Error())
 		}
 
 		if err = sendJSONResponse(c, "Stopping backup...", ""); err != nil {
 			return
 		}
-		m.StopBackup()
-		if c.Path() == "/soft" {
+		m.Stop()
+		if c.Path() == "/restore/soft" {
 			if err = sendJSONResponse(c, "Starting restore...", ""); err != nil {
 				return
 			}
 
 			if err = m.RestoreBackup(backupPath); err != nil {
-				if err = sendJSONResponse(c, "Restore Error!", err.Error()); err != nil {
-					return
-				}
+				return sendJSONResponse(c, "Restore Error!", err.Error())
 			}
-			if err = sendJSONResponse(c, "Restore finished!", ""); err != nil {
-				return
-			}
-		} else {
+
+			return sendJSONResponse(c, "Restore finished!", "")
+		} else if c.Path() == "/restore/hard" {
 			if err = sendJSONResponse(c, "Starting hard restore...", ""); err != nil {
 				return
 			}
 			if err = m.HardRestoreBackup(backupPath); err != nil {
-				if err = sendJSONResponse(c, "Hard Restore Error!", err.Error()); err != nil {
-					return
-				}
+				return sendJSONResponse(c, "Hard Restore Error!", err.Error())
 			}
 			if err = sendJSONResponse(c, "Hard Restore finished!", ""); err != nil {
 				return
 			}
 		}
-		go m.StartBackup()
+		go m.Start()
 		return nil
+	}
+}
+
+func GetReadiness(m *backup.Manager) echo.HandlerFunc {
+	return func(c echo.Context) (err error) {
+		if c.Path() == "/health/readiness" {
+			m.Health.Lock()
+			defer m.Health.Unlock()
+			if m.Health.Ready {
+				return c.String(http.StatusOK, "READY")
+			}
+			return c.String(http.StatusInternalServerError, "NOT READY")
+		}
+		return
 	}
 }
 
