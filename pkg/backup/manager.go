@@ -192,6 +192,7 @@ func (m *Manager) verifyBackup() {
 			User:         m.cfg.MariaDB.User,
 			Password:     m.cfg.MariaDB.Password,
 			VerifyTables: m.cfg.MariaDB.VerifyTables,
+			Database:     m.cfg.MariaDB.Database,
 		},
 	}
 	p, err := m.Storage.GetLatestBackup()
