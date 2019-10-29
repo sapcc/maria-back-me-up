@@ -33,6 +33,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
+const podName = "mariadb"
+
 var (
 	binlogCancel context.CancelFunc
 	backupCancel context.CancelFunc
@@ -185,10 +187,11 @@ func (m *Manager) verifyBackup() {
 	log.Info("Start verifying backup")
 	cfg := config.Config{
 		MariaDB: config.MariaDB{
-			Host:     fmt.Sprintf("%s-mariadb-verify", m.cfg.ServiceName),
-			Port:     3306,
-			User:     m.cfg.MariaDB.User,
-			Password: m.cfg.MariaDB.Password,
+			Host:         fmt.Sprintf("%s-%s-verify", m.cfg.ServiceName, podName),
+			Port:         3306,
+			User:         m.cfg.MariaDB.User,
+			Password:     m.cfg.MariaDB.Password,
+			VerifyTables: m.cfg.MariaDB.VerifyTables,
 		},
 	}
 	p, err := m.Storage.GetLatestBackup()
@@ -232,7 +235,7 @@ func (m *Manager) verifyBackup() {
 }
 
 func (m *Manager) onVerifyError(err error) {
-	log.Error("BackupManager Verfiy Error: ", err.Error())
+	log.Error("Manager Verfiy Error: ", err.Error())
 	m.updateSts.Lock()
 	m.updateSts.verifyBackup = 0
 	m.updateSts.Unlock()
@@ -263,8 +266,8 @@ func (m *Manager) RestoreBackup(p string) (err error) {
 	m.Health.Lock()
 	m.Health.Ready = false
 	m.Health.Unlock()
-	nReady, err := m.maria.CheckPodNotReady(m.cfg.ServiceName + "-mariadb")
-	if err != nil || !nReady {
+	err = m.maria.CheckPodNotReady()
+	if err != nil {
 		return fmt.Errorf("cannot set pod to status: NotReady. Reason: %s", err.Error())
 	}
 	if err = m.restore.Restore(p); err != nil {
@@ -285,8 +288,8 @@ func (m *Manager) HardRestoreBackup(p string) (err error) {
 		m.Health.Ready = true
 		m.Health.Unlock()
 	}()
-	nReady, err := m.maria.CheckPodNotReady(m.cfg.ServiceName + "-mariadb")
-	if err != nil || !nReady {
+	err = m.maria.CheckPodNotReady()
+	if err != nil {
 		return fmt.Errorf("cannot set pod to status: NotReady. Reason: %s", err.Error())
 	}
 	if err = m.restore.Restore(p); err != nil {
