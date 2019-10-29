@@ -121,9 +121,13 @@ func (m *Maria) createService(p string, cfg interface{}) (svc *v1.Service, err e
 	return m.client.CoreV1().Services(m.ns).Create(svc)
 }
 
-func (m *Maria) CheckPodNotReady(n string) (nr bool, err error) {
+func (m *Maria) CheckPodNotReady() (err error) {
+	name := os.Getenv("HOSTNAME")
+	if name == "" {
+		return
+	}
 	cf := wait.ConditionFunc(func() (bool, error) {
-		p, err := m.client.CoreV1().Pods(m.ns).Get(n, metav1.GetOptions{})
+		p, err := m.client.CoreV1().Pods(m.ns).Get(name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -138,7 +142,7 @@ func (m *Maria) CheckPodNotReady(n string) (nr bool, err error) {
 	})
 	//Check for 1 minute if pod is in state  NotReady
 	if err = wait.Poll(1*time.Second, 1*time.Minute, cf); err != nil {
-		return false, fmt.Errorf("Cannot do backup. MariaDB Pod not going into state 'NotReady'. : %s", err.Error())
+		return fmt.Errorf("Wait Timed out for pod readiness: %s", err.Error())
 	}
 	return
 }
