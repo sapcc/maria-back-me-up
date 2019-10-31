@@ -47,10 +47,10 @@ func prettify(ts string) string {
 var funcMap = template.FuncMap{
 	"prettify": prettify,
 }
-var tmpl = template.New("index.html").Funcs(funcMap)
 
 func GetRoot(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
+		var tmpl = template.New("index.html").Funcs(funcMap)
 		t, err := tmpl.ParseFiles(constants.INDEX)
 		backups, err := m.Storage.GetAllBackups()
 		return t.Execute(c.Response(), backups)
