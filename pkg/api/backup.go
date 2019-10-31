@@ -18,17 +18,86 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
+	"html/template"
 	"net/http"
+	"path"
 	"time"
 
 	"github.com/labstack/echo"
 	"github.com/sapcc/maria-back-me-up/pkg/backup"
+	"github.com/sapcc/maria-back-me-up/pkg/constants"
 )
+
+type TemplateRenderer struct {
+	templates *template.Template
+}
 
 type jsonResponse struct {
 	Time   string `json:"time"`
 	Status string `json:"status"`
 	Error  string `json:"error,omitempty"`
+}
+
+func prettify(ts string) string {
+	t, _ := time.Parse("2006-01-02 15:04:05.999999999 -0700 MST", ts)
+	return "link" + t.Format("01-02-2006_15_04_05")
+}
+
+var funcMap = template.FuncMap{
+	"prettify": prettify,
+}
+var tmpl = template.New("index.html").Funcs(funcMap)
+
+func GetRoot(m *backup.Manager) echo.HandlerFunc {
+	return func(c echo.Context) (err error) {
+		t, err := tmpl.ParseFiles(constants.INDEX)
+		backups, err := m.Storage.GetAllBackups()
+		return t.Execute(c.Response(), backups)
+	}
+}
+
+func PostRestore(m *backup.Manager) echo.HandlerFunc {
+	return func(c echo.Context) (err error) {
+		params, err := c.FormParams()
+		if err != nil {
+			return
+		}
+		fmt.Println(params)
+		p := params["backup"][0]
+		d, f := path.Split(p)
+		backupPath, err := m.Storage.DownloadBackupFrom(d, f)
+		if err != nil {
+			return sendJSONResponse(c, "Restore Error", err.Error())
+		}
+		if err = sendJSONResponse(c, "Stopping backup...", ""); err != nil {
+			return
+		}
+		m.Stop()
+		s, err := backup.HealthCheck(m.GetConfig().MariaDB)
+		if err != nil || !s.Ok {
+			if err = sendJSONResponse(c, "Database not healthy. Trying hard restore!", ""); err != nil {
+				return
+			}
+			if err = sendJSONResponse(c, "Starting hard restore...", ""); err != nil {
+				return
+			}
+			if err = m.Restore(backupPath, constants.HARDRESTORE); err != nil {
+				return sendJSONResponse(c, "Hard Restore Error!", err.Error())
+			}
+		} else {
+			if err = sendJSONResponse(c, "Starting restore...", ""); err != nil {
+				return
+			}
+
+			if err = m.Restore(backupPath, constants.SOFTRESTORE); err != nil {
+				return sendJSONResponse(c, "Restore Error!", err.Error())
+			}
+		}
+
+		go m.Start()
+		return sendJSONResponse(c, "Restore finished!", "")
+	}
 }
 
 func GetGackup(m *backup.Manager) echo.HandlerFunc {
@@ -44,56 +113,6 @@ func GetGackup(m *backup.Manager) echo.HandlerFunc {
 	}
 }
 
-func GetRestore(m *backup.Manager) echo.HandlerFunc {
-	return func(c echo.Context) (err error) {
-		var backupPath string
-		c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-
-		ts := c.QueryParam("time")
-		t, err := time.Parse(time.RFC3339, ts)
-		if err != nil {
-			return c.JSON(http.StatusBadRequest, "Time has to be RFC3339 conform "+err.Error())
-		}
-
-		s, err := backup.HealthCheck(m.GetConfig().MariaDB)
-		if err != nil || !s.Ok {
-			return c.JSON(http.StatusInternalServerError, "Cannot do restore, mariadb is not healthy")
-		}
-		backupPath, err = m.Storage.GetBackupByTimestamp(t)
-		if err != nil {
-			return sendJSONResponse(c, "Restore Error", err.Error())
-		}
-
-		if err = sendJSONResponse(c, "Stopping backup...", ""); err != nil {
-			return
-		}
-		m.Stop()
-		if c.Path() == "/restore/soft" {
-			if err = sendJSONResponse(c, "Starting restore...", ""); err != nil {
-				return
-			}
-
-			if err = m.RestoreBackup(backupPath); err != nil {
-				return sendJSONResponse(c, "Restore Error!", err.Error())
-			}
-
-			return sendJSONResponse(c, "Restore finished!", "")
-		} else if c.Path() == "/restore/hard" {
-			if err = sendJSONResponse(c, "Starting hard restore...", ""); err != nil {
-				return
-			}
-			if err = m.HardRestoreBackup(backupPath); err != nil {
-				return sendJSONResponse(c, "Hard Restore Error!", err.Error())
-			}
-			if err = sendJSONResponse(c, "Hard Restore finished!", ""); err != nil {
-				return
-			}
-		}
-		go m.Start()
-		return nil
-	}
-}
-
 func GetReadiness(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		if c.Path() == "/health/readiness" {
@@ -102,7 +121,7 @@ func GetReadiness(m *backup.Manager) echo.HandlerFunc {
 			if m.Health.Ready {
 				return c.String(http.StatusOK, "READY")
 			}
-			return c.String(http.StatusInternalServerError, "NOT READY")
+			return c.String(http.StatusInternalServerError, "RESTORE IN PROCESS")
 		}
 		return
 	}

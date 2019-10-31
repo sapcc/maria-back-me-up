@@ -1,0 +1,56 @@
+<html lang="en">
+
+<head>
+    <title>Maria Backups</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+</head>
+
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="card-header">
+                <h1>MariaDB Restore</h1>
+                <p>Choose one timestamp to restore to</p>
+            </div>
+        </div>
+
+        <div class="card-body">
+        <li class="card">
+        {{ range $key, $value := . }}
+            <ul class="list-group">
+                <li class="list-group-item  list-group-item-info"><a aria-expanded="false" aria-controls="{{ prettify $key }}" data-toggle="collapse" href="#{{ prettify $key }}">{{ $key }}</a>
+                    <ul id = "{{ prettify $key }}" class="collapse">
+                        <div class="form-check">
+                            <form action="/restore" method="post">
+                                {{ range $value}}
+                                <li class="list-group-item">
+                                    <input class="form-check-input" type="radio" name="backup" id="backup" value="{{.Key}}">
+                                    <label class="form-check-label" for="backup">
+                                        {{.LastModified}}
+                                    </label>
+                                </li>
+                                {{ end }}
+                                <div class="container">
+                                    <div class="row">
+                                        <div class="col-sm">
+                                            <button name="restore" type="submit" class="btn btn-primary mb-2" value="soft">Restore</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </ul>
+                </li>
+            </ul>
+        {{ end }}
+        </li>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+
+</body>
+
+</html>

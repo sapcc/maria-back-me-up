@@ -24,12 +24,15 @@ import (
 
 func Init(m *backup.Manager) *echo.Echo {
 	e := echo.New()
-	g := e.Group("/backup")
-	g.GET("/stop", api.GetGackup(m))
-	g.GET("/start", api.GetGackup(m))
+	e.GET("/", api.GetRoot(m))
+	e.POST("/restore", api.PostRestore(m))
 
-	gr := e.Group("/restore")
-	gr.GET("/soft", api.GetRestore(m))
-	gr.GET("/hard", api.GetRestore(m))
+	gb := e.Group("/backup")
+	gb.GET("/stop", api.GetGackup(m))
+	gb.GET("/start", api.GetGackup(m))
+
+	gh := e.Group("/health")
+	gh.GET("/readiness", api.GetReadiness(m))
+
 	return e
 }
