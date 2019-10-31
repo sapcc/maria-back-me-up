@@ -46,14 +46,23 @@ func NewRestore(c config.Config) (r *Restore) {
 }
 
 func (r *Restore) hardRestore(p string) (err error) {
-	if err = exec.Command("mysqladmin",
+	cmd := exec.Command("mysqladmin",
 		"shutdown",
 		"-u"+r.cfg.MariaDB.User,
 		"-p"+r.cfg.MariaDB.Password,
 		"-h"+r.cfg.MariaDB.Host,
 		"-P"+strconv.Itoa(r.cfg.MariaDB.Port),
-	).Run(); err != nil {
-		return
+	)
+	cf := wait.ConditionFunc(func() (bool, error) {
+		err = cmd.Run()
+		if err != nil {
+			return false, nil
+		}
+		return true, nil
+	})
+	if err = wait.Poll(5*time.Second, 1*time.Minute, cf); err != nil {
+		//Cant shutdown database. Try to delete datadir anyway.
+		log.Error(fmt.Errorf("Timed out trying to shutdown database"))
 	}
 
 	if err = os.RemoveAll(r.cfg.MariaDB.DataDir); err != nil {
@@ -92,6 +101,17 @@ func (r *Restore) restore(backupPath string) (err error) {
 		"tar",
 		"-xvf", path.Join(backupPath, "dump.tar"),
 		"-C", path.Join(backupPath, "dump"),
+	).Run(); err != nil {
+		return
+	}
+
+	if err = exec.Command("mysqladmin",
+		"-u"+r.cfg.MariaDB.User,
+		"-p"+r.cfg.MariaDB.Password,
+		"-h"+r.cfg.MariaDB.Host,
+		"-P"+strconv.Itoa(r.cfg.MariaDB.Port),
+		"drop", r.cfg.MariaDB.Database,
+		"--force",
 	).Run(); err != nil {
 		return
 	}
