@@ -55,14 +55,14 @@ func NewBackup(c config.Config, s storage.Storage) (m *Backup, err error) {
 	return
 }
 
-func (b *Backup) createMysqlDump(p string) (err error) {
+func (b *Backup) createMysqlDump(toPath string) (err error) {
 	mydumperCmd := exec.Command(
 		"mydumper",
 		"--port="+strconv.Itoa(b.cfg.MariaDB.Port),
 		"--host="+b.cfg.MariaDB.Host,
 		"--user="+b.cfg.MariaDB.User,
 		"--password="+b.cfg.MariaDB.Password,
-		"--outputdir="+p,
+		"--outputdir="+toPath,
 		//"--regex='^(?!(mysql))'",
 		"--compress",
 	)
@@ -71,7 +71,7 @@ func (b *Backup) createMysqlDump(p string) (err error) {
 		return
 	}
 	log.Debug("Uploading full backup")
-	if err = b.storage.WriteFolder(p); err != nil {
+	if err = b.storage.WriteFolder(toPath); err != nil {
 		return
 	}
 	log.Debug("Done uploading full backup")
