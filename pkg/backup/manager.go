@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -240,8 +241,8 @@ func (m *Manager) verifyBackup() {
 	defer func() {
 		out, err := yaml.Marshal(m.updateSts)
 		if err == nil {
-			vp := strings.Replace(p, constants.RESTOREFOLDER, "", 1)
-			fmt.Println(p, vp)
+			//remove restore and bucket dir from path
+			vp := strings.Replace(p, filepath.Join(constants.RESTOREFOLDER, m.cfg.S3.BucketName), "", 1)
 			m.Storage.WriteStream(vp+"/verify.yaml", "", bytes.NewReader(out))
 		} else {
 			logger.Error(fmt.Errorf("cannot write verify status: %s", err.Error()))
