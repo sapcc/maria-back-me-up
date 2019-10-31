@@ -240,7 +240,7 @@ func (m *Manager) verifyBackup() {
 	defer func() {
 		out, err := yaml.Marshal(m.updateSts)
 		if err == nil {
-			vp := strings.Replace(p, constants.RESTOREFOLDER, "", 0)
+			vp := strings.Replace(p, constants.RESTOREFOLDER, "", 1)
 			fmt.Println(p, vp)
 			m.Storage.WriteStream(vp+"/verify.yaml", "", bytes.NewReader(out))
 		} else {
