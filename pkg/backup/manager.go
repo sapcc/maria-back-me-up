@@ -241,8 +241,8 @@ func (m *Manager) verifyBackup() {
 	defer func() {
 		out, err := yaml.Marshal(m.updateSts)
 		if err == nil {
-			//remove restore and bucket dir from path
-			vp := strings.Replace(p, filepath.Join(constants.RESTOREFOLDER, m.cfg.S3.BucketName), "", 1)
+			//remove restore and servicename dir from path
+			vp := strings.Replace(p, filepath.Join(constants.RESTOREFOLDER, m.cfg.ServiceName), "", 1)
 			m.Storage.WriteStream(vp+"/verify.yaml", "", bytes.NewReader(out))
 		} else {
 			logger.Error(fmt.Errorf("cannot write verify status: %s", err.Error()))
