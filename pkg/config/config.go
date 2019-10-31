@@ -56,7 +56,7 @@ type S3 struct {
 
 func GetConfig(opts Options) (cfg Config, err error) {
 	if opts.ConfigFilePath == "" {
-		return cfg, nil
+		return cfg, fmt.Errorf("no config file provided")
 	}
 	yamlBytes, err := ioutil.ReadFile(opts.ConfigFilePath)
 	if err != nil {
@@ -66,6 +66,5 @@ func GetConfig(opts Options) (cfg Config, err error) {
 	if err != nil {
 		return cfg, fmt.Errorf("parse config file: %s", err.Error())
 	}
-
 	return cfg, nil
 }
