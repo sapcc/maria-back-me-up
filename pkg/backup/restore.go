@@ -24,6 +24,7 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/coreos/etcd/client"
@@ -117,7 +118,8 @@ func (r *Restore) restoreIncBackupFromPath(p string) (err error) {
 		if f.IsDir() && f.Name() == "dump" {
 			return filepath.SkipDir
 		}
-		if !f.IsDir() && f.Name() != "dump.tar" {
+
+		if !f.IsDir() && strings.Contains(f.Name(), "mysqld-bin") {
 			binlogFiles = append(binlogFiles, p)
 		}
 		return nil
