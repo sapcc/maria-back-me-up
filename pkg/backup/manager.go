@@ -17,19 +17,25 @@
 package backup
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"path"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
+	"github.com/sapcc/maria-back-me-up/pkg/constants"
 	"github.com/sapcc/maria-back-me-up/pkg/k8s"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
 	"github.com/siddontang/go-mysql/mysql"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
+	"gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -39,6 +45,7 @@ var (
 	binlogCancel context.CancelFunc
 	backupCancel context.CancelFunc
 	logUpdate    chan<- time.Time
+	logger       *logrus.Entry
 )
 
 type (
@@ -58,6 +65,12 @@ type (
 		backupCheckSums map[string]int64
 	}
 )
+
+func init() {
+	logger = log.WithFields(logrus.Fields{
+		"component": "manager",
+	})
+}
 
 func NewManager(c config.Config) (m *Manager, err error) {
 	s3, err := storage.NewS3(c.S3, c.ServiceName)
@@ -107,7 +120,7 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 		if m.lastBackupTime != "" && len(m.cfg.MariaDB.VerifyTables) > 0 {
 			m.backupCheckSums, err = getCheckSumForTable(m.cfg.MariaDB)
 			if err != nil {
-				log.Error("cannot load checksums")
+				logger.Error("cannot load checksums")
 			}
 		}
 		go m.verifyBackup()
@@ -117,7 +130,7 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 		ch := make(chan time.Time)
 		mp, err := m.createMysqlDump(bpath)
 		if err != nil {
-			log.Error(err)
+			logger.Error(err)
 			time.Sleep(time.Duration(m.cfg.FullBackupIntervalInSeconds) * time.Second)
 			continue
 		}
@@ -133,7 +146,7 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 		})
 		go func() {
 			if err = eg.Wait(); err != nil {
-				log.Error(fmt.Errorf("Error saving log files %s", err.Error()))
+				logger.Error(fmt.Errorf("Error saving log files %s", err.Error()))
 				return
 			}
 		}()
@@ -146,7 +159,7 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 		case <-c:
 			continue
 		case <-ctx.Done():
-			log.Info("stop backup")
+			logger.Info("stop backup")
 			binlogCancel()
 			return nil
 		}
@@ -154,7 +167,7 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 }
 
 func (m *Manager) createMysqlDump(bpath string) (mp mysql.Position, err error) {
-	log.Debug("Starting full backup")
+	logger.Debug("Starting full backup")
 	cf := wait.ConditionFunc(func() (bool, error) {
 		s, err := HealthCheck(m.cfg.MariaDB)
 		if err != nil || !s.Ok {
@@ -179,12 +192,13 @@ func (m *Manager) createMysqlDump(bpath string) (mp mysql.Position, err error) {
 	if err != nil {
 		return mp, fmt.Errorf("Error cannot read binlog metadata: %s", err.Error())
 	}
-	log.Debug("Finished full backup")
+	os.RemoveAll(bpath)
+	logger.Debug("Finished full backup")
 	return
 }
 
 func (m *Manager) verifyBackup() {
-	log.Info("Start verifying backup")
+	logger.Info("Start verifying backup")
 	cfg := config.Config{
 		MariaDB: config.MariaDB{
 			Host:         fmt.Sprintf("%s-%s-verify", m.cfg.ServiceName, podName),
@@ -195,7 +209,7 @@ func (m *Manager) verifyBackup() {
 			Database:     m.cfg.MariaDB.Database,
 		},
 	}
-	p, err := m.Storage.GetLatestBackup()
+	p, err := m.Storage.DownloadLatestBackup()
 	if err != nil {
 		m.onVerifyError(fmt.Errorf("error loading backup for verifying: %s", err.Error()))
 		return
@@ -210,36 +224,53 @@ func (m *Manager) verifyBackup() {
 		m.onVerifyError(fmt.Errorf("error creating mariadb for verifying: %s", err.Error()))
 		return
 	}
+	m.updateSts.Lock()
 	r := NewRestore(cfg)
-	if err = r.Restore(p); err != nil {
+	if err = r.restore(p); err != nil {
 		m.onVerifyError(fmt.Errorf("error restoring backup for verifying: %s", err.Error()))
 		return
 	}
 	if len(m.backupCheckSums) > 0 && len(m.cfg.MariaDB.VerifyTables) > 0 {
-		rs, err := getCheckSumForTable(cfg.MariaDB)
-		if err != nil {
-			m.onVerifyError(fmt.Errorf("error verifying backup: %s", err.Error()))
-		}
-		if err = compareChecksums(m.backupCheckSums, rs); err != nil {
-			m.onVerifyError(fmt.Errorf("error verifying backup: %s", err.Error()))
+		if err = m.verifyChecksums(cfg); err != nil {
+			m.onVerifyError(fmt.Errorf("error doing table checksum: %s", err.Error()))
+		} else {
+			m.updateSts.VerifyTables = 1
 		}
 	}
 	defer func() {
-		if err = m.maria.DeleteMariaResources(dp, svc); err != nil {
-			m.onVerifyError(fmt.Errorf("error deleting mariadb resources for verifying: %s", err.Error()))
+		out, err := yaml.Marshal(m.updateSts)
+		if err == nil {
+			vp := strings.Replace(p, constants.RESTOREFOLDER, "", 0)
+			fmt.Println(p, vp)
+			m.Storage.WriteStream(vp+"/verify.yaml", "", bytes.NewReader(out))
+		} else {
+			logger.Error(fmt.Errorf("cannot write verify status: %s", err.Error()))
 		}
+		if err = m.maria.DeleteMariaResources(dp, svc); err != nil {
+			logger.Error(fmt.Errorf("error deleting mariadb resources for verifying: %s", err.Error()))
+		}
+		m.updateSts.Unlock()
 	}()
-	log.Info("Done verifying backup")
-	m.updateSts.Lock()
-	m.updateSts.verifyBackup = 1
-	m.updateSts.Unlock()
+	m.updateSts.VerifyBackup = 1
+	logger.Info("Done verifying backup successful")
+}
+
+func (m *Manager) verifyChecksums(cfg config.Config) (err error) {
+	rs, err := getCheckSumForTable(cfg.MariaDB)
+	if err != nil {
+		return fmt.Errorf("error verifying backup: %s", err.Error())
+	}
+	if err = compareChecksums(m.backupCheckSums, rs); err != nil {
+		return fmt.Errorf("error verifying backup: %s", err.Error())
+	}
+	logger.Debug("Checksum successful", rs, m.backupCheckSums)
+	return
 }
 
 func (m *Manager) onVerifyError(err error) {
-	log.Error("Manager Verfiy Error: ", err.Error())
-	m.updateSts.Lock()
-	m.updateSts.verifyBackup = 0
-	m.updateSts.Unlock()
+	logger.Error(err.Error())
+	m.updateSts.VerifyBackup = 0
+	m.updateSts.VerifyTables = 0
 	return
 }
 
@@ -263,7 +294,7 @@ func (m *Manager) GetConfig() config.Config {
 	return m.cfg
 }
 
-func (m *Manager) RestoreBackup(p string) (err error) {
+func (m *Manager) Restore(p string, kind string) (err error) {
 	m.Health.Lock()
 	m.Health.Ready = false
 	m.Health.Unlock()
@@ -271,34 +302,18 @@ func (m *Manager) RestoreBackup(p string) (err error) {
 	if err != nil {
 		return fmt.Errorf("cannot set pod to status: NotReady. Reason: %s", err.Error())
 	}
-	if err = m.restore.Restore(p); err != nil {
-		return
+	if kind == constants.SOFTRESTORE {
+		if err = m.restore.restore(p); err != nil {
+			return
+		}
+	} else if kind == constants.HARDRESTORE {
+		if err = m.restore.hardRestore(p); err != nil {
+			return
+		}
 	}
 	m.Health.Lock()
 	m.Health.Ready = true
 	m.Health.Unlock()
-	return
-}
-
-func (m *Manager) HardRestoreBackup(p string) (err error) {
-	m.Health.Lock()
-	m.Health.Ready = false
-	m.Health.Unlock()
-	defer func() {
-		m.Health.Lock()
-		m.Health.Ready = true
-		m.Health.Unlock()
-	}()
-	err = m.maria.CheckPodNotReady()
-	if err != nil {
-		return fmt.Errorf("cannot set pod to status: NotReady. Reason: %s", err.Error())
-	}
-	if err = m.restore.Restore(p); err != nil {
-		return
-	}
-	if err = m.restore.HardRestore(p); err != nil {
-		return
-	}
 	return
 }
 
@@ -311,7 +326,7 @@ func (m *Manager) flushLogs(ctx context.Context) (err error) {
 		case <-c:
 			continue
 		case <-ctx.Done():
-			log.Info("stop flush")
+			logger.Info("stop flush")
 			return
 		}
 	}
