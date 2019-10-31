@@ -44,7 +44,7 @@ func NewRestore(c config.Config) (r *Restore) {
 	}
 }
 
-func (r *Restore) HardRestore(p string) (err error) {
+func (r *Restore) hardRestore(p string) (err error) {
 	if err = exec.Command("mysqladmin",
 		"shutdown",
 		"-u"+r.cfg.MariaDB.User,
@@ -59,13 +59,13 @@ func (r *Restore) HardRestore(p string) (err error) {
 		return
 	}
 
-	if err = r.Restore(p); err != nil {
+	if err = r.restore(p); err != nil {
 		return
 	}
 	return
 }
 
-func (r *Restore) Restore(p string) (err error) {
+func (r *Restore) restore(backupPath string) (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
 		s, err := HealthCheck(r.cfg.MariaDB)
 		if err != nil || !s.Ok {
@@ -76,17 +76,20 @@ func (r *Restore) Restore(p string) (err error) {
 	if err = wait.Poll(5*time.Second, 5*time.Minute, cf); err != nil {
 		return fmt.Errorf("Timed out waiting for mariadb to become healthy")
 	}
+	defer func() {
+		os.RemoveAll(backupPath)
+	}()
 
-	backupPath := path.Join("restore", filepath.Dir(p))
+	//backupPath := filepath.Dir(p)
 	log.Debug("Restore path: ", backupPath)
 	if err = os.MkdirAll(
 		filepath.Join(backupPath, "dump"), os.ModePerm); err != nil {
 		return
 	}
-	log.Debug("tar path: ", path.Join("restore", p), path.Join(backupPath, "dump"))
+	log.Debug("tar path: ", path.Join(backupPath, "dump"))
 	if err = exec.Command(
 		"tar",
-		"-xvf", path.Join("restore", p),
+		"-xvf", path.Join(backupPath, "dump.tar"),
 		"-C", path.Join(backupPath, "dump"),
 	).Run(); err != nil {
 		return
@@ -110,9 +113,6 @@ func (r *Restore) Restore(p string) (err error) {
 
 func (r *Restore) restoreIncBackupFromPath(p string) (err error) {
 	var binlogFiles []string
-	defer func() {
-		//os.RemoveAll(p)
-	}()
 	filepath.Walk(p, func(p string, f os.FileInfo, err error) error {
 		if f.IsDir() && f.Name() == "dump" {
 			return filepath.SkipDir

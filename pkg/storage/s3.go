@@ -36,6 +36,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/prometheus/common/log"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
+	"github.com/sapcc/maria-back-me-up/pkg/constants"
 )
 
 type S3 struct {
@@ -130,7 +131,60 @@ func (s *S3) WriteStream(name, mimeType string, body io.Reader) (err error) {
 	return
 }
 
-func (s *S3) GetLatestBackup() (path string, err error) {
+func (s *S3) DownloadBackupFrom(fullBackupPath, binlog string) (path string, err error) {
+	svc := s3.New(s.session)
+	until := strings.Split(binlog, ".")
+	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(fullBackupPath)})
+	if err != nil {
+		return
+	}
+	for _, listObj := range listRes.Contents {
+		if err != nil {
+			continue
+		}
+		if strings.Contains(*listObj.Key, "dump.tar") {
+			s.downloadFile(constants.RESTOREFOLDER, listObj)
+			continue
+		}
+		_, file := filepath.Split(*listObj.Key)
+		nbr := strings.Split(file, ".")
+		if nbr[1] <= until[1] {
+			s.downloadFile(constants.RESTOREFOLDER, listObj)
+		}
+	}
+	path = filepath.Join(constants.RESTOREFOLDER, fullBackupPath)
+	return
+}
+
+func (s *S3) GetAllBackups() (backups map[string][]s3.Object, err error) {
+	backups = make(map[string][]s3.Object, 0)
+
+	svc := s3.New(s.session)
+	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(s.serviceName + "/")})
+	if err != nil {
+		return
+	}
+	for _, fullObj := range listRes.Contents {
+		if err != nil {
+			continue
+		}
+		if strings.Contains(*fullObj.Key, "dump.tar") {
+			backups[fullObj.LastModified.String()] = make([]s3.Object, 0)
+			list, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.Replace(*fullObj.Key, "dump.tar", "", -1))})
+			if err != nil {
+				continue
+			}
+			for _, incObj := range list.Contents {
+				if !strings.HasSuffix(*incObj.Key, "/") && !strings.Contains(*incObj.Key, "dump.tar") {
+					backups[fullObj.LastModified.String()] = append(backups[fullObj.LastModified.String()], *incObj)
+				}
+			}
+		}
+	}
+	return
+}
+
+func (s *S3) DownloadLatestBackup() (path string, err error) {
 	var newestBackup *s3.Object
 	var newestTime int64 = 0
 	svc := s3.New(s.session)
@@ -153,7 +207,7 @@ func (s *S3) GetLatestBackup() (path string, err error) {
 	}
 
 	if newestBackup == nil {
-		return path, errors.New("No backup found for given timestamp")
+		return path, errors.New("No backup found for this service")
 	}
 
 	listRes, err = svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.Replace(*newestBackup.Key, "dump.tar", "", -1))})
@@ -164,11 +218,11 @@ func (s *S3) GetLatestBackup() (path string, err error) {
 	for _, listObj := range listRes.Contents {
 		if !strings.HasSuffix(*listObj.Key, "/") {
 			log.Info(*listObj.Key)
-			s.downloadFile("./restore", listObj)
+			s.downloadFile(constants.RESTOREFOLDER, listObj)
 		}
 	}
-	path = *newestBackup.Key
-
+	path = filepath.Join(constants.RESTOREFOLDER, *newestBackup.Key)
+	path = filepath.Dir(path)
 	return
 }
 
