@@ -16,13 +16,16 @@
 
         <div class="card-body">
         <li class="card">
-        {{ range $key, $value := . }}
+        {{ range $index, $backup := . }}
             <ul class="list-group">
-                <li class="list-group-item  list-group-item-info"><a aria-expanded="false" aria-controls="{{ prettify $key }}" data-toggle="collapse" href="#{{ prettify $key }}">{{ $key }}</a>
-                    <ul id = "{{ prettify $key }}" class="collapse">
+                <li class="list-group-item  list-group-item-info" style="background-color: {{ verifyBackup  $backup.Verify }}">
+                    <a style="color:white" aria-expanded="false" aria-controls="{{ prettify $backup.Full }}" data-toggle="collapse" href="#{{ prettify $backup.Full }}">
+                    {{ $backup.Full }}
+                </a>
+                    <ul id = "{{ prettify $backup.Full }}" class="collapse">
                         <div class="form-check">
                             <form action="/restore" method="post">
-                                {{ range $value}}
+                                {{ range $backup.IncList}}
                                 <li class="list-group-item">
                                     <input class="form-check-input" type="radio" name="backup" id="backup" value="{{.Key}}">
                                     <label class="form-check-label" for="backup">

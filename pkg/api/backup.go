@@ -27,6 +27,7 @@ import (
 	"github.com/labstack/echo"
 	"github.com/sapcc/maria-back-me-up/pkg/backup"
 	"github.com/sapcc/maria-back-me-up/pkg/constants"
+	"github.com/sapcc/maria-back-me-up/pkg/storage"
 )
 
 type TemplateRenderer struct {
@@ -39,13 +40,26 @@ type jsonResponse struct {
 	Error  string `json:"error,omitempty"`
 }
 
-func prettify(ts string) string {
-	t, _ := time.Parse("2006-01-02 15:04:05.999999999 -0700 MST", ts)
-	return "link" + t.Format("01-02-2006_15_04_05")
+func prettify(ts time.Time) string {
+	return "link" + ts.Format("01-02-2006_15_04_05")
+}
+
+func verifyBackup(v storage.Verify) string {
+	if v.Backup == -1 {
+		return "grey"
+	}
+	if v.Tables == 1 {
+		return "green"
+	}
+	if v.Backup == 1 {
+		return "orange"
+	}
+	return "red"
 }
 
 var funcMap = template.FuncMap{
-	"prettify": prettify,
+	"prettify":     prettify,
+	"verifyBackup": verifyBackup,
 }
 
 func GetRoot(m *backup.Manager) echo.HandlerFunc {
@@ -53,6 +67,9 @@ func GetRoot(m *backup.Manager) echo.HandlerFunc {
 		var tmpl = template.New("index.html").Funcs(funcMap)
 		t, err := tmpl.ParseFiles(constants.INDEX)
 		backups, err := m.Storage.GetAllBackups()
+		if err != nil {
+			return fmt.Errorf("Error fetching backup list: %s", err.Error())
+		}
 		return t.Execute(c.Response(), backups)
 	}
 }
@@ -63,7 +80,10 @@ func PostRestore(m *backup.Manager) echo.HandlerFunc {
 		if err != nil {
 			return
 		}
-		fmt.Println(params)
+
+		if len(params["backup"]) == 0 {
+			return fmt.Errorf("No Backup selected")
+		}
 		p := params["backup"][0]
 		d, f := path.Split(p)
 		backupPath, err := m.Storage.DownloadBackupFrom(d, f)
