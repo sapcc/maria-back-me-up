@@ -68,9 +68,7 @@ type (
 )
 
 func init() {
-	logger = log.WithFields(logrus.Fields{
-		"component": "manager",
-	})
+	logger = log.WithFields(logrus.Fields{"component": "manager"})
 }
 
 func NewManager(c config.Config) (m *Manager, err error) {
@@ -206,6 +204,7 @@ func (m *Manager) verifyBackup() {
 			Port:         3306,
 			User:         m.cfg.MariaDB.User,
 			Password:     m.cfg.MariaDB.Password,
+			Version:      m.cfg.MariaDB.Version,
 			VerifyTables: m.cfg.MariaDB.VerifyTables,
 			Database:     m.cfg.MariaDB.Database,
 		},
@@ -312,9 +311,12 @@ func (m *Manager) Restore(p string, kind string) (err error) {
 			return
 		}
 	}
-	m.Health.Lock()
-	m.Health.Ready = true
-	m.Health.Unlock()
+	defer func() {
+		os.RemoveAll(p)
+		m.Health.Lock()
+		m.Health.Ready = true
+		m.Health.Unlock()
+	}()
 	return
 }
 

@@ -18,8 +18,8 @@ spec:
     spec:
       containers:
         - name: mariadb
-          image: mariadb:10.4.0
-          args: ["--log-bin", "--binlog-format=ROW"]
+          image: mariadb:{{.Version}}
+          args: ["--log-bin", "--binlog-format=MIXED"]
           ports:
             - containerPort: 3306
               name: dbport

@@ -37,6 +37,7 @@ type Config struct {
 
 type MariaDB struct {
 	Flavor       string   `yaml:"flavor"`
+	Version      string   `yaml:"version"`
 	Host         string   `yaml:"host"`
 	Port         int      `yaml:"port"`
 	User         string   `yaml:"user"`
