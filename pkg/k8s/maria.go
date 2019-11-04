@@ -28,6 +28,7 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
+	"github.com/sapcc/maria-back-me-up/pkg/constants"
 	"k8s.io/api/apps/v1beta1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -78,7 +79,7 @@ func NewMaria(ns string) (m *Maria, err error) {
 }
 
 func (m *Maria) CreateMariaDeployment(c config.MariaDB) (deploy *v1beta1.Deployment, err error) {
-	deploy, err = m.createDeployment("/templates/maria_deployment.yaml", c)
+	deploy, err = m.createDeployment(constants.MARIADEPLOYMENT, c)
 	if err != nil {
 		if errors.IsAlreadyExists(err) {
 			if err = m.client.AppsV1beta1().Deployments(m.ns).Delete(c.Host, &metav1.DeleteOptions{}); err != nil {
@@ -92,7 +93,7 @@ func (m *Maria) CreateMariaDeployment(c config.MariaDB) (deploy *v1beta1.Deploym
 }
 
 func (m *Maria) CreateMariaService(c config.MariaDB) (svc *v1.Service, err error) {
-	svc, err = m.createService("/templates/maria_svc.yaml", c)
+	svc, err = m.createService(constants.MARIASERIVCE, c)
 	if err != nil {
 		if errors.IsAlreadyExists(err) {
 			if err = m.client.CoreV1().Services(m.ns).Delete(c.Host, &metav1.DeleteOptions{}); err != nil {
@@ -124,7 +125,7 @@ func (m *Maria) createService(p string, cfg interface{}) (svc *v1.Service, err e
 func (m *Maria) CheckPodNotReady() (err error) {
 	name := os.Getenv("HOSTNAME")
 	if name == "" {
-		return
+		return fmt.Errorf("No env HOSTNAME found")
 	}
 	cf := wait.ConditionFunc(func() (bool, error) {
 		p, err := m.client.CoreV1().Pods(m.ns).Get(name, metav1.GetOptions{})
