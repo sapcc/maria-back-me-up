@@ -65,8 +65,10 @@ func (r *Restore) hardRestore(p string) (err error) {
 		log.Error(fmt.Errorf("Timed out trying to shutdown database"))
 	}
 
-	if err = os.RemoveAll(r.cfg.MariaDB.DataDir); err != nil {
-		return
+	if r.cfg.MariaDB.DataDir != "" {
+		if err = os.RemoveAll(r.cfg.MariaDB.DataDir); err != nil {
+			return
+		}
 	}
 
 	if err = r.restore(p); err != nil {
@@ -86,9 +88,6 @@ func (r *Restore) restore(backupPath string) (err error) {
 	if err = wait.Poll(5*time.Second, 5*time.Minute, cf); err != nil {
 		return fmt.Errorf("Timed out waiting for mariadb to become healthy")
 	}
-	defer func() {
-		os.RemoveAll(backupPath)
-	}()
 
 	//backupPath := filepath.Dir(p)
 	log.Debug("Restore path: ", backupPath)
@@ -105,6 +104,7 @@ func (r *Restore) restore(backupPath string) (err error) {
 		return
 	}
 
+	//Drop database
 	if err = exec.Command("mysqladmin",
 		"-u"+r.cfg.MariaDB.User,
 		"-p"+r.cfg.MariaDB.Password,
