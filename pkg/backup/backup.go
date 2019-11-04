@@ -66,6 +66,8 @@ func (b *Backup) createMysqlDump(toPath string) (err error) {
 		//"--regex='^(?!(mysql))'",
 		"--compress",
 	)
+	defer os.RemoveAll(toPath)
+
 	err = mydumperCmd.Run()
 	if err != nil {
 		return
@@ -81,7 +83,7 @@ func (b *Backup) createMysqlDump(toPath string) (err error) {
 func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c chan time.Time) (err error) {
 	var binlogFile string
 	cfg := replication.BinlogSyncerConfig{
-		ServerID: 100,
+		ServerID: 999,
 		Flavor:   "mariadb",
 		Host:     b.cfg.MariaDB.Host,
 		Port:     uint16(b.cfg.MariaDB.Port),
@@ -119,7 +121,7 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 				continue
 			}
 		} else if ev.Header.EventType == replication.FORMAT_DESCRIPTION_EVENT {
-			// FormateDescriptionEvent is the first event in binlog, we will close old one and create a new
+			// FormateDescriptionEvent is the first event in binlog, we will close old one and create a new log file
 			if binlogFile != "" {
 				pw.Close()
 				time.Sleep(100 * time.Millisecond)
