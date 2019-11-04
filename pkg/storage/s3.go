@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"mime"
 	"os"
 	"path"
 	"path/filepath"
@@ -34,15 +33,35 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-	"github.com/prometheus/common/log"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/constants"
+	"github.com/sapcc/maria-back-me-up/pkg/log"
+	"github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v2"
 )
 
-type S3 struct {
-	cfg         config.S3
-	session     *session.Session
-	serviceName string
+var logger *logrus.Entry
+
+type (
+	S3 struct {
+		cfg         config.S3
+		session     *session.Session
+		serviceName string
+	}
+	Verify struct {
+		Backup int `yaml:"verify_backup"`
+		Tables int `yaml:"verify_tables"`
+	}
+
+	Backup struct {
+		Full    time.Time
+		IncList []s3.Object
+		Verify  Verify
+	}
+)
+
+func init() {
+	logger = log.WithFields(logrus.Fields{"component": "s3"})
 }
 
 func NewS3(c config.S3, sn string) (s3 *S3, err error) {
@@ -52,7 +71,7 @@ func NewS3(c config.S3, sn string) (s3 *S3, err error) {
 		Credentials: credentials.NewStaticCredentials(c.AwsAccessKeyID, c.AwsSecretAccessKey, ""),
 	})
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatal(err)
 	}
 
 	return &S3{
@@ -82,24 +101,8 @@ func (s *S3) WriteBytes(f string, b []byte) (err error) {
 	if err != nil {
 		return fmt.Errorf("WriteBytes: Failed to upload to s3. Error: %s", err.Error())
 	}
-	log.Infoln("Successfully uploaded to", result.Location)
+	logger.Debugln("Successfully uploaded to", result.Location)
 
-	return
-}
-
-func (s *S3) WriteFile(path string) (err error) {
-	fn := filepath.Dir(path)
-	extension := filepath.Ext(path)
-	mimeType := mime.TypeByExtension(extension)
-	body, err := os.Open(path)
-	fmt.Println(fn, path, body)
-	if err != nil {
-		return
-	}
-	err = s.WriteStream(fn, mimeType, body)
-	if err != nil {
-		return err
-	}
 	return
 }
 
@@ -156,9 +159,7 @@ func (s *S3) DownloadBackupFrom(fullBackupPath, binlog string) (path string, err
 	return
 }
 
-func (s *S3) GetAllBackups() (backups map[string][]s3.Object, err error) {
-	backups = make(map[string][]s3.Object, 0)
-
+func (s *S3) GetAllBackups() (bl []Backup, err error) {
 	svc := s3.New(s.session)
 	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(s.serviceName + "/")})
 	if err != nil {
@@ -169,16 +170,29 @@ func (s *S3) GetAllBackups() (backups map[string][]s3.Object, err error) {
 			continue
 		}
 		if strings.Contains(*fullObj.Key, "dump.tar") {
-			backups[fullObj.LastModified.String()] = make([]s3.Object, 0)
+			b := Backup{
+				Full:    *fullObj.LastModified,
+				IncList: make([]s3.Object, 0),
+				Verify:  Verify{Backup: -1, Tables: -1},
+			}
 			list, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.Replace(*fullObj.Key, "dump.tar", "", -1))})
 			if err != nil {
 				continue
 			}
 			for _, incObj := range list.Contents {
+				if strings.Contains(*incObj.Key, "verify.yaml") {
+					v := Verify{}
+					w := aws.NewWriteAtBuffer([]byte{})
+					s.downloadStream(w, incObj)
+					err = yaml.Unmarshal(w.Bytes(), &v)
+					b.Verify = v
+					continue
+				}
 				if !strings.HasSuffix(*incObj.Key, "/") && !strings.Contains(*incObj.Key, "dump.tar") {
-					backups[fullObj.LastModified.String()] = append(backups[fullObj.LastModified.String()], *incObj)
+					b.IncList = append(b.IncList, *incObj)
 				}
 			}
+			bl = append(bl, b)
 		}
 	}
 	return
@@ -217,7 +231,6 @@ func (s *S3) DownloadLatestBackup() (path string, err error) {
 
 	for _, listObj := range listRes.Contents {
 		if !strings.HasSuffix(*listObj.Key, "/") {
-			log.Info(*listObj.Key)
 			s.downloadFile(constants.RESTOREFOLDER, listObj)
 		}
 	}
@@ -265,12 +278,12 @@ func (s *S3) GetBackupByTimestamp(t time.Time) (path string, err error) {
 	for _, listObj := range listRes.Contents {
 		if !strings.HasSuffix(*listObj.Key, "/") {
 			if listObj.LastModified.Before(t) {
-				log.Info(*listObj.Key)
-				s.downloadFile("./restore", listObj)
+				s.downloadFile(constants.RESTOREFOLDER, listObj)
 			}
 		}
 	}
-	path = *backup.Key
+	path = filepath.Join(constants.RESTOREFOLDER, *backup.Key)
+	path = filepath.Dir(path)
 	return
 }
 
@@ -291,6 +304,19 @@ func (s *S3) downloadFile(path string, obj *s3.Object) (err error) {
 		d.Concurrency = 6
 	})
 	_, err = downloader.Download(file,
+		&s3.GetObjectInput{
+			Bucket: aws.String(s.cfg.BucketName),
+			Key:    aws.String(*obj.Key),
+		})
+	return
+}
+
+func (s *S3) downloadStream(w io.WriterAt, obj *s3.Object) (err error) {
+	downloader := s3manager.NewDownloader(s.session, func(d *s3manager.Downloader) {
+		d.PartSize = 64 * 1024 * 1024 // 64MB per part
+		d.Concurrency = 6
+	})
+	_, err = downloader.Download(w,
 		&s3.GetObjectInput{
 			Bucket: aws.String(s.cfg.BucketName),
 			Key:    aws.String(*obj.Key),
