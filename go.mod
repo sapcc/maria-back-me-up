@@ -12,10 +12,9 @@ require (
 	github.com/coreos/pkg v0.0.0-20180928190104-399ea9e2e55f // indirect
 	github.com/docker/docker v1.13.1
 	github.com/docker/go-connections v0.4.0 // indirect
-	github.com/fsnotify/fsnotify v1.4.7
 	github.com/gogo/protobuf v1.3.0 // indirect
 	github.com/googleapis/gnostic v0.3.1 // indirect
-	github.com/gorilla/mux v1.7.3
+	github.com/gorilla/mux v1.7.3 // indirect
 	github.com/gorilla/websocket v1.4.1 // indirect
 	github.com/gregjones/httpcache v0.0.0-20190611155906-901d90724c79 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.1.0 // indirect
@@ -30,6 +29,7 @@ require (
 	github.com/pingcap/errors v0.11.0
 	github.com/prometheus/client_golang v1.0.0
 	github.com/prometheus/common v0.7.0
+	github.com/robfig/cron v1.2.0 // indirect
 	github.com/sapcc/atlas v0.0.0-20190912211211-bd14cd3121cf // indirect
 	github.com/siddontang/go-mysql v0.0.0-20190913034749-818e04340bba
 	github.com/sirupsen/logrus v1.4.2
