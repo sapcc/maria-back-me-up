@@ -94,9 +94,10 @@ func (s *S3) WriteBytes(f string, b []byte) (err error) {
 	}()
 	uploader := s3manager.NewUploader(s.session)
 	result, err := uploader.Upload(&s3manager.UploadInput{
-		Body:   pr,
-		Bucket: aws.String(s.cfg.BucketName),
-		Key:    aws.String(path.Join(s.serviceName, f)),
+		Body:                 pr,
+		Bucket:               aws.String(s.cfg.BucketName),
+		Key:                  aws.String(path.Join(s.serviceName, f)),
+		ServerSideEncryption: aws.String("AES256"),
 	})
 	if err != nil {
 		return fmt.Errorf("WriteBytes: Failed to upload to s3. Error: %s", err.Error())
@@ -111,20 +112,20 @@ func (s *S3) WriteFolder(p string) (err error) {
 	if err != nil {
 		return
 	}
-	filepath.Base(p)
 	return s.WriteStream(path.Join(filepath.Base(p), "dump.tar"), "zip", r)
 }
 
-func (s *S3) WriteStream(name, mimeType string, body io.Reader) (err error) {
+func (s *S3) WriteStream(fileName, mimeType string, body io.Reader) (err error) {
 	uploader := s3manager.NewUploader(s.session, func(u *s3manager.Uploader) {
 		u.PartSize = 20 << 20 // 20MB
 		u.MaxUploadParts = 10000
 	})
+
 	input := s3manager.UploadInput{
-		Bucket: aws.String(s.cfg.BucketName),
-		Key:    aws.String(path.Join(s.serviceName, name)),
-		Body:   body,
-		//ContentType: &mimeType,
+		Bucket:               aws.String(s.cfg.BucketName),
+		Key:                  aws.String(path.Join(s.serviceName, fileName)),
+		Body:                 body,
+		ServerSideEncryption: aws.String("AES256"),
 	}
 	_, err = uploader.Upload(&input)
 	if err != nil {
