@@ -87,7 +87,6 @@ func Warn(args ...interface{}) {
 
 //Error logs a message at level Error on the standard logger.
 func Error(args ...interface{}) {
-	fmt.Println(logger.log.Level, logrus.ErrorLevel)
 	if logger.log.Level >= logrus.ErrorLevel {
 		logger.entry.Data["file"] = fileInfo(2)
 		logger.entry.Error(args...)
