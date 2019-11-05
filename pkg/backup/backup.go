@@ -66,7 +66,6 @@ func (b *Backup) createMysqlDump(toPath string) (err error) {
 		//"--regex='^(?!(mysql))'",
 		"--compress",
 	)
-	defer os.RemoveAll(toPath)
 
 	err = mydumperCmd.Run()
 	if err != nil {

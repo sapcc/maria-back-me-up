@@ -191,7 +191,8 @@ func (m *Manager) createMysqlDump(bpath string) (mp mysql.Position, err error) {
 	if err != nil {
 		return mp, fmt.Errorf("Error cannot read binlog metadata: %s", err.Error())
 	}
-	os.RemoveAll(bpath)
+
+	defer os.RemoveAll(bpath)
 	logger.Debug("Finished full backup")
 	return
 }
