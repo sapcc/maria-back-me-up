@@ -113,7 +113,7 @@ func (r *Restore) restore(backupPath string) (err error) {
 		"drop", r.cfg.MariaDB.Database,
 		"--force",
 	).Run(); err != nil {
-		return
+		log.Error(fmt.Errorf("mysqladmin drop table error: %s", err.Error()))
 	}
 
 	if err = exec.Command(
