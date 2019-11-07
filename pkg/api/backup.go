@@ -70,12 +70,15 @@ func GetRoot(m *backup.Manager) echo.HandlerFunc {
 		if err != nil {
 			return fmt.Errorf("Error fetching backup list: %s", err.Error())
 		}
+
 		return t.Execute(c.Response(), backups)
 	}
 }
 
 func PostRestore(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
+		c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		c.Response().WriteHeader(http.StatusOK)
 		params, err := c.FormParams()
 		if err != nil {
 			return
@@ -94,6 +97,7 @@ func PostRestore(m *backup.Manager) echo.HandlerFunc {
 			return
 		}
 		m.Stop()
+		time.Sleep(time.Duration(1 * time.Second))
 		s, err := backup.HealthCheck(m.GetConfig().MariaDB)
 		if err != nil || !s.Ok {
 			if err = sendJSONResponse(c, "Database not healthy. Trying hard restore!", ""); err != nil {
