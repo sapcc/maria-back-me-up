@@ -162,12 +162,14 @@ func (s *S3) DownloadBackupFrom(fullBackupPath, binlog string) (path string, err
 
 func (s *S3) GetAllBackups() (bl []Backup, err error) {
 	svc := s3.New(s.session)
-	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(s.serviceName + "/")})
+	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(s.serviceName + "/"), Delimiter: aws.String("y")})
 	if err != nil {
 		return
 	}
+
 	for _, fullObj := range listRes.Contents {
 		if err != nil {
+			log.Error(err.Error())
 			continue
 		}
 		if strings.Contains(*fullObj.Key, "dump.tar") {
@@ -178,6 +180,7 @@ func (s *S3) GetAllBackups() (bl []Backup, err error) {
 			}
 			list, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.Replace(*fullObj.Key, "dump.tar", "", -1))})
 			if err != nil {
+				log.Error(err.Error())
 				continue
 			}
 			for _, incObj := range list.Contents {
