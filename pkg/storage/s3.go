@@ -51,6 +51,7 @@ type (
 	Verify struct {
 		Backup int `yaml:"verify_backup"`
 		Tables int `yaml:"verify_tables"`
+		Time   time.Time
 	}
 
 	Backup struct {
@@ -190,6 +191,7 @@ func (s *S3) GetAllBackups() (bl []Backup, err error) {
 					s.downloadStream(w, incObj)
 					err = yaml.Unmarshal(w.Bytes(), &v)
 					b.Verify = v
+					b.Verify.Time = *incObj.LastModified
 					continue
 				}
 				if !strings.HasSuffix(*incObj.Key, "/") && !strings.Contains(*incObj.Key, "dump.tar") {

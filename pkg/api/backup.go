@@ -44,8 +44,12 @@ func prettify(ts time.Time) string {
 	return "link" + ts.Format("01-02-2006_15_04_05")
 }
 
-func verifyBackup(v storage.Verify) string {
+func verifyBackup(v storage.Verify, t time.Time) string {
 	if v.Backup == -1 {
+		return "grey"
+	}
+	fmt.Println(v.Time, t)
+	if t.After(v.Time) {
 		return "grey"
 	}
 	if v.Tables == 1 {
