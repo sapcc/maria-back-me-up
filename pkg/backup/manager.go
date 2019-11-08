@@ -23,6 +23,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -256,7 +257,7 @@ func (m *Manager) verifyBackup() {
 	defer func() {
 		out, err := yaml.Marshal(m.updateSts)
 		if err == nil {
-			u := string(time.Now().Unix())
+			u := strconv.FormatInt(time.Now().Unix(), 10)
 			//remove restore and servicename dir from path
 			vp := strings.Replace(p, filepath.Join(constants.RESTOREFOLDER, m.cfg.ServiceName), "", 1)
 			m.Storage.WriteStream(vp+"/verify_"+u+".yaml", "", bytes.NewReader(out))
