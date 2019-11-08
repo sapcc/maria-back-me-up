@@ -57,7 +57,7 @@ type (
 	Backup struct {
 		Full    time.Time
 		IncList []s3.Object
-		Verify  Verify
+		Verify  []Verify
 	}
 )
 
@@ -177,7 +177,7 @@ func (s *S3) GetAllBackups() (bl []Backup, err error) {
 			b := Backup{
 				Full:    *fullObj.LastModified,
 				IncList: make([]s3.Object, 0),
-				Verify:  Verify{Backup: -1, Tables: -1},
+				Verify:  make([]Verify, 0),
 			}
 			list, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.Replace(*fullObj.Key, "dump.tar", "", -1))})
 			if err != nil {
@@ -185,13 +185,14 @@ func (s *S3) GetAllBackups() (bl []Backup, err error) {
 				continue
 			}
 			for _, incObj := range list.Contents {
-				if strings.Contains(*incObj.Key, "verify.yaml") {
+				if strings.Contains(*incObj.Key, "verify_") {
+					fmt.Println(*incObj.Key)
 					v := Verify{}
 					w := aws.NewWriteAtBuffer([]byte{})
 					s.downloadStream(w, incObj)
 					err = yaml.Unmarshal(w.Bytes(), &v)
-					b.Verify = v
-					b.Verify.Time = *incObj.LastModified
+					v.Time = *incObj.LastModified
+					b.Verify = append(b.Verify, v)
 					continue
 				}
 				if !strings.HasSuffix(*incObj.Key, "/") && !strings.Contains(*incObj.Key, "dump.tar") {
