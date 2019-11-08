@@ -44,21 +44,21 @@ func prettify(ts time.Time) string {
 	return "link" + ts.Format("01-02-2006_15_04_05")
 }
 
-func verifyBackup(v storage.Verify, t time.Time) string {
-	if v.Backup == -1 {
-		return "grey"
+func verifyBackup(v []storage.Verify, t time.Time) string {
+	for _, k := range v {
+		fmt.Println(k.Backup, k.Time)
+		if t.Before(k.Time) {
+			if k.Time.Sub(t) < 10 {
+				if k.Tables == 1 {
+					return "green"
+				}
+				if k.Backup == 1 {
+					return "orange"
+				}
+			}
+		}
 	}
-	fmt.Println(v.Time, t)
-	if t.After(v.Time) {
-		return "grey"
-	}
-	if v.Tables == 1 {
-		return "green"
-	}
-	if v.Backup == 1 {
-		return "orange"
-	}
-	return "red"
+	return "grey"
 }
 
 var funcMap = template.FuncMap{
