@@ -115,14 +115,8 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 	if err != nil {
 		return
 	}
-	for c := time.Tick(time.Duration(m.cfg.FullBackupIntervalInSeconds) * time.Second); ; {
-		if m.lastBackupTime != "" && len(m.cfg.MariaDB.VerifyTables) > 0 {
-			m.backupCheckSums, err = getCheckSumForTable(m.cfg.MariaDB)
-			if err != nil {
-				logger.Error("cannot load checksums")
-			}
-		}
-		go m.verifyBackup()
+	for c := time.Tick(time.Duration(m.cfg.FullBackupIntervalInHours) * time.Hour); ; {
+		go m.scheduleVerifyBackup(ctx, 15)
 
 		m.lastBackupTime = time.Now().Format(time.RFC3339)
 		bpath := path.Join(m.cfg.BackupDir, m.lastBackupTime)
@@ -130,7 +124,7 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 		mp, err := m.createMysqlDump(bpath)
 		if err != nil {
 			logger.Error(err)
-			time.Sleep(time.Duration(m.cfg.FullBackupIntervalInSeconds) * time.Second)
+			time.Sleep(time.Duration(1) * time.Minute)
 			continue
 		}
 		ctxBin := context.Background()
@@ -195,6 +189,27 @@ func (m *Manager) createMysqlDump(bpath string) (mp mysql.Position, err error) {
 	defer os.RemoveAll(bpath)
 	logger.Debug("Finished full backup")
 	return
+}
+
+func (m *Manager) scheduleVerifyBackup(ctx context.Context, duration int) {
+	var err error
+	for c := time.Tick(time.Duration(duration) * time.Minute); ; {
+		if m.lastBackupTime != "" && len(m.cfg.MariaDB.VerifyTables) > 0 {
+			m.backupCheckSums, err = getCheckSumForTable(m.cfg.MariaDB)
+			if err != nil {
+				logger.Error("cannot load checksums")
+			}
+		}
+		go m.verifyBackup()
+
+		select {
+		case <-c:
+			continue
+		case <-ctx.Done():
+			logger.Info("stop backup")
+			return
+		}
+	}
 }
 
 func (m *Manager) verifyBackup() {
@@ -322,7 +337,7 @@ func (m *Manager) Restore(p string, kind string) (err error) {
 }
 
 func (m *Manager) flushLogs(ctx context.Context) (err error) {
-	for c := time.Tick(time.Duration(m.cfg.IncrementalBackupIntervalInSeconds) * time.Second); ; {
+	for c := time.Tick(time.Duration(m.cfg.IncrementalBackupIntervalInMinutes) * time.Second); ; {
 		if err = m.backup.flushLogs(ctx); err != nil {
 			return err
 		}
