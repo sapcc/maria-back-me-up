@@ -256,9 +256,10 @@ func (m *Manager) verifyBackup() {
 	defer func() {
 		out, err := yaml.Marshal(m.updateSts)
 		if err == nil {
+			u := string(time.Now().Unix())
 			//remove restore and servicename dir from path
 			vp := strings.Replace(p, filepath.Join(constants.RESTOREFOLDER, m.cfg.ServiceName), "", 1)
-			m.Storage.WriteStream(vp+"/verify.yaml", "", bytes.NewReader(out))
+			m.Storage.WriteStream(vp+"/verify_"+u+".yaml", "", bytes.NewReader(out))
 		} else {
 			logger.Error(fmt.Errorf("cannot write verify status: %s", err.Error()))
 		}
