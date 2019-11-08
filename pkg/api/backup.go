@@ -46,20 +46,23 @@ func prettify(ts time.Time) string {
 
 func verifyBackup(v []storage.Verify, t time.Time) string {
 	var duration time.Duration
+	duration = time.Duration(1000 * time.Hour)
+	verifyState := "grey"
 	for _, k := range v {
 		if t.Before(k.Time) {
 			if k.Time.Sub(t) < duration {
+				fmt.Println("---------------------------------,", k.Tables, k.Backup)
 				if k.Tables == 1 {
-					return "green"
+					verifyState = "green"
 				}
 				if k.Backup == 1 {
-					return "orange"
+					verifyState = "orange"
 				}
 			}
 			duration = k.Time.Sub(t)
 		}
 	}
-	return "grey"
+	return verifyState
 }
 
 var funcMap = template.FuncMap{
