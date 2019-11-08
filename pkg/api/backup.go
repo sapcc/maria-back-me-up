@@ -45,10 +45,10 @@ func prettify(ts time.Time) string {
 }
 
 func verifyBackup(v []storage.Verify, t time.Time) string {
+	var duration time.Duration
 	for _, k := range v {
-		fmt.Println(k.Backup, k.Time)
 		if t.Before(k.Time) {
-			if k.Time.Sub(t) < 10 {
+			if k.Time.Sub(t) < duration {
 				if k.Tables == 1 {
 					return "green"
 				}
@@ -56,6 +56,7 @@ func verifyBackup(v []storage.Verify, t time.Time) string {
 					return "orange"
 				}
 			}
+			duration = k.Time.Sub(t)
 		}
 	}
 	return "grey"
