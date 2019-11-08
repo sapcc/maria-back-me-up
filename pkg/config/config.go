@@ -31,8 +31,8 @@ type Config struct {
 	AutomaticRecovery                  bool    `yaml:"automatic_recovery"`
 	ServiceName                        string  `yaml:"service_name"`
 	Namespace                          string  `yaml:"namespace"`
-	FullBackupIntervalInSeconds        int     `yaml:"full_backup_interval_in_seconds"`
-	IncrementalBackupIntervalInSeconds int     `yaml:"incremental_backup_interval_in_seconds"`
+	FullBackupIntervalInHours          int     `yaml:"full_backup_interval_in_hours"`
+	IncrementalBackupIntervalInMinutes int     `yaml:"incremental_backup_interval_in_minutes"`
 }
 
 type MariaDB struct {
