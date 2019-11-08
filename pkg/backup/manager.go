@@ -337,7 +337,7 @@ func (m *Manager) Restore(p string, kind string) (err error) {
 }
 
 func (m *Manager) flushLogs(ctx context.Context) (err error) {
-	for c := time.Tick(time.Duration(m.cfg.IncrementalBackupIntervalInMinutes) * time.Second); ; {
+	for c := time.Tick(time.Duration(m.cfg.IncrementalBackupIntervalInMinutes) * time.Minute); ; {
 		if err = m.backup.flushLogs(ctx); err != nil {
 			return err
 		}
