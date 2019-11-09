@@ -25,6 +25,7 @@ import (
 func Init(m *backup.Manager) *echo.Echo {
 	e := echo.New()
 	e.GET("/", api.GetRoot(m))
+	e.GET("/restore", api.GetRestore(m))
 	e.POST("/restore", api.PostRestore(m))
 
 	gb := e.Group("/backup")

@@ -51,12 +51,11 @@ func verifyBackup(v []storage.Verify, t time.Time) string {
 	for _, k := range v {
 		if t.Before(k.Time) {
 			if k.Time.Sub(t) < duration {
-				fmt.Println("---------------------------------,", k.Tables, k.Backup)
-				if k.Tables == 1 {
-					verifyState = "green"
-				}
 				if k.Backup == 1 {
 					verifyState = "orange"
+				}
+				if k.Tables == 1 {
+					verifyState = "green"
 				}
 			}
 			duration = k.Time.Sub(t)
@@ -74,12 +73,27 @@ func GetRoot(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		var tmpl = template.New("index.html").Funcs(funcMap)
 		t, err := tmpl.ParseFiles(constants.INDEX)
-		backups, err := m.Storage.GetAllBackups()
+		backups, err := m.Storage.ListFullBackups()
+		fmt.Println(backups)
 		if err != nil {
 			return fmt.Errorf("Error fetching backup list: %s", err.Error())
 		}
 
 		return t.Execute(c.Response(), backups)
+	}
+}
+
+func GetRestore(m *backup.Manager) echo.HandlerFunc {
+	return func(c echo.Context) (err error) {
+		k := c.QueryParam("key")
+		var tmpl = template.New("restore.html").Funcs(funcMap)
+		t, err := tmpl.ParseFiles(constants.RESTORE)
+		incBackups, err := m.Storage.ListIncBackupsFor(k)
+		fmt.Println(incBackups)
+		if err != nil {
+			return fmt.Errorf("Error fetching backup list: %s", err.Error())
+		}
+		return t.Execute(c.Response(), incBackups)
 	}
 }
 

@@ -19,9 +19,11 @@ package constants
 const (
 	PORT            = "8081"
 	INDEX           = "templates/index.html"
+	RESTORE         = "templates/restore.html"
 	MARIADEPLOYMENT = "templates/maria_deployment.yaml"
 	MARIASERIVCE    = "templates/maria_svc.yaml"
 	RESTOREFOLDER   = "restore"
 	HARDRESTORE     = "hard"
 	SOFTRESTORE     = "soft"
+	VERIFYINTERFAL  = 15
 )

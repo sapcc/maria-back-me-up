@@ -11,6 +11,7 @@ type Storage interface {
 	WriteStream(name, mimeType string, body io.Reader) (err error)
 	GetBackupByTimestamp(t time.Time) (path string, err error)
 	DownloadLatestBackup() (path string, err error)
-	GetAllBackups() (bl []Backup, err error)
+	ListFullBackups() (bl []Backup, err error)
+	ListIncBackupsFor(key string) (bl []Backup, err error)
 	DownloadBackupFrom(fullBackupPath string, binlog string) (path string, err error)
 }

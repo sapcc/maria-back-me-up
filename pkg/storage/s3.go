@@ -55,7 +55,8 @@ type (
 	}
 
 	Backup struct {
-		Full    time.Time
+		Time    time.Time
+		Key     string
 		IncList []s3.Object
 		Verify  []Verify
 	}
@@ -161,7 +162,38 @@ func (s *S3) DownloadBackupFrom(fullBackupPath, binlog string) (path string, err
 	return
 }
 
-func (s *S3) GetAllBackups() (bl []Backup, err error) {
+func (s *S3) ListIncBackupsFor(key string) (bl []Backup, err error) {
+	svc := s3.New(s.session)
+	b := Backup{
+		IncList: make([]s3.Object, 0),
+		Verify:  make([]Verify, 0),
+	}
+
+	list, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.Replace(key, "dump.tar", "", -1))})
+	if err != nil {
+		log.Error(err.Error())
+		return
+	}
+	for _, incObj := range list.Contents {
+		if strings.Contains(*incObj.Key, "verify_") {
+			fmt.Println(*incObj.Key)
+			v := Verify{}
+			w := aws.NewWriteAtBuffer([]byte{})
+			s.downloadStream(w, incObj)
+			err = yaml.Unmarshal(w.Bytes(), &v)
+			v.Time = *incObj.LastModified
+			b.Verify = append(b.Verify, v)
+			continue
+		}
+		if !strings.HasSuffix(*incObj.Key, "/") && !strings.Contains(*incObj.Key, "dump.tar") {
+			b.IncList = append(b.IncList, *incObj)
+		}
+	}
+	bl = append(bl, b)
+	return
+}
+
+func (s *S3) ListFullBackups() (bl []Backup, err error) {
 	svc := s3.New(s.session)
 	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(s.serviceName + "/"), Delimiter: aws.String("y")})
 	if err != nil {
@@ -173,31 +205,13 @@ func (s *S3) GetAllBackups() (bl []Backup, err error) {
 			log.Error(err.Error())
 			continue
 		}
+
 		if strings.Contains(*fullObj.Key, "dump.tar") {
 			b := Backup{
-				Full:    *fullObj.LastModified,
+				Time:    *fullObj.LastModified,
+				Key:     *fullObj.Key,
 				IncList: make([]s3.Object, 0),
 				Verify:  make([]Verify, 0),
-			}
-			list, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.Replace(*fullObj.Key, "dump.tar", "", -1))})
-			if err != nil {
-				log.Error(err.Error())
-				continue
-			}
-			for _, incObj := range list.Contents {
-				if strings.Contains(*incObj.Key, "verify_") {
-					fmt.Println(*incObj.Key)
-					v := Verify{}
-					w := aws.NewWriteAtBuffer([]byte{})
-					s.downloadStream(w, incObj)
-					err = yaml.Unmarshal(w.Bytes(), &v)
-					v.Time = *incObj.LastModified
-					b.Verify = append(b.Verify, v)
-					continue
-				}
-				if !strings.HasSuffix(*incObj.Key, "/") && !strings.Contains(*incObj.Key, "dump.tar") {
-					b.IncList = append(b.IncList, *incObj)
-				}
 			}
 			bl = append(bl, b)
 		}

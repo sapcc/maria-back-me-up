@@ -10,7 +10,7 @@
         <div class="card">
             <div class="card-header">
                 <h1>MariaDB Restore</h1>
-                <p>Choose a full backup</p>
+                <p>Choose one timestamp to restore to</p>
             </div>
         </div>
 
@@ -19,9 +19,30 @@
         {{ range $index, $backup := . }}
             <ul class="list-group">
                 <li class="list-group-item  list-group-item-info" style="background-color: rgba(0,0,0,.03);">
-                    <a style="color:black" aria-expanded="false" href="/restore?key={{ $backup.Key }}">
+                    <a style="color:black" aria-expanded="false">
                     {{ $backup.Time }}
                 </a>
+                    <ul id = "{{ prettify $backup.Time }}">
+                        <div class="form-check">
+                            <form action="/restore" method="post">
+                                {{ range $backup.IncList}}
+                                <li class="list-group-item" style="background-color: {{ verifyBackup $backup.Verify .LastModified }}">
+                                    <input class="form-check-input" type="radio" name="backup" id="backup" value="{{.Key}}">
+                                    <label class="form-check-label" style="color:white" for="backup">
+                                        {{.LastModified}}
+                                    </label>
+                                </li>
+                                {{ end }}
+                                <div class="container">
+                                    <div class="row">
+                                        <div class="col-sm">
+                                            <button name="restore" type="submit" class="btn btn-primary mb-2" value="soft">Restore</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </ul>
                 </li>
             </ul>
         {{ end }}
