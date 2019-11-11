@@ -22,6 +22,7 @@ import (
 	"html/template"
 	"net/http"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo"
@@ -40,8 +41,14 @@ type jsonResponse struct {
 	Error  string `json:"error,omitempty"`
 }
 
-func prettify(ts time.Time) string {
-	return "link" + ts.Format("01-02-2006_15_04_05")
+func getKeyPath(key string) string {
+	s := strings.Split(key, "/")
+	return fmt.Sprintf("Full Dump: %s", s[1])
+}
+
+func getServiceName(key string) string {
+	s := strings.Split(key, "/")
+	return fmt.Sprintf("Service: %s", s[0])
 }
 
 func verifyBackup(v []storage.Verify, t time.Time) string {
@@ -65,8 +72,9 @@ func verifyBackup(v []storage.Verify, t time.Time) string {
 }
 
 var funcMap = template.FuncMap{
-	"prettify":     prettify,
-	"verifyBackup": verifyBackup,
+	"getKeyPath":     getKeyPath,
+	"verifyBackup":   verifyBackup,
+	"getServiceName": getServiceName,
 }
 
 func GetRoot(m *backup.Manager) echo.HandlerFunc {
@@ -88,7 +96,6 @@ func GetRestore(m *backup.Manager) echo.HandlerFunc {
 		var tmpl = template.New("restore.html").Funcs(funcMap)
 		t, err := tmpl.ParseFiles(constants.RESTORE)
 		incBackups, err := m.Storage.ListIncBackupsFor(k)
-		fmt.Println(incBackups)
 		if err != nil {
 			return fmt.Errorf("Error fetching backup list: %s", err.Error())
 		}

@@ -167,6 +167,7 @@ func (s *S3) ListIncBackupsFor(key string) (bl []Backup, err error) {
 	b := Backup{
 		IncList: make([]s3.Object, 0),
 		Verify:  make([]Verify, 0),
+		Key:     key,
 	}
 
 	list, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.Replace(key, "dump.tar", "", -1))})
@@ -176,7 +177,6 @@ func (s *S3) ListIncBackupsFor(key string) (bl []Backup, err error) {
 	}
 	for _, incObj := range list.Contents {
 		if strings.Contains(*incObj.Key, "verify_") {
-			fmt.Println(*incObj.Key)
 			v := Verify{}
 			w := aws.NewWriteAtBuffer([]byte{})
 			s.downloadStream(w, incObj)

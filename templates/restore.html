@@ -19,10 +19,16 @@
         {{ range $index, $backup := . }}
             <ul class="list-group">
                 <li class="list-group-item  list-group-item-info" style="background-color: rgba(0,0,0,.03);">
-                    <a style="color:black" aria-expanded="false">
-                    {{ $backup.Time }}
-                </a>
-                    <ul id = "{{ prettify $backup.Time }}">
+                    <h3 style="margin:30px;" aria-expanded="false">
+                        {{ getServiceName $backup.Key }}</br>
+                    </h3>
+                    <h4 style="margin:30px;" aria-expanded="false">
+                        {{ getKeyPath $backup.Key }}</br>
+                    </h4>
+                    <h5 style="margin:30px;" aria-expanded="false">
+                        List of available incremental backups. Choose one:
+                    </h5>
+                    <ul>
                         <div class="form-check">
                             <form action="/restore" method="post">
                                 {{ range $backup.IncList}}
@@ -33,13 +39,7 @@
                                     </label>
                                 </li>
                                 {{ end }}
-                                <div class="container">
-                                    <div class="row">
-                                        <div class="col-sm">
-                                            <button name="restore" type="submit" class="btn btn-primary mb-2" value="soft">Restore</button>
-                                        </div>
-                                    </div>
-                                </div>
+                                <button style="margin-top:10px;" name="restore" type="submit" class="btn btn-primary btn-lg btn-block" value="soft">Restore</button>
                             </form>
                         </div>
                     </ul>
