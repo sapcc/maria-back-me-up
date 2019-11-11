@@ -42,6 +42,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+var deletePolicy = metav1.DeletePropagationForeground
+
 type Maria struct {
 	client *kubernetes.Clientset
 	ns     string
@@ -82,7 +84,9 @@ func (m *Maria) CreateMariaDeployment(c config.MariaDB) (deploy *v1beta1.Deploym
 	deploy, err = m.createDeployment(constants.MARIADEPLOYMENT, c)
 	if err != nil {
 		if errors.IsAlreadyExists(err) {
-			if err = m.client.AppsV1beta1().Deployments(m.ns).Delete(c.Host, &metav1.DeleteOptions{}); err != nil {
+			if err = m.client.AppsV1beta1().Deployments(m.ns).Delete(c.Host, &metav1.DeleteOptions{
+				PropagationPolicy: &deletePolicy,
+			}); err != nil {
 				return
 			}
 			return m.CreateMariaDeployment(c)
@@ -96,7 +100,9 @@ func (m *Maria) CreateMariaService(c config.MariaDB) (svc *v1.Service, err error
 	svc, err = m.createService(constants.MARIASERIVCE, c)
 	if err != nil {
 		if errors.IsAlreadyExists(err) {
-			if err = m.client.CoreV1().Services(m.ns).Delete(c.Host, &metav1.DeleteOptions{}); err != nil {
+			if err = m.client.CoreV1().Services(m.ns).Delete(c.Host, &metav1.DeleteOptions{
+				PropagationPolicy: &deletePolicy,
+			}); err != nil {
 				return
 			}
 			return m.CreateMariaService(c)
@@ -149,7 +155,6 @@ func (m *Maria) CheckPodNotReady() (err error) {
 }
 
 func (m *Maria) DeleteMariaResources(deploy *v1beta1.Deployment, svc *v1.Service) (err error) {
-	deletePolicy := metav1.DeletePropagationForeground
 	if err = m.client.AppsV1beta1().Deployments(m.ns).Delete(deploy.Name, &metav1.DeleteOptions{
 		PropagationPolicy: &deletePolicy,
 	}); err != nil {

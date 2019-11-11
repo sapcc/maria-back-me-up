@@ -74,7 +74,6 @@ func GetRoot(m *backup.Manager) echo.HandlerFunc {
 		var tmpl = template.New("index.html").Funcs(funcMap)
 		t, err := tmpl.ParseFiles(constants.INDEX)
 		backups, err := m.Storage.ListFullBackups()
-		fmt.Println(backups)
 		if err != nil {
 			return fmt.Errorf("Error fetching backup list: %s", err.Error())
 		}

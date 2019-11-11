@@ -117,7 +117,10 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 		return
 	}
 	for c := time.Tick(time.Duration(m.cfg.FullBackupIntervalInHours) * time.Hour); ; {
-		go m.scheduleVerifyBackup(ctx, 15)
+		ctxBin := context.Background()
+		ctxBin, binlogCancel = context.WithCancel(ctxBin)
+
+		go m.scheduleVerifyBackup(ctxBin, constants.VERIFYINTERFAL)
 
 		m.lastBackupTime = time.Now().Format(time.RFC3339)
 		bpath := path.Join(m.cfg.BackupDir, m.lastBackupTime)
@@ -128,8 +131,7 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 			time.Sleep(time.Duration(1) * time.Minute)
 			continue
 		}
-		ctxBin := context.Background()
-		ctxBin, binlogCancel = context.WithCancel(ctxBin)
+
 		go m.onLogUpdate(ch)
 		var eg errgroup.Group
 		eg.Go(func() error {

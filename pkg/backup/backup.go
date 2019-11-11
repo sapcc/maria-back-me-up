@@ -94,7 +94,6 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 	defer func() {
 		pw.Close()
 		syncer.Close()
-		close(c)
 	}()
 
 	// Start sync with specified binlog file and position
@@ -136,6 +135,9 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 				}
 				if ctx.Err() == nil {
 					c <- time.Now()
+				} else {
+					c <- time.Now()
+					close(c)
 				}
 				return nil
 			}()
