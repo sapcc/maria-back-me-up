@@ -26,7 +26,7 @@ import (
 
 type (
 	updateStatus struct {
-		sync.Mutex   `yaml:"-"`
+		sync.RWMutex `yaml:"-"`
 		up           bool
 		incBackup    time.Time
 		fullBackup   time.Time
@@ -76,7 +76,8 @@ func (c *MetricsCollector) Collect(ch chan<- prometheus.Metric) {
 		)
 	}
 
-	c.updateSts.Lock()
+	c.updateSts.RLock()
+	defer c.updateSts.RUnlock()
 	ch <- prometheus.MustNewConstMetric(
 		c.backup,
 		prometheus.GaugeValue,
@@ -101,7 +102,6 @@ func (c *MetricsCollector) Collect(ch chan<- prometheus.Metric) {
 		float64(c.updateSts.VerifyTables),
 		"verify_tables",
 	)
-	c.updateSts.Unlock()
 }
 
 func NewMetricsCollector(c config.MariaDB, u *updateStatus) *MetricsCollector {

@@ -117,6 +117,8 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 		return
 	}
 	for c := time.Tick(time.Duration(m.cfg.FullBackupIntervalInHours) * time.Hour); ; {
+		//verify last full backup cycle
+		go m.verifyBackup(m.lastBackupTime)
 		m.lastBackupTime = time.Now().Format(time.RFC3339)
 		bpath := path.Join(m.cfg.BackupDir, m.lastBackupTime)
 		ch := make(chan time.Time)
@@ -129,6 +131,7 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 		ctxBin := context.Background()
 		ctxBin, binlogCancel = context.WithCancel(ctxBin)
 		go m.onLogUpdate(ch)
+		//start verify cycle
 		go m.scheduleVerifyBackup(ctxBin, constants.VERIFYINTERFAL)
 		var eg errgroup.Group
 		eg.Go(func() error {
@@ -192,19 +195,10 @@ func (m *Manager) createMysqlDump(bpath string) (mp mysql.Position, err error) {
 }
 
 func (m *Manager) scheduleVerifyBackup(ctx context.Context, duration int) {
-	var err error
 	for c := time.Tick(time.Duration(duration) * time.Minute); ; {
-		if m.lastBackupTime != "" && len(m.cfg.MariaDB.VerifyTables) > 0 {
-			m.backupCheckSums, err = getCheckSumForTable(m.cfg.MariaDB)
-			if err != nil {
-				logger.Error("cannot load checksums")
-			}
-		}
-		go m.verifyBackup()
-
 		select {
 		case <-c:
-			continue
+			go m.verifyBackup(m.lastBackupTime)
 		case <-ctx.Done():
 			logger.Info("stop verfiy backup")
 			return
@@ -212,8 +206,15 @@ func (m *Manager) scheduleVerifyBackup(ctx context.Context, duration int) {
 	}
 }
 
-func (m *Manager) verifyBackup() {
+func (m *Manager) verifyBackup(lastBackupTime string) {
+	var err error
 	logger.Info("Start verifying backup")
+	if lastBackupTime != "" && len(m.cfg.MariaDB.VerifyTables) > 0 {
+		m.backupCheckSums, err = getCheckSumForTable(m.cfg.MariaDB)
+		if err != nil {
+			logger.Error("cannot load checksums")
+		}
+	}
 	cfg := config.Config{
 		MariaDB: config.MariaDB{
 			Host:         fmt.Sprintf("%s-%s-verify", m.cfg.ServiceName, podName),
@@ -240,7 +241,7 @@ func (m *Manager) verifyBackup() {
 		m.onVerifyError(fmt.Errorf("error creating mariadb for verifying: %s", err.Error()))
 		return
 	}
-	m.updateSts.Lock()
+
 	r := NewRestore(cfg)
 	if err = r.restore(p); err != nil {
 		m.onVerifyError(fmt.Errorf("error restoring backup for verifying: %s", err.Error()))
@@ -250,7 +251,9 @@ func (m *Manager) verifyBackup() {
 		if err = m.verifyChecksums(cfg); err != nil {
 			m.onVerifyError(fmt.Errorf("error doing table checksum: %s", err.Error()))
 		} else {
+			m.updateSts.Lock()
 			m.updateSts.VerifyTables = 1
+			m.updateSts.Unlock()
 		}
 	}
 	defer func() {
@@ -266,9 +269,10 @@ func (m *Manager) verifyBackup() {
 		if err = m.maria.DeleteMariaResources(dp, svc); err != nil {
 			logger.Error(fmt.Errorf("error deleting mariadb resources for verifying: %s", err.Error()))
 		}
-		m.updateSts.Unlock()
 	}()
+	m.updateSts.Lock()
 	m.updateSts.VerifyBackup = 1
+	m.updateSts.Unlock()
 	logger.Info("Done verifying backup successful")
 }
 
@@ -286,15 +290,17 @@ func (m *Manager) verifyChecksums(cfg config.Config) (err error) {
 
 func (m *Manager) onVerifyError(err error) {
 	logger.Error(err.Error())
+	m.updateSts.Lock()
 	m.updateSts.VerifyBackup = 0
 	m.updateSts.VerifyTables = 0
+	m.updateSts.Unlock()
 	return
 }
 
 func (m *Manager) onLogUpdate(c chan time.Time) {
 	for {
 		t, ok := <-c
-		if ok == false {
+		if !ok {
 			break
 		}
 		m.updateSts.Lock()
