@@ -56,16 +56,16 @@ type (
 		Ready bool
 	}
 	Manager struct {
-		cfg                config.Config
-		backup             *Backup
-		maria              *k8s.Maria
-		restore            *Restore
-		Storage            storage.Storage
-		updateSts          *updateStatus
-		Health             *Health
-		lastBackupTime     string
-		backupCheckSums    map[string]int64
-		verifyBackupActive bool
+		cfg             config.Config
+		backup          *Backup
+		maria           *k8s.Maria
+		restore         *Restore
+		Storage         storage.Storage
+		updateSts       *updateStatus
+		Health          *Health
+		lastBackupTime  string
+		backupCheckSums map[string]int64
+		verifyTimer     *time.Timer
 	}
 )
 
@@ -89,15 +89,14 @@ func NewManager(c config.Config) (m *Manager, err error) {
 	prometheus.MustRegister(NewMetricsCollector(c.MariaDB, &us))
 
 	return &Manager{
-		cfg:                c,
-		backup:             b,
-		maria:              mr,
-		restore:            NewRestore(c),
-		Storage:            s3,
-		updateSts:          &us,
-		Health:             &Health{Ready: true},
-		backupCheckSums:    make(map[string]int64),
-		verifyBackupActive: false,
+		cfg:             c,
+		backup:          b,
+		maria:           mr,
+		restore:         NewRestore(c),
+		Storage:         s3,
+		updateSts:       &us,
+		Health:          &Health{Ready: true},
+		backupCheckSums: make(map[string]int64),
 	}, err
 }
 
@@ -161,6 +160,9 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 		case <-ctx.Done():
 			logger.Info("stop backup")
 			binlogCancel()
+			if m.verifyTimer != nil {
+				m.verifyTimer.Stop()
+			}
 			return nil
 		}
 	}
@@ -212,7 +214,7 @@ func (m *Manager) verifyBackup(lastBackupTime, backupFolder string) {
 	logger.Info("Start verifying backup")
 	defer func() {
 		os.RemoveAll(backupFolder)
-		m.verifyBackupActive = false
+		m.verifyTimer = nil
 		m.uploadVerfiyStatus(backupFolder)
 	}()
 
@@ -318,9 +320,8 @@ func (m *Manager) onBinlogRotation(c chan time.Time) {
 		m.updateSts.incBackup = t
 		m.updateSts.Unlock()
 
-		if !m.verifyBackupActive {
-			m.verifyBackupActive = true
-			time.AfterFunc(time.Duration(15)*time.Minute, func() {
+		if m.verifyTimer == nil {
+			m.verifyTimer = time.AfterFunc(time.Duration(15)*time.Minute, func() {
 				p, err := m.Storage.DownloadLatestBackup()
 				if err != nil {
 					m.onVerifyError(fmt.Errorf("error loading backup for verifying: %s", err.Error()))

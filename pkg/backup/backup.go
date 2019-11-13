@@ -26,10 +26,10 @@ const (
 
 type (
 	Backup struct {
-		cfg         config.Config
-		docker      *client.Client
-		storage     storage.Storage
-		flushActive bool
+		cfg        config.Config
+		docker     *client.Client
+		storage    storage.Storage
+		flushTimer *time.Timer
 	}
 	metadata struct {
 		Status binlog `yaml:"SHOW MASTER STATUS"`
@@ -48,10 +48,9 @@ func NewBackup(c config.Config, s storage.Storage) (m *Backup, err error) {
 	}
 
 	m = &Backup{
-		cfg:         c,
-		docker:      cli,
-		storage:     s,
-		flushActive: false,
+		cfg:     c,
+		docker:  cli,
+		storage: s,
 	}
 
 	return
@@ -151,19 +150,20 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 
 		switch ev.Event.(type) {
 		case *replication.RowsEvent:
-			if !b.flushActive {
-				b.flushActive = true
-				time.AfterFunc(time.Duration(b.cfg.IncrementalBackupIntervalInMinutes)*time.Minute, func() { b.flushLogs(ctx) })
+			if b.flushTimer == nil {
+				b.flushTimer = time.AfterFunc(time.Duration(b.cfg.IncrementalBackupIntervalInMinutes)*time.Minute, func() { b.flushLogs() })
 			}
 		case *replication.QueryEvent:
-			if !b.flushActive {
-				b.flushActive = true
-				time.AfterFunc(time.Duration(b.cfg.IncrementalBackupIntervalInMinutes)*time.Minute, func() { b.flushLogs(ctx) })
+			if b.flushTimer == nil {
+				b.flushTimer = time.AfterFunc(time.Duration(b.cfg.IncrementalBackupIntervalInMinutes)*time.Minute, func() { b.flushLogs() })
 			}
 		}
 
 		select {
 		case <-ctx.Done():
+			if b.flushTimer != nil {
+				b.flushTimer.Stop()
+			}
 			log.Info("stop binlog streaming")
 			return
 		default:
@@ -172,9 +172,9 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 	}
 }
 
-func (b *Backup) flushLogs(ctx context.Context) (err error) {
+func (b *Backup) flushLogs() (err error) {
 	defer func() {
-		b.flushActive = false
+		b.flushTimer = nil
 	}()
 	flushLogs := exec.Command(
 		"mysqladmin",
