@@ -64,6 +64,9 @@ func verifyBackup(v []storage.Verify, t time.Time) string {
 				if k.Tables == 1 {
 					verifyState = "green"
 				}
+				if k.Backup == 0 {
+					verifyState = "red"
+				}
 			}
 			duration = k.Time.Sub(t)
 		}

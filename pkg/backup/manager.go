@@ -345,6 +345,12 @@ func (m *Manager) Restore(p string, kind string) (err error) {
 	m.Health.Lock()
 	m.Health.Ready = false
 	m.Health.Unlock()
+	defer func() {
+		os.RemoveAll(p)
+		m.Health.Lock()
+		m.Health.Ready = true
+		m.Health.Unlock()
+	}()
 	err = m.maria.CheckPodNotReady()
 	if err != nil {
 		return fmt.Errorf("cannot set pod to status: NotReady. Reason: %s", err.Error())
@@ -358,11 +364,6 @@ func (m *Manager) Restore(p string, kind string) (err error) {
 			return
 		}
 	}
-	defer func() {
-		os.RemoveAll(p)
-		m.Health.Lock()
-		m.Health.Ready = true
-		m.Health.Unlock()
-	}()
+
 	return
 }
