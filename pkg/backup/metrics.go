@@ -17,6 +17,7 @@
 package backup
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -54,7 +55,7 @@ func (c *MetricsCollector) Describe(ch chan<- *prometheus.Desc) {
 
 func (c *MetricsCollector) Collect(ch chan<- prometheus.Metric) {
 	s, err := HealthCheck(c.cfg)
-	if err == nil || !s.Ok {
+	if err != nil || !s.Ok {
 		ch <- prometheus.MustNewConstMetric(
 			c.upGauge,
 			prometheus.GaugeValue,
@@ -68,12 +69,14 @@ func (c *MetricsCollector) Collect(ch chan<- prometheus.Metric) {
 		)
 	}
 	for key, value := range s.Details {
-		ch <- prometheus.MustNewConstMetric(
-			c.mariaHealth,
-			prometheus.GaugeValue,
-			float64(value),
-			key,
-		)
+		if !strings.Contains(key, "mysql.") {
+			ch <- prometheus.MustNewConstMetric(
+				c.mariaHealth,
+				prometheus.GaugeValue,
+				float64(value),
+				key,
+			)
+		}
 	}
 
 	c.updateSts.RLock()

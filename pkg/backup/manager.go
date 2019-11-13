@@ -56,15 +56,16 @@ type (
 		Ready bool
 	}
 	Manager struct {
-		cfg             config.Config
-		backup          *Backup
-		maria           *k8s.Maria
-		restore         *Restore
-		Storage         storage.Storage
-		updateSts       *updateStatus
-		Health          *Health
-		lastBackupTime  string
-		backupCheckSums map[string]int64
+		cfg                config.Config
+		backup             *Backup
+		maria              *k8s.Maria
+		restore            *Restore
+		Storage            storage.Storage
+		updateSts          *updateStatus
+		Health             *Health
+		lastBackupTime     string
+		backupCheckSums    map[string]int64
+		verifyBackupActive bool
 	}
 )
 
@@ -88,14 +89,15 @@ func NewManager(c config.Config) (m *Manager, err error) {
 	prometheus.MustRegister(NewMetricsCollector(c.MariaDB, &us))
 
 	return &Manager{
-		cfg:             c,
-		backup:          b,
-		maria:           mr,
-		restore:         NewRestore(c),
-		Storage:         s3,
-		updateSts:       &us,
-		Health:          &Health{Ready: true},
-		backupCheckSums: make(map[string]int64),
+		cfg:                c,
+		backup:             b,
+		maria:              mr,
+		restore:            NewRestore(c),
+		Storage:            s3,
+		updateSts:          &us,
+		Health:             &Health{Ready: true},
+		backupCheckSums:    make(map[string]int64),
+		verifyBackupActive: false,
 	}, err
 }
 
@@ -118,7 +120,14 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 	}
 	for c := time.Tick(time.Duration(m.cfg.FullBackupIntervalInHours) * time.Hour); ; {
 		//verify last full backup cycle
-		go m.verifyBackup(m.lastBackupTime)
+		p, err := m.Storage.DownloadLatestBackup()
+		if err != nil {
+			m.onVerifyError(fmt.Errorf("error loading backup for verifying: %s", err.Error()))
+			m.uploadVerfiyStatus(p)
+		} else {
+			go m.verifyBackup(m.lastBackupTime, p)
+		}
+
 		m.lastBackupTime = time.Now().Format(time.RFC3339)
 		bpath := path.Join(m.cfg.BackupDir, m.lastBackupTime)
 		ch := make(chan time.Time)
@@ -130,13 +139,8 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 		}
 		ctxBin := context.Background()
 		ctxBin, binlogCancel = context.WithCancel(ctxBin)
-		go m.onLogUpdate(ch)
-		//start verify cycle
-		go m.scheduleVerifyBackup(ctxBin, constants.VERIFYINTERFAL)
+		go m.onBinlogRotation(ch)
 		var eg errgroup.Group
-		eg.Go(func() error {
-			return m.flushLogs(ctxBin)
-		})
 		eg.Go(func() error {
 			return m.backup.runBinlog(ctxBin, mp, m.lastBackupTime, ch)
 		})
@@ -194,21 +198,24 @@ func (m *Manager) createMysqlDump(bpath string) (mp mysql.Position, err error) {
 	return
 }
 
-func (m *Manager) scheduleVerifyBackup(ctx context.Context, duration int) {
-	for c := time.Tick(time.Duration(duration) * time.Minute); ; {
-		select {
-		case <-c:
-			go m.verifyBackup(m.lastBackupTime)
-		case <-ctx.Done():
-			logger.Info("stop verfiy backup")
-			return
-		}
+func (m *Manager) scheduleVerifyBackup() {
+	p, err := m.Storage.DownloadLatestBackup()
+	if err != nil {
+		m.onVerifyError(fmt.Errorf("error loading backup for verifying: %s", err.Error()))
+		return
 	}
+	go m.verifyBackup(m.lastBackupTime, p)
 }
 
-func (m *Manager) verifyBackup(lastBackupTime string) {
+func (m *Manager) verifyBackup(lastBackupTime, backupFolder string) {
 	var err error
 	logger.Info("Start verifying backup")
+	defer func() {
+		os.RemoveAll(backupFolder)
+		m.verifyBackupActive = false
+		m.uploadVerfiyStatus(backupFolder)
+	}()
+
 	if lastBackupTime != "" && len(m.cfg.MariaDB.VerifyTables) > 0 {
 		m.backupCheckSums, err = getCheckSumForTable(m.cfg.MariaDB)
 		if err != nil {
@@ -226,11 +233,7 @@ func (m *Manager) verifyBackup(lastBackupTime string) {
 			Database:     m.cfg.MariaDB.Database,
 		},
 	}
-	p, err := m.Storage.DownloadLatestBackup()
-	if err != nil {
-		m.onVerifyError(fmt.Errorf("error loading backup for verifying: %s", err.Error()))
-		return
-	}
+
 	dp, err := m.maria.CreateMariaDeployment(cfg.MariaDB)
 	if err != nil {
 		m.onVerifyError(fmt.Errorf("error creating mariadb for verifying: %s", err.Error()))
@@ -242,11 +245,21 @@ func (m *Manager) verifyBackup(lastBackupTime string) {
 		return
 	}
 
+	defer func() {
+		if err = m.maria.DeleteMariaResources(dp, svc); err != nil {
+			logger.Error(fmt.Errorf("error deleting mariadb resources for verifying: %s", err.Error()))
+		}
+	}()
+
 	r := NewRestore(cfg)
-	if err = r.restore(p); err != nil {
+	if err = r.restore(backupFolder); err != nil {
 		m.onVerifyError(fmt.Errorf("error restoring backup for verifying: %s", err.Error()))
 		return
 	}
+	m.updateSts.Lock()
+	m.updateSts.VerifyBackup = 1
+	m.updateSts.Unlock()
+
 	if len(m.backupCheckSums) > 0 && len(m.cfg.MariaDB.VerifyTables) > 0 {
 		if err = m.verifyChecksums(cfg); err != nil {
 			m.onVerifyError(fmt.Errorf("error doing table checksum: %s", err.Error()))
@@ -256,23 +269,6 @@ func (m *Manager) verifyBackup(lastBackupTime string) {
 			m.updateSts.Unlock()
 		}
 	}
-	defer func() {
-		out, err := yaml.Marshal(m.updateSts)
-		if err == nil {
-			u := strconv.FormatInt(time.Now().Unix(), 10)
-			//remove restore and servicename dir from path
-			vp := strings.Replace(p, filepath.Join(constants.RESTOREFOLDER, m.cfg.ServiceName), "", 1)
-			m.Storage.WriteStream(vp+"/verify_"+u+".yaml", "", bytes.NewReader(out))
-		} else {
-			logger.Error(fmt.Errorf("cannot write verify status: %s", err.Error()))
-		}
-		if err = m.maria.DeleteMariaResources(dp, svc); err != nil {
-			logger.Error(fmt.Errorf("error deleting mariadb resources for verifying: %s", err.Error()))
-		}
-	}()
-	m.updateSts.Lock()
-	m.updateSts.VerifyBackup = 1
-	m.updateSts.Unlock()
 	logger.Info("Done verifying backup successful")
 }
 
@@ -297,15 +293,42 @@ func (m *Manager) onVerifyError(err error) {
 	return
 }
 
-func (m *Manager) onLogUpdate(c chan time.Time) {
+func (m *Manager) uploadVerfiyStatus(backupFolder string) {
+	m.updateSts.RLock()
+	out, err := yaml.Marshal(m.updateSts)
+	m.updateSts.RUnlock()
+	if err == nil {
+		u := strconv.FormatInt(time.Now().Unix(), 10)
+		//remove restore and servicename dir from path
+		vp := strings.Replace(backupFolder, filepath.Join(constants.RESTOREFOLDER, m.cfg.ServiceName), "", 1)
+		m.Storage.WriteStream(vp+"/verify_"+u+".yaml", "", bytes.NewReader(out))
+	} else {
+		logger.Error(fmt.Errorf("cannot write verify status: %s", err.Error()))
+	}
+}
+
+func (m *Manager) onBinlogRotation(c chan time.Time) {
 	for {
 		t, ok := <-c
 		if !ok {
 			break
 		}
+
 		m.updateSts.Lock()
 		m.updateSts.incBackup = t
 		m.updateSts.Unlock()
+
+		if !m.verifyBackupActive {
+			m.verifyBackupActive = true
+			time.AfterFunc(time.Duration(15)*time.Minute, func() {
+				p, err := m.Storage.DownloadLatestBackup()
+				if err != nil {
+					m.onVerifyError(fmt.Errorf("error loading backup for verifying: %s", err.Error()))
+					return
+				}
+				go m.verifyBackup(m.lastBackupTime, p)
+			})
+		}
 	}
 }
 
@@ -341,19 +364,4 @@ func (m *Manager) Restore(p string, kind string) (err error) {
 		m.Health.Unlock()
 	}()
 	return
-}
-
-func (m *Manager) flushLogs(ctx context.Context) (err error) {
-	for c := time.Tick(time.Duration(m.cfg.IncrementalBackupIntervalInMinutes) * time.Minute); ; {
-		if err = m.backup.flushLogs(ctx); err != nil {
-			return err
-		}
-		select {
-		case <-c:
-			continue
-		case <-ctx.Done():
-			logger.Info("stop flush")
-			return
-		}
-	}
 }

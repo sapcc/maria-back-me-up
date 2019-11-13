@@ -26,9 +26,10 @@ const (
 
 type (
 	Backup struct {
-		cfg     config.Config
-		docker  *client.Client
-		storage storage.Storage
+		cfg         config.Config
+		docker      *client.Client
+		storage     storage.Storage
+		flushActive bool
 	}
 	metadata struct {
 		Status binlog `yaml:"SHOW MASTER STATUS"`
@@ -47,9 +48,10 @@ func NewBackup(c config.Config, s storage.Storage) (m *Backup, err error) {
 	}
 
 	m = &Backup{
-		cfg:     c,
-		docker:  cli,
-		storage: s,
+		cfg:         c,
+		docker:      cli,
+		storage:     s,
+		flushActive: false,
 	}
 
 	return
@@ -146,6 +148,20 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 
 		}
 		pw.Write(ev.RawData)
+
+		switch ev.Event.(type) {
+		case *replication.RowsEvent:
+			if !b.flushActive {
+				b.flushActive = true
+				time.AfterFunc(time.Duration(b.cfg.IncrementalBackupIntervalInMinutes)*time.Minute, func() { b.flushLogs(ctx) })
+			}
+		case *replication.QueryEvent:
+			if !b.flushActive {
+				b.flushActive = true
+				time.AfterFunc(time.Duration(b.cfg.IncrementalBackupIntervalInMinutes)*time.Minute, func() { b.flushLogs(ctx) })
+			}
+		}
+
 		select {
 		case <-ctx.Done():
 			log.Info("stop binlog streaming")
@@ -157,6 +173,9 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 }
 
 func (b *Backup) flushLogs(ctx context.Context) (err error) {
+	defer func() {
+		b.flushActive = false
+	}()
 	flushLogs := exec.Command(
 		"mysqladmin",
 		"flush-logs",
