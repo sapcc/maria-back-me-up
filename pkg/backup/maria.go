@@ -44,6 +44,7 @@ func HealthCheck(c config.MariaDB) (status Status, err error) {
 	}
 	dbs := strings.Join(c.Databases, " -B ")
 	args := strings.Split(fmt.Sprintf("-c -B %s -u%s -p%s -h%s -P%s", dbs, c.User, c.Password, c.Host, strconv.Itoa(c.Port)), " ")
+	fmt.Println(args)
 	cmd := exec.Command(
 		"mysqlcheck",
 		args...,
@@ -55,6 +56,7 @@ func HealthCheck(c config.MariaDB) (status Status, err error) {
 		return status, fmt.Errorf("mysqlcheck failed with %s", err)
 	}
 	outa := strings.Fields(string(out))
+	fmt.Println(outa)
 	for i := 0; i < len(outa)-1; i++ {
 		if i%2 == 0 {
 			if outa[i+1] == "OK" {
@@ -65,7 +67,7 @@ func HealthCheck(c config.MariaDB) (status Status, err error) {
 			}
 		}
 	}
-
+	fmt.Println(status)
 	return
 }
 
