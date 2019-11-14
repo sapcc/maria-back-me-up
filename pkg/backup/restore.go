@@ -45,6 +45,21 @@ func NewRestore(c config.Config) (r *Restore) {
 	}
 }
 
+func (r *Restore) verifyRestore(backupPath string) (err error) {
+	if err = r.waitMariaDbUp(1 * time.Minute); err != nil {
+		return fmt.Errorf("Timed out waiting for mariadb to boot. Cant perform restore")
+	}
+	if err = r.restoreDump(backupPath); err != nil {
+		return
+	}
+
+	if err = r.restoreIncBackup(backupPath); err != nil {
+		return
+	}
+
+	return
+}
+
 func (r *Restore) restore(backupPath string) (err error) {
 	log.Info("STARTING RESTORE")
 	if err = r.restartMariaDB(); err != nil {

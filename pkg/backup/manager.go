@@ -245,7 +245,7 @@ func (m *Manager) verifyBackup(lastBackupTime, backupFolder string) {
 	}()
 
 	r := NewRestore(cfg)
-	if err = r.restore(backupFolder); err != nil {
+	if err = r.verifyRestore(backupFolder); err != nil {
 		m.onVerifyError(fmt.Errorf("error restoring backup for verifying: %s", err.Error()))
 		return
 	}
