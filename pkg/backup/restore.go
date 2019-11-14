@@ -46,6 +46,7 @@ func NewRestore(c config.Config) (r *Restore) {
 }
 
 func (r *Restore) restore(backupPath string) (err error) {
+	log.Info("STARTING RESTORE")
 	if err = r.restartMariaDB(); err != nil {
 		//Cant shutdown database. Lets try restore anyway
 		log.Error(fmt.Errorf("Timed out trying to shutdown database"))
@@ -142,6 +143,7 @@ func (r *Restore) restoreIncBackup(p string) (err error) {
 
 func (r *Restore) dropMariaDBDatabases() {
 	for _, d := range r.cfg.MariaDB.Databases {
+		log.Debug("dropping database: ", d)
 		if err := exec.Command("mysqladmin",
 			"-u"+r.cfg.MariaDB.User,
 			"-p"+r.cfg.MariaDB.Password,
