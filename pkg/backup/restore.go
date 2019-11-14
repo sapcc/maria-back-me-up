@@ -47,35 +47,29 @@ func NewRestore(c config.Config) (r *Restore) {
 
 func (r *Restore) restore(backupPath string) (err error) {
 	if err = r.restartMariaDB(); err != nil {
-		//Cant shutdown database. Try to delete datadir anyway.
+		//Cant shutdown database. Lets try restore anyway
 		log.Error(fmt.Errorf("Timed out trying to shutdown database"))
 	}
-	if err = r.deleteMariaDBData(); err != nil {
-		log.Error(fmt.Errorf("Error trying to delete database data dir: %s", err.Error()))
-	}
-	cf := wait.ConditionFunc(func() (bool, error) {
-		s, err := HealthCheck(r.cfg.MariaDB)
-		if err != nil || !s.Ok {
-			return false, nil
-		}
-		return true, nil
-	})
-	if err = wait.Poll(5*time.Second, 5*time.Minute, cf); err != nil {
-		return fmt.Errorf("Timed out waiting for mariadb to become healthy")
+	err = r.waitMariaDBHealthy(2 * time.Minute)
+	if err != nil {
+		log.Error(fmt.Errorf("Timed out waiting for mariadb to become healthy. Delete data dir"))
+		r.deleteMariaDBDatabases()
+	} else {
+		r.dropMariaDBDatabases()
 	}
 
-	//Drop database
-	if err = exec.Command("mysqladmin",
-		"-u"+r.cfg.MariaDB.User,
-		"-p"+r.cfg.MariaDB.Password,
-		"-h"+r.cfg.MariaDB.Host,
-		"-P"+strconv.Itoa(r.cfg.MariaDB.Port),
-		"drop", r.cfg.MariaDB.Database,
-		"--force",
-	).Run(); err != nil {
-		log.Error(fmt.Errorf("mysqladmin drop table error: %s", err.Error()))
+	if err = r.waitMariaDBHealthy(5 * time.Minute); err != nil {
+		return fmt.Errorf("Timed out waiting for mariadb to become healthy. Cant perform restore")
 	}
 
+	if err = r.restoreDump(backupPath); err != nil {
+		return
+	}
+
+	return r.restoreIncBackup(backupPath)
+}
+
+func (r *Restore) restoreDump(backupPath string) (err error) {
 	log.Debug("Restore path: ", backupPath)
 	if err = os.MkdirAll(
 		filepath.Join(backupPath, "dump"), os.ModePerm); err != nil {
@@ -103,11 +97,10 @@ func (r *Restore) restore(backupPath string) (err error) {
 		return
 	}
 	log.Debug("myloader restore finished")
-
-	return r.restoreIncBackupFromPath(backupPath)
+	return
 }
 
-func (r *Restore) restoreIncBackupFromPath(p string) (err error) {
+func (r *Restore) restoreIncBackup(p string) (err error) {
 	var binlogFiles []string
 	filepath.Walk(p, func(p string, f os.FileInfo, err error) error {
 		if f.IsDir() && f.Name() == "dump" {
@@ -147,7 +140,23 @@ func (r *Restore) restoreIncBackupFromPath(p string) (err error) {
 	return mysqlPipe.Wait()
 }
 
-func (r *Restore) deleteMariaDBData() (err error) {
+func (r *Restore) dropMariaDBDatabases() {
+	for _, d := range r.cfg.MariaDB.Databases {
+		if err := exec.Command("mysqladmin",
+			"-u"+r.cfg.MariaDB.User,
+			"-p"+r.cfg.MariaDB.Password,
+			"-h"+r.cfg.MariaDB.Host,
+			"-P"+strconv.Itoa(r.cfg.MariaDB.Port),
+			"drop", d,
+			"--force",
+		).Run(); err != nil {
+			log.Error(fmt.Errorf("mysqladmin drop table error: %s", err.Error()))
+		}
+	}
+
+}
+
+func (r *Restore) deleteMariaDBDatabases() (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
 		if err = os.RemoveAll(r.cfg.MariaDB.DataDir); err != nil {
 			return false, nil
@@ -176,6 +185,17 @@ func (r *Restore) restartMariaDB() (err error) {
 		return true, nil
 	})
 	return wait.Poll(5*time.Second, 30*time.Second, cf)
+}
+
+func (r *Restore) waitMariaDBHealthy(timeout time.Duration) (err error) {
+	cf := wait.ConditionFunc(func() (bool, error) {
+		s, err := HealthCheck(r.cfg.MariaDB)
+		if err != nil || !s.Ok {
+			return false, nil
+		}
+		return true, nil
+	})
+	return wait.Poll(5*time.Second, timeout, cf)
 }
 
 func IsEmpty(name string) (bool, error) {

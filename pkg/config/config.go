@@ -43,7 +43,7 @@ type MariaDB struct {
 	User         string   `yaml:"user"`
 	Password     string   `yaml:"password"`
 	DataDir      string   `yaml:"data_dir"`
-	Database     string   `yaml:"database"`
+	Databases    []string `yaml:"database"`
 	VerifyTables []string `yaml:"verify_tables"`
 }
 

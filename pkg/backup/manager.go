@@ -232,7 +232,7 @@ func (m *Manager) verifyBackup(lastBackupTime, backupFolder string) {
 			Password:     m.cfg.MariaDB.Password,
 			Version:      m.cfg.MariaDB.Version,
 			VerifyTables: m.cfg.MariaDB.VerifyTables,
-			Database:     m.cfg.MariaDB.Database,
+			Databases:    m.cfg.MariaDB.Databases,
 		},
 	}
 
@@ -346,7 +346,6 @@ func (m *Manager) Restore(p string) (err error) {
 	m.Health.Ready = false
 	m.Health.Unlock()
 	defer func() {
-		os.RemoveAll(p)
 		m.Health.Lock()
 		m.Health.Ready = true
 		m.Health.Unlock()
@@ -358,6 +357,8 @@ func (m *Manager) Restore(p string) (err error) {
 	if err = m.restore.restore(p); err != nil {
 		return
 	}
+	//only remove backup files when restore was succesful, so manual restore is possible!
+	os.RemoveAll(p)
 
 	return
 }

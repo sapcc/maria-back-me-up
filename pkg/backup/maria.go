@@ -83,7 +83,7 @@ func getCheckSumForTable(c config.MariaDB) (cs map[string]int64, err error) {
 		return
 	}
 
-	conn, err := client.Connect(fmt.Sprintf("%s:%s", c.Host, strconv.Itoa(c.Port)), c.User, c.Password, c.Database)
+	conn, err := client.Connect(fmt.Sprintf("%s:%s", c.Host, strconv.Itoa(c.Port)), c.User, c.Password, "")
 	if err != nil {
 		return
 	}
