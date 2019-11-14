@@ -148,9 +148,10 @@ func (m *Maria) CheckPodNotReady() (err error) {
 		return false, nil
 	})
 	//Check for 1 minute if pod is in state  NotReady
-	if err = wait.Poll(1*time.Second, 1*time.Minute, cf); err != nil {
+	if err = wait.Poll(5*time.Second, 1*time.Minute, cf); err != nil {
 		return fmt.Errorf("Wait Timed out for pod readiness: %s", err.Error())
 	}
+
 	return
 }
 

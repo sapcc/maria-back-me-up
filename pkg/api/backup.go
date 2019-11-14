@@ -134,20 +134,13 @@ func PostRestore(m *backup.Manager) echo.HandlerFunc {
 			if err = sendJSONResponse(c, "Database not healthy. Trying hard restore!", ""); err != nil {
 				return
 			}
-			if err = sendJSONResponse(c, "Starting hard restore...", ""); err != nil {
-				return
-			}
-			if err = m.Restore(backupPath, constants.HARDRESTORE); err != nil {
-				return sendJSONResponse(c, "Hard Restore Error!", err.Error())
-			}
-		} else {
-			if err = sendJSONResponse(c, "Starting restore...", ""); err != nil {
-				return
-			}
+		}
+		if err = sendJSONResponse(c, "Starting restore...", ""); err != nil {
+			return
+		}
 
-			if err = m.Restore(backupPath, constants.SOFTRESTORE); err != nil {
-				return sendJSONResponse(c, "Restore Error!", err.Error())
-			}
+		if err = m.Restore(backupPath); err != nil {
+			return sendJSONResponse(c, "Restore Error!", err.Error())
 		}
 
 		go m.Start()

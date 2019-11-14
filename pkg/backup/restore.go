@@ -45,39 +45,14 @@ func NewRestore(c config.Config) (r *Restore) {
 	}
 }
 
-func (r *Restore) hardRestore(p string) (err error) {
-	cmd := exec.Command("mysqladmin",
-		"shutdown",
-		"-u"+r.cfg.MariaDB.User,
-		"-p"+r.cfg.MariaDB.Password,
-		"-h"+r.cfg.MariaDB.Host,
-		"-P"+strconv.Itoa(r.cfg.MariaDB.Port),
-	)
-	cf := wait.ConditionFunc(func() (bool, error) {
-		err = cmd.Run()
-		if err != nil {
-			return false, nil
-		}
-		return true, nil
-	})
-	if err = wait.Poll(5*time.Second, 1*time.Minute, cf); err != nil {
+func (r *Restore) restore(backupPath string) (err error) {
+	if err = r.restartMariaDB(); err != nil {
 		//Cant shutdown database. Try to delete datadir anyway.
 		log.Error(fmt.Errorf("Timed out trying to shutdown database"))
 	}
-
-	if r.cfg.MariaDB.DataDir != "" {
-		if err = os.RemoveAll(r.cfg.MariaDB.DataDir); err != nil {
-			return
-		}
+	if err = r.deleteMariaDBData(); err != nil {
+		log.Error(fmt.Errorf("Error trying to delete database data dir: %s", err.Error()))
 	}
-
-	if err = r.restore(p); err != nil {
-		return
-	}
-	return
-}
-
-func (r *Restore) restore(backupPath string) (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
 		s, err := HealthCheck(r.cfg.MariaDB)
 		if err != nil || !s.Ok {
@@ -87,21 +62,6 @@ func (r *Restore) restore(backupPath string) (err error) {
 	})
 	if err = wait.Poll(5*time.Second, 5*time.Minute, cf); err != nil {
 		return fmt.Errorf("Timed out waiting for mariadb to become healthy")
-	}
-
-	//backupPath := filepath.Dir(p)
-	log.Debug("Restore path: ", backupPath)
-	if err = os.MkdirAll(
-		filepath.Join(backupPath, "dump"), os.ModePerm); err != nil {
-		return
-	}
-	log.Debug("tar path: ", path.Join(backupPath, "dump"))
-	if err = exec.Command(
-		"tar",
-		"-xvf", path.Join(backupPath, "dump.tar"),
-		"-C", path.Join(backupPath, "dump"),
-	).Run(); err != nil {
-		return
 	}
 
 	//Drop database
@@ -115,6 +75,21 @@ func (r *Restore) restore(backupPath string) (err error) {
 	).Run(); err != nil {
 		log.Error(fmt.Errorf("mysqladmin drop table error: %s", err.Error()))
 	}
+
+	log.Debug("Restore path: ", backupPath)
+	if err = os.MkdirAll(
+		filepath.Join(backupPath, "dump"), os.ModePerm); err != nil {
+		return
+	}
+	log.Debug("tar path: ", path.Join(backupPath, "dump"))
+	if err = exec.Command(
+		"tar",
+		"-xvf", path.Join(backupPath, "dump.tar"),
+		"-C", path.Join(backupPath, "dump"),
+	).Run(); err != nil {
+		return
+	}
+	//mysql -h 127.0.0.1 -u root -p -N -e "SELECT * FROM INFORMATION_SCHEMA.PROCESSLIST where user != 'system user' and user !='root';" | awk '{print "KILL "$1";"}'| mysql -h 127.0.0.1 -u root -p
 
 	if err = exec.Command(
 		"myloader",
@@ -170,6 +145,37 @@ func (r *Restore) restoreIncBackupFromPath(p string) (err error) {
 		return
 	}
 	return mysqlPipe.Wait()
+}
+
+func (r *Restore) deleteMariaDBData() (err error) {
+	cf := wait.ConditionFunc(func() (bool, error) {
+		if err = os.RemoveAll(r.cfg.MariaDB.DataDir); err != nil {
+			return false, nil
+		}
+		return true, nil
+	})
+	if r.cfg.MariaDB.DataDir != "" {
+		return wait.Poll(1*time.Second, 30*time.Second, cf)
+	}
+	return
+}
+
+func (r *Restore) restartMariaDB() (err error) {
+	cmd := exec.Command("mysqladmin",
+		"shutdown",
+		"-u"+r.cfg.MariaDB.User,
+		"-p"+r.cfg.MariaDB.Password,
+		"-h"+r.cfg.MariaDB.Host,
+		"-P"+strconv.Itoa(r.cfg.MariaDB.Port),
+	)
+	cf := wait.ConditionFunc(func() (bool, error) {
+		err = cmd.Run()
+		if err != nil {
+			return false, nil
+		}
+		return true, nil
+	})
+	return wait.Poll(5*time.Second, 30*time.Second, cf)
 }
 
 func IsEmpty(name string) (bool, error) {

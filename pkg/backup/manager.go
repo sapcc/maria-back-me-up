@@ -341,7 +341,7 @@ func (m *Manager) GetConfig() config.Config {
 	return m.cfg
 }
 
-func (m *Manager) Restore(p string, kind string) (err error) {
+func (m *Manager) Restore(p string) (err error) {
 	m.Health.Lock()
 	m.Health.Ready = false
 	m.Health.Unlock()
@@ -355,14 +355,8 @@ func (m *Manager) Restore(p string, kind string) (err error) {
 	if err != nil {
 		return fmt.Errorf("cannot set pod to status: NotReady. Reason: %s", err.Error())
 	}
-	if kind == constants.SOFTRESTORE {
-		if err = m.restore.restore(p); err != nil {
-			return
-		}
-	} else if kind == constants.HARDRESTORE {
-		if err = m.restore.hardRestore(p); err != nil {
-			return
-		}
+	if err = m.restore.restore(p); err != nil {
+		return
 	}
 
 	return
