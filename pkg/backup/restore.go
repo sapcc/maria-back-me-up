@@ -51,27 +51,30 @@ func (r *Restore) restore(backupPath string) (err error) {
 		//Cant shutdown database. Lets try restore anyway
 		log.Error(fmt.Errorf("Timed out trying to shutdown database"))
 	}
-	err = r.waitMariaDBHealthy(2 * time.Minute)
+	err = r.waitMariaDbUp(5 * time.Minute)
 	if err != nil {
-		log.Error(fmt.Errorf("Timed out waiting for mariadb to become healthy. Delete data dir"))
+		log.Error(fmt.Errorf("Timed out waiting for mariadb to boot. Delete data dir"))
 		r.deleteMariaDBDatabases()
 	} else {
 		r.dropMariaDBDatabases()
 	}
 
-	if err = r.waitMariaDBHealthy(5 * time.Minute); err != nil {
-		return fmt.Errorf("Timed out waiting for mariadb to become healthy. Cant perform restore")
+	if err = r.waitMariaDbUp(1 * time.Minute); err != nil {
+		return fmt.Errorf("Timed out waiting for mariadb to boot. Cant perform restore")
 	}
 
 	if err = r.restoreDump(backupPath); err != nil {
 		return
 	}
 
-	if err = r.waitMariaDBHealthy(10 * time.Second); err != nil {
-		return fmt.Errorf("Timed out waiting for mariadb to become healthy after restore")
+	if err = r.restoreIncBackup(backupPath); err != nil {
+		return
 	}
 
-	return r.restoreIncBackup(backupPath)
+	if sts, err := HealthCheck(r.cfg.MariaDB); err != nil || !sts.Ok {
+		return fmt.Errorf("Mariadb health check failed after restore. Tables corrupted: %s", sts.Details)
+	}
+	return
 }
 
 func (r *Restore) restoreDump(backupPath string) (err error) {
@@ -88,7 +91,6 @@ func (r *Restore) restoreDump(backupPath string) (err error) {
 	).Run(); err != nil {
 		return
 	}
-	//mysql -h 127.0.0.1 -u root -p -N -e "SELECT * FROM INFORMATION_SCHEMA.PROCESSLIST where user != 'system user' and user !='root';" | awk '{print "KILL "$1";"}'| mysql -h 127.0.0.1 -u root -p
 
 	if err = exec.Command(
 		"myloader",
@@ -197,6 +199,17 @@ func (r *Restore) waitMariaDBHealthy(timeout time.Duration) (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
 		s, err := HealthCheck(r.cfg.MariaDB)
 		if err != nil || !s.Ok {
+			return false, nil
+		}
+		return true, nil
+	})
+	return wait.Poll(5*time.Second, timeout, cf)
+}
+
+func (r *Restore) waitMariaDbUp(timeout time.Duration) (err error) {
+	cf := wait.ConditionFunc(func() (bool, error) {
+		err := Ping(r.cfg.MariaDB)
+		if err != nil {
 			return false, nil
 		}
 		return true, nil

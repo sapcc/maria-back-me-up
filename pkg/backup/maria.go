@@ -29,7 +29,7 @@ import (
 
 type Status struct {
 	Ok      bool
-	Details map[string]int
+	Details map[string]string
 }
 
 type checksum struct {
@@ -40,11 +40,11 @@ type checksum struct {
 func HealthCheck(c config.MariaDB) (status Status, err error) {
 	status = Status{
 		Ok:      true,
-		Details: make(map[string]int, 0),
+		Details: make(map[string]string, 0),
 	}
+
 	dbs := strings.Join(c.Databases, " -B ")
 	args := strings.Split(fmt.Sprintf("-c -B %s -u%s -p%s -h%s -P%s", dbs, c.User, c.Password, c.Host, strconv.Itoa(c.Port)), " ")
-	fmt.Println(args)
 	cmd := exec.Command(
 		"mysqlcheck",
 		args...,
@@ -56,14 +56,11 @@ func HealthCheck(c config.MariaDB) (status Status, err error) {
 		return status, fmt.Errorf("mysqlcheck failed with %s", err)
 	}
 	outa := strings.Fields(string(out))
-	fmt.Println(outa)
 	for i := 0; i < len(outa)-1; i++ {
 		if i%2 == 0 {
-			if outa[i+1] == "OK" {
-				status.Details[outa[i]] = 1
-			} else {
+			if outa[i+1] != "OK" {
 				status.Ok = false
-				status.Details[outa[i]] = 0
+				status.Details[outa[i]] = outa[i+1]
 			}
 		}
 	}
@@ -71,11 +68,25 @@ func HealthCheck(c config.MariaDB) (status Status, err error) {
 	return
 }
 
+func Ping(c config.MariaDB) (err error) {
+	if err = exec.Command("mysqladmin",
+		"-u"+c.User,
+		"-p"+c.Password,
+		"-h"+"c.Host",
+		"-P"+strconv.Itoa(c.Port),
+		"status",
+	).Run(); err != nil {
+		return fmt.Errorf("mysqladmin status error: %s", err.Error())
+	}
+
+	return
+}
+
 func getCheckSumForTable(c config.MariaDB) (cs map[string]int64, err error) {
 	cs = make(map[string]int64)
 	cf := wait.ConditionFunc(func() (bool, error) {
-		s, err := HealthCheck(c)
-		if err != nil || !s.Ok {
+		err = Ping(c)
+		if err != nil {
 			return false, nil
 		}
 		return true, nil
