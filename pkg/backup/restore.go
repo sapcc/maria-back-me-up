@@ -223,7 +223,7 @@ func (r *Restore) waitMariaDBHealthy(timeout time.Duration) (err error) {
 
 func (r *Restore) waitMariaDbUp(timeout time.Duration) (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
-		err := Ping(r.cfg.MariaDB)
+		err := PingMariaDB(r.cfg.MariaDB)
 		if err != nil {
 			return false, nil
 		}

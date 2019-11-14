@@ -64,17 +64,17 @@ func HealthCheck(c config.MariaDB) (status Status, err error) {
 			}
 		}
 	}
-	fmt.Println(status)
+
 	return
 }
 
-func Ping(c config.MariaDB) (err error) {
+func PingMariaDB(c config.MariaDB) (err error) {
 	if err = exec.Command("mysqladmin",
+		"status",
 		"-u"+c.User,
 		"-p"+c.Password,
-		"-h"+"c.Host",
+		"-h"+c.Host,
 		"-P"+strconv.Itoa(c.Port),
-		"status",
 	).Run(); err != nil {
 		return fmt.Errorf("mysqladmin status error: %s", err.Error())
 	}
@@ -85,7 +85,7 @@ func Ping(c config.MariaDB) (err error) {
 func getCheckSumForTable(c config.MariaDB) (cs map[string]int64, err error) {
 	cs = make(map[string]int64)
 	cf := wait.ConditionFunc(func() (bool, error) {
-		err = Ping(c)
+		err = PingMariaDB(c)
 		if err != nil {
 			return false, nil
 		}
