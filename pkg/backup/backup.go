@@ -102,6 +102,7 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 	if err != nil {
 		return fmt.Errorf("Cannot start binlog stream: %w", err)
 	}
+	b.flushTimer = time.AfterFunc(time.Duration(b.cfg.IncrementalBackupIntervalInMinutes)*time.Minute, func() { b.flushLogs() })
 	for {
 		ev, inerr := streamer.GetEvent(ctx)
 		if inerr != nil {
