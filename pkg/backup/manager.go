@@ -200,15 +200,6 @@ func (m *Manager) createMysqlDump(bpath string) (mp mysql.Position, err error) {
 	return
 }
 
-func (m *Manager) scheduleVerifyBackup() {
-	p, err := m.Storage.DownloadLatestBackup()
-	if err != nil {
-		m.onVerifyError(fmt.Errorf("error loading backup for verifying: %s", err.Error()))
-		return
-	}
-	go m.verifyBackup(m.lastBackupTime, p)
-}
-
 func (m *Manager) verifyBackup(lastBackupTime, backupFolder string) {
 	var err error
 	logger.Info("Start verifying backup")

@@ -42,12 +42,11 @@ func HealthCheck(c config.MariaDB) (status Status, err error) {
 		Ok:      true,
 		Details: make(map[string]int, 0),
 	}
-	cmd := exec.Command("mysqlcheck",
-		"-A",
-		"-u"+c.User,
-		"-p"+c.Password,
-		"-h"+c.Host,
-		"-P"+strconv.Itoa(c.Port),
+	dbs := strings.Join(c.Databases, " -B ")
+	args := strings.Split(fmt.Sprintf("-c -B %s -u%s -p%s -h%s -P%s", dbs, c.User, c.Password, c.Host, strconv.Itoa(c.Port)), " ")
+	cmd := exec.Command(
+		"mysqlcheck",
+		args...,
 	)
 
 	out, err := cmd.Output()

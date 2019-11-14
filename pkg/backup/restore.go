@@ -67,6 +67,10 @@ func (r *Restore) restore(backupPath string) (err error) {
 		return
 	}
 
+	if err = r.waitMariaDBHealthy(10 * time.Second); err != nil {
+		return fmt.Errorf("Timed out waiting for mariadb to become healthy after restore")
+	}
+
 	return r.restoreIncBackup(backupPath)
 }
 

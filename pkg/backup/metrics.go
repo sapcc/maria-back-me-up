@@ -17,7 +17,6 @@
 package backup
 
 import (
-	"strings"
 	"sync"
 	"time"
 
@@ -36,11 +35,9 @@ type (
 	}
 
 	MetricsCollector struct {
-		upGauge     *prometheus.Desc
-		mariaHealth *prometheus.Desc
-		backup      *prometheus.Desc
-		cfg         config.MariaDB
-		updateSts   *updateStatus
+		backup    *prometheus.Desc
+		cfg       config.MariaDB
+		updateSts *updateStatus
 	}
 )
 
@@ -50,35 +47,9 @@ var (
 )
 
 func (c *MetricsCollector) Describe(ch chan<- *prometheus.Desc) {
-	ch <- c.upGauge
 }
 
 func (c *MetricsCollector) Collect(ch chan<- prometheus.Metric) {
-	s, err := HealthCheck(c.cfg)
-	if err != nil || !s.Ok {
-		ch <- prometheus.MustNewConstMetric(
-			c.upGauge,
-			prometheus.GaugeValue,
-			float64(0),
-		)
-	} else {
-		ch <- prometheus.MustNewConstMetric(
-			c.upGauge,
-			prometheus.GaugeValue,
-			float64(1),
-		)
-	}
-	for key, value := range s.Details {
-		if !strings.Contains(key, "mysql.") {
-			ch <- prometheus.MustNewConstMetric(
-				c.mariaHealth,
-				prometheus.GaugeValue,
-				float64(value),
-				key,
-			)
-		}
-	}
-
 	c.updateSts.RLock()
 	defer c.updateSts.RUnlock()
 	ch <- prometheus.MustNewConstMetric(
@@ -111,16 +82,6 @@ func NewMetricsCollector(c config.MariaDB, u *updateStatus) *MetricsCollector {
 	m := MetricsCollector{
 		updateSts: u,
 		cfg:       c,
-		mariaHealth: prometheus.NewDesc(
-			"maria_health_status",
-			"Health status of mariadb",
-			[]string{"module"},
-			prometheus.Labels{}),
-		upGauge: prometheus.NewDesc(
-			"maria_up",
-			"Shows if mariadb is running",
-			nil,
-			prometheus.Labels{}),
 		backup: prometheus.NewDesc(
 			"maria_backup_status",
 			"backup status of mariadb",

@@ -124,25 +124,19 @@ func PostRestore(m *backup.Manager) echo.HandlerFunc {
 		if err != nil {
 			return sendJSONResponse(c, "Restore Error", err.Error())
 		}
-		if err = sendJSONResponse(c, "Stopping backup...", ""); err != nil {
-			return
-		}
+		sendJSONResponse(c, "Stopping backup...", "")
 		m.Stop()
 		time.Sleep(time.Duration(1 * time.Second))
+
 		s, err := backup.HealthCheck(m.GetConfig().MariaDB)
 		if err != nil || !s.Ok {
-			if err = sendJSONResponse(c, "Database not healthy. Trying hard restore!", ""); err != nil {
-				return
-			}
+			sendJSONResponse(c, "Database not healthy. Trying to restore!", "")
 		}
-		if err = sendJSONResponse(c, "Starting restore...", ""); err != nil {
-			return
-		}
+		sendJSONResponse(c, "Starting restore...", "")
 
 		if err = m.Restore(backupPath); err != nil {
-			return sendJSONResponse(c, "Restore Error!", err.Error())
+			return sendJSONResponse(c, "Error during restore!", err.Error())
 		}
-
 		go m.Start()
 		return sendJSONResponse(c, "Restore finished!", "")
 	}
