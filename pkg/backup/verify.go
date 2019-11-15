@@ -59,21 +59,16 @@ func (m *Manager) verifyBackup(lastBackupTime, backupFolder string) {
 	}
 
 	dp, err := m.maria.CreateMariaDeployment(cfg.MariaDB)
-	if err != nil {
-		m.onVerifyError(fmt.Errorf("error creating mariadb for verifying: %s", err.Error()))
-		return
-	}
 	svc, err := m.maria.CreateMariaService(cfg.MariaDB)
-	if err != nil {
-		m.onVerifyError(fmt.Errorf("error creating mariadb for verifying: %s", err.Error()))
-		return
-	}
-
 	defer func() {
 		if err = m.maria.DeleteMariaResources(dp, svc); err != nil {
 			logger.Error(fmt.Errorf("error deleting mariadb resources for verifying: %s", err.Error()))
 		}
 	}()
+	if err != nil {
+		m.onVerifyError(fmt.Errorf("error creating mariadb for verifying: %s", err.Error()))
+		return
+	}
 
 	r := NewRestore(cfg)
 	if err = r.verifyRestore(backupFolder); err != nil {
@@ -93,7 +88,7 @@ func (m *Manager) verifyBackup(lastBackupTime, backupFolder string) {
 			m.updateSts.Unlock()
 		}
 	}
-	logger.Info("Done verifying backup successful")
+	logger.Info("successfully verified backup")
 }
 
 func (m *Manager) verifyChecksums(cfg config.Config) (err error) {
@@ -104,7 +99,7 @@ func (m *Manager) verifyChecksums(cfg config.Config) (err error) {
 	if err = compareChecksums(m.backupCheckSums, rs); err != nil {
 		return fmt.Errorf("error verifying backup: %s", err.Error())
 	}
-	logger.Debug("Checksum successful", rs, m.backupCheckSums)
+	logger.Debug("Checksum successful ", rs, m.backupCheckSums)
 	return
 }
 

@@ -181,8 +181,11 @@ func (r *Restore) dropMariaDBDatabases() {
 
 func (r *Restore) deleteMariaDBDatabases() (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
-		if err = os.RemoveAll(r.cfg.MariaDB.DataDir); err != nil {
-			return false, nil
+		for _, d := range r.cfg.MariaDB.Databases {
+			log.Debug("deleting database: ", d)
+			if err = os.RemoveAll(filepath.Join(r.cfg.MariaDB.DataDir, d)); err != nil {
+				return false, nil
+			}
 		}
 		return true, nil
 	})

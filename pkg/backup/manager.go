@@ -135,9 +135,7 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 		mp, err := m.createMysqlDump(bpath)
 		if err != nil {
 			logger.Error(fmt.Sprintf("error creating mysqldump: %s", err.Error()))
-			m.updateSts.Lock()
-			m.updateSts.up = 0
-			m.updateSts.Unlock()
+			m.updateStatus(0, time.Time{})
 			if err = m.initRestore(err); err != nil {
 				time.Sleep(time.Duration(10) * time.Second)
 				continue
@@ -155,14 +153,11 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 		go func() {
 			if err = eg.Wait(); err != nil {
 				logger.Error(fmt.Errorf("Error saving log files %s", err.Error()))
-				return
+				m.updateStatus(0, time.Time{})
 			}
 		}()
 
-		m.updateSts.Lock()
-		m.updateSts.fullBackup = time.Now()
-		m.updateSts.up = 1
-		m.updateSts.Unlock()
+		m.updateStatus(1, time.Now())
 
 		select {
 		case <-c:
@@ -176,6 +171,15 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 			return nil
 		}
 	}
+}
+
+func (m *Manager) updateStatus(s int, t time.Time) {
+	m.updateSts.Lock()
+	if !t.IsZero() {
+		m.updateSts.fullBackup = t
+	}
+	m.updateSts.up = s
+	m.updateSts.Unlock()
 }
 
 func (m *Manager) createMysqlDump(bpath string) (mp mysql.Position, err error) {
