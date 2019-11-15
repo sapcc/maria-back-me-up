@@ -15,3 +15,11 @@ type Storage interface {
 	ListIncBackupsFor(key string) (bl []Backup, err error)
 	DownloadBackupFrom(fullBackupPath string, binlog string) (path string, err error)
 }
+
+type NoBackupError struct {
+	message string
+}
+
+func (d *NoBackupError) Error() string {
+	return "No backup found for this service"
+}

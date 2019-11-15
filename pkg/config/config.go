@@ -33,6 +33,7 @@ type Config struct {
 	Namespace                          string  `yaml:"namespace"`
 	FullBackupIntervalInHours          int     `yaml:"full_backup_interval_in_hours"`
 	IncrementalBackupIntervalInMinutes int     `yaml:"incremental_backup_interval_in_minutes"`
+	EnableInitRestore                  bool    `yaml:"enable_init_restore"`
 }
 
 type MariaDB struct {

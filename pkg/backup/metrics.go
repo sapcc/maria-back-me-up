@@ -27,7 +27,7 @@ import (
 type (
 	updateStatus struct {
 		sync.RWMutex `yaml:"-"`
-		up           bool
+		up           int
 		incBackup    time.Time
 		fullBackup   time.Time
 		VerifyBackup int `yaml:"verify_backup"`
@@ -35,6 +35,7 @@ type (
 	}
 
 	MetricsCollector struct {
+		upGauge   *prometheus.Desc
 		backup    *prometheus.Desc
 		cfg       config.MariaDB
 		updateSts *updateStatus
@@ -47,6 +48,7 @@ var (
 )
 
 func (c *MetricsCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- c.upGauge
 }
 
 func (c *MetricsCollector) Collect(ch chan<- prometheus.Metric) {
@@ -76,12 +78,22 @@ func (c *MetricsCollector) Collect(ch chan<- prometheus.Metric) {
 		float64(c.updateSts.VerifyTables),
 		"verify_tables",
 	)
+	ch <- prometheus.MustNewConstMetric(
+		c.upGauge,
+		prometheus.GaugeValue,
+		float64(c.updateSts.up),
+	)
 }
 
 func NewMetricsCollector(c config.MariaDB, u *updateStatus) *MetricsCollector {
 	m := MetricsCollector{
 		updateSts: u,
 		cfg:       c,
+		upGauge: prometheus.NewDesc(
+			"backup_running",
+			"Shows if mariadb backup is running",
+			nil,
+			prometheus.Labels{}),
 		backup: prometheus.NewDesc(
 			"maria_backup_status",
 			"backup status of mariadb",

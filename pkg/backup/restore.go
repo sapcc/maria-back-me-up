@@ -213,8 +213,10 @@ func (r *Restore) restartMariaDB() (err error) {
 func (r *Restore) waitMariaDBHealthy(timeout time.Duration) (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
 		s, err := HealthCheck(r.cfg.MariaDB)
-		if err != nil || !s.Ok {
+		if err != nil {
 			return false, nil
+		} else if !s.Ok {
+			return false, fmt.Errorf("Tables corrupt: %s", s.Details)
 		}
 		return true, nil
 	})

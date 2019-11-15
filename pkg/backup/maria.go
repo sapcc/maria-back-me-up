@@ -27,14 +27,24 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
-type Status struct {
-	Ok      bool
-	Details map[string]string
-}
+type (
+	Status struct {
+		Ok      bool
+		Details map[string]string
+	}
 
-type checksum struct {
-	Table string `yaml:"table"`
-	Sum   int64  `yaml:"sum"`
+	DatabaseMissingError struct {
+		message string
+	}
+
+	checksum struct {
+		Table string `yaml:"table"`
+		Sum   int64  `yaml:"sum"`
+	}
+)
+
+func (d *DatabaseMissingError) Error() string {
+	return "Database not available"
 }
 
 func HealthCheck(c config.MariaDB) (status Status, err error) {
@@ -50,9 +60,12 @@ func HealthCheck(c config.MariaDB) (status Status, err error) {
 		args...,
 	)
 
-	out, err := cmd.Output()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		status.Ok = false
+		if strings.Contains(string(out), "1049") {
+			return status, &DatabaseMissingError{}
+		}
 		return status, fmt.Errorf("mysqlcheck failed with %s", err)
 	}
 	outa := strings.Fields(string(out))

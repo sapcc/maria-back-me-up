@@ -19,7 +19,6 @@ package storage
 import (
 	"archive/tar"
 	"compress/gzip"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -242,7 +241,7 @@ func (s *S3) DownloadLatestBackup() (path string, err error) {
 	}
 
 	if newestBackup == nil {
-		return path, errors.New("No backup found for this service")
+		return path, &NoBackupError{}
 	}
 
 	listRes, err = svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.Replace(*newestBackup.Key, "dump.tar", "", -1))})
@@ -288,7 +287,7 @@ func (s *S3) GetBackupByTimestamp(t time.Time) (path string, err error) {
 	}
 
 	if backup == nil {
-		return path, errors.New("No backup found for given timestamp")
+		return path, &NoBackupError{}
 	}
 
 	listRes, err = svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.Replace(*backup.Key, "dump.tar", "", -1))})
