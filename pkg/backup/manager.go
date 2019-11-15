@@ -116,7 +116,17 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 		log.Debug("Start full backup cycle")
 		//verify last full backup cycle
 		if m.updateSts.up == 1 {
-			go m.verifyBackup(m.lastBackupTime)
+			backupFolder, err := m.Storage.DownloadLatestBackup()
+			if err != nil {
+				var e *storage.NoBackupError
+				if errors.As(err, &e) {
+					logger.Info(e.Error())
+				} else {
+					m.onVerifyError(fmt.Errorf("error loading backup for verifying: %s", err.Error()))
+				}
+			} else {
+				go m.verifyBackup(m.lastBackupTime, backupFolder)
+			}
 		}
 
 		m.lastBackupTime = time.Now().Format(time.RFC3339)
@@ -238,7 +248,17 @@ func (m *Manager) onBinlogRotation(c chan time.Time) {
 		m.updateSts.Unlock()
 		if m.verifyTimer == nil {
 			m.verifyTimer = time.AfterFunc(time.Duration(15)*time.Minute, func() {
-				m.verifyBackup(m.lastBackupTime)
+				backupFolder, err := m.Storage.DownloadLatestBackup()
+				if err != nil {
+					var e *storage.NoBackupError
+					if errors.As(err, &e) {
+						logger.Info(e.Error())
+						return
+					}
+					m.onVerifyError(fmt.Errorf("error loading backup for verifying: %s", err.Error()))
+					return
+				}
+				m.verifyBackup(m.lastBackupTime, backupFolder)
 			})
 		}
 	}

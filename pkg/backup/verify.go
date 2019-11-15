@@ -18,7 +18,6 @@ package backup
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -28,13 +27,11 @@ import (
 
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/constants"
-	"github.com/sapcc/maria-back-me-up/pkg/storage"
 	"gopkg.in/yaml.v2"
 )
 
-func (m *Manager) verifyBackup(lastBackupTime string) {
+func (m *Manager) verifyBackup(lastBackupTime, backupFolder string) {
 	var err error
-	var backupFolder string
 	logger.Info("Start verifying backup")
 
 	defer func() {
@@ -42,16 +39,6 @@ func (m *Manager) verifyBackup(lastBackupTime string) {
 		m.verifyTimer = nil
 		m.uploadVerfiyStatus(backupFolder)
 	}()
-	backupFolder, err = m.Storage.DownloadLatestBackup()
-	if err != nil {
-		var e *storage.NoBackupError
-		if errors.As(err, &e) {
-			logger.Info(e.Error())
-			return
-		}
-		m.onVerifyError(fmt.Errorf("error loading backup for verifying: %s", err.Error()))
-		return
-	}
 
 	if lastBackupTime != "" && len(m.cfg.MariaDB.VerifyTables) > 0 {
 		m.backupCheckSums, err = getCheckSumForTable(m.cfg.MariaDB)
