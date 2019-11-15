@@ -1,6 +1,6 @@
-FROM golang:1.12.0-alpine3.9 as builder
+FROM golang:1.13.4-alpine3.10 as builder
 WORKDIR /go/src/github.com/sapcc/maria-back-me-up
-RUN apk add --no-cache make
+RUN apk add --no-cache make git
 COPY . .
 ARG VERSION
 RUN make all
