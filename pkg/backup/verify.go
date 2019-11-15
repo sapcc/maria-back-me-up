@@ -18,6 +18,7 @@ package backup
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -27,10 +28,26 @@ import (
 
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/constants"
+	"github.com/sapcc/maria-back-me-up/pkg/storage"
 	"gopkg.in/yaml.v2"
 )
 
-func (m *Manager) verifyBackup(lastBackupTime, backupFolder string) {
+func (m *Manager) verifyLatestBackup(withChecksum bool) {
+	backupFolder, err := m.Storage.DownloadLatestBackup()
+	if err != nil {
+		var e *storage.NoBackupError
+		if errors.As(err, &e) {
+			logger.Info(e.Error())
+			return
+		}
+		m.updateVerifyStatus(0, 0, fmt.Errorf("error loading backup for verifying: %s", err.Error()))
+		return
+	}
+	go m.verifyBackup(withChecksum, backupFolder)
+	return
+}
+
+func (m *Manager) verifyBackup(withChecksum bool, backupFolder string) {
 	var err error
 	logger.Info("Start verifying backup")
 
@@ -40,7 +57,7 @@ func (m *Manager) verifyBackup(lastBackupTime, backupFolder string) {
 		m.uploadVerfiyStatus(backupFolder)
 	}()
 
-	if lastBackupTime != "" && len(m.cfg.MariaDB.VerifyTables) > 0 {
+	if withChecksum && len(m.cfg.MariaDB.VerifyTables) > 0 {
 		m.backupCheckSums, err = getCheckSumForTable(m.cfg.MariaDB)
 		if err != nil {
 			logger.Error("cannot load checksums")
@@ -66,26 +83,23 @@ func (m *Manager) verifyBackup(lastBackupTime, backupFolder string) {
 		}
 	}()
 	if err != nil {
-		m.onVerifyError(fmt.Errorf("error creating mariadb for verifying: %s", err.Error()))
+		m.updateVerifyStatus(0, 0, fmt.Errorf("error creating mariadb for verifying: %s", err.Error()))
 		return
 	}
 
 	r := NewRestore(cfg)
 	if err = r.verifyRestore(backupFolder); err != nil {
-		m.onVerifyError(fmt.Errorf("error restoring backup for verifying: %s", err.Error()))
+		m.updateVerifyStatus(0, 0, fmt.Errorf("error restoring backup for verifying: %s", err.Error()))
 		return
 	}
-	m.updateSts.Lock()
-	m.updateSts.VerifyBackup = 1
-	m.updateSts.Unlock()
+
+	m.updateVerifyStatus(1, 0, nil)
 
 	if len(m.backupCheckSums) > 0 && len(m.cfg.MariaDB.VerifyTables) > 0 {
 		if err = m.verifyChecksums(cfg); err != nil {
-			m.onVerifyError(fmt.Errorf("error doing table checksum: %s", err.Error()))
+			m.updateVerifyStatus(1, 0, fmt.Errorf("error doing table checksum: %s", err.Error()))
 		} else {
-			m.updateSts.Lock()
-			m.updateSts.VerifyTables = 1
-			m.updateSts.Unlock()
+			m.updateVerifyStatus(1, 1, nil)
 		}
 	}
 	logger.Info("successfully verified backup")
@@ -103,13 +117,11 @@ func (m *Manager) verifyChecksums(cfg config.Config) (err error) {
 	return
 }
 
-func (m *Manager) onVerifyError(err error) {
-	logger.Error(err.Error())
+func (m *Manager) updateVerifyStatus(vb, vt int, err error) {
 	m.updateSts.Lock()
-	m.updateSts.VerifyBackup = 0
-	m.updateSts.VerifyTables = 0
+	m.updateSts.VerifyTables = vt
+	m.updateSts.VerifyBackup = vb
 	m.updateSts.Unlock()
-	return
 }
 
 func (m *Manager) uploadVerfiyStatus(backupFolder string) {
