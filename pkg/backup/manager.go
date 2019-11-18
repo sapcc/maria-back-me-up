@@ -115,8 +115,13 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 	for c := time.Tick(time.Duration(m.cfg.FullBackupIntervalInHours) * time.Hour); ; {
 		log.Debug("Start full backup cycle")
 		//verify last full backup cycle
-		if m.updateSts.up == 1 {
+		if m.lastBackupTime == "" {
 			m.verifyLatestBackup(false)
+		}
+
+		// Stop binlog
+		if binlogCancel != nil {
+			binlogCancel()
 		}
 
 		m.lastBackupTime = time.Now().Format(time.RFC3339)
@@ -151,10 +156,14 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 
 		select {
 		case <-c:
+			m.lastBackupTime = ""
 			continue
 		case <-ctx.Done():
 			logger.Info("stop backup")
-			binlogCancel()
+			// Stop binlog
+			if binlogCancel != nil {
+				binlogCancel()
+			}
 			if m.verifyTimer != nil {
 				m.verifyTimer.Stop()
 			}
@@ -191,10 +200,6 @@ func (m *Manager) createMysqlDump(bpath string) (mp mysql.Position, err error) {
 	//Only do backups if db is healthy
 	if err = wait.Poll(10*time.Second, 1*time.Minute, cf); err != nil {
 		return mp, fmt.Errorf("Cannot do backup: %w", err)
-	}
-	// Stop binlog
-	if binlogCancel != nil {
-		binlogCancel()
 	}
 
 	if err = m.backup.createMysqlDump(bpath); err != nil {

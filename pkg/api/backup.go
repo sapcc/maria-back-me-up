@@ -106,24 +106,45 @@ func GetRestore(m *backup.Manager) echo.HandlerFunc {
 	}
 }
 
+func PostLatestRestore(m *backup.Manager) echo.HandlerFunc {
+	return func(c echo.Context) (err error) {
+		c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		c.Response().WriteHeader(http.StatusOK)
+
+		p, err := m.Storage.DownloadLatestBackup()
+		if err != nil {
+			return sendJSONResponse(c, "Restore Error", err.Error())
+		}
+		m.Stop()
+		if err = m.Restore(p); err != nil {
+			sendJSONResponse(c, "Error during restore!", err.Error())
+		}
+		go m.Start()
+		return sendJSONResponse(c, "Restore finished!", "")
+	}
+}
+
 func PostRestore(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		c.Response().WriteHeader(http.StatusOK)
+
 		params, err := c.FormParams()
 		if err != nil {
 			return
 		}
 
 		if len(params["backup"]) == 0 {
-			return fmt.Errorf("No Backup selected")
+			return sendJSONResponse(c, "No Backup selected", err.Error())
 		}
+
 		p := params["backup"][0]
 		d, f := path.Split(p)
 		backupPath, err := m.Storage.DownloadBackupFrom(d, f)
 		if err != nil {
 			return sendJSONResponse(c, "Restore Error", err.Error())
 		}
+
 		sendJSONResponse(c, "Stopping backup...", "")
 		m.Stop()
 		time.Sleep(time.Duration(1 * time.Second))
@@ -135,7 +156,7 @@ func PostRestore(m *backup.Manager) echo.HandlerFunc {
 		sendJSONResponse(c, "Starting restore...", "")
 
 		if err = m.Restore(backupPath); err != nil {
-			return sendJSONResponse(c, "Error during restore!", err.Error())
+			sendJSONResponse(c, "Error during restore!", err.Error())
 		}
 		go m.Start()
 		return sendJSONResponse(c, "Restore finished!", "")

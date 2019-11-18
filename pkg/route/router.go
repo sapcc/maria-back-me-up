@@ -28,6 +28,8 @@ func Init(m *backup.Manager) *echo.Echo {
 	e.GET("/restore", api.GetRestore(m))
 	e.POST("/restore", api.PostRestore(m))
 
+	e.POST("/restore/latestbackup", api.PostLatestRestore(m))
+
 	gb := e.Group("/backup")
 	gb.GET("/stop", api.GetGackup(m))
 	gb.GET("/start", api.GetGackup(m))
