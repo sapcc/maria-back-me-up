@@ -61,7 +61,6 @@ func (r *Restore) verifyRestore(backupPath string) (err error) {
 }
 
 func (r *Restore) restore(backupPath string) (err error) {
-	log.Info("STARTING RESTORE")
 	if err = r.restartMariaDB(); err != nil {
 		//Cant shutdown database. Lets try restore anyway
 		log.Error(fmt.Errorf("Timed out trying to shutdown database"))

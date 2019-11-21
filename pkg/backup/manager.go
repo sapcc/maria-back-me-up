@@ -115,9 +115,7 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 	for c := time.Tick(time.Duration(m.cfg.FullBackupIntervalInHours) * time.Hour); ; {
 		log.Debug("Start full backup cycle")
 		//verify last full backup cycle
-		if m.lastBackupTime == "" {
-			m.verifyLatestBackup(false)
-		}
+		m.verifyLatestBackup(false)
 
 		// Stop binlog
 		if binlogCancel != nil {
@@ -166,6 +164,7 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 			}
 			if m.verifyTimer != nil {
 				m.verifyTimer.Stop()
+				m.verifyTimer = nil
 			}
 			return nil
 		}
@@ -262,6 +261,7 @@ func (m *Manager) GetConfig() config.Config {
 }
 
 func (m *Manager) Restore(p string) (err error) {
+	log.Info("STARTING RESTORE")
 	m.Health.Lock()
 	m.Health.Ready = false
 	m.Health.Unlock()
