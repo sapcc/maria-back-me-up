@@ -32,7 +32,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-func (m *Manager) verifyLatestBackup(withChecksum bool) {
+func (m *Manager) verifyLatestBackup(withChecksum bool, resetTimer bool) {
 	backupFolder, err := m.Storage.DownloadLatestBackup()
 	if err != nil {
 		var e *storage.NoBackupError
@@ -43,17 +43,19 @@ func (m *Manager) verifyLatestBackup(withChecksum bool) {
 		m.updateVerifyStatus(0, 0, fmt.Errorf("error loading backup for verifying: %s", err.Error()))
 		return
 	}
-	go m.verifyBackup(withChecksum, backupFolder)
+	go m.verifyBackup(withChecksum, backupFolder, resetTimer)
 	return
 }
 
-func (m *Manager) verifyBackup(withChecksum bool, backupFolder string) {
+func (m *Manager) verifyBackup(withChecksum bool, backupFolder string, resetTimer bool) {
 	var err error
 	logger.Info("Start verifying backup")
 
 	defer func() {
 		os.RemoveAll(backupFolder)
-		m.verifyTimer = nil
+		if resetTimer {
+			m.verifyTimer = nil
+		}
 		m.uploadVerfiyStatus(backupFolder)
 	}()
 

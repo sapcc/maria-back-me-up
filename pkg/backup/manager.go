@@ -115,7 +115,7 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 	for c := time.Tick(time.Duration(m.cfg.FullBackupIntervalInHours) * time.Hour); ; {
 		log.Debug("Start full backup cycle")
 		//verify last full backup cycle
-		m.verifyLatestBackup(false)
+		m.verifyLatestBackup(false, false)
 
 		// Stop binlog
 		if binlogCancel != nil {
@@ -246,7 +246,7 @@ func (m *Manager) onBinlogRotation(c chan time.Time) {
 		m.updateSts.Unlock()
 		if m.verifyTimer == nil {
 			m.verifyTimer = time.AfterFunc(time.Duration(15)*time.Minute, func() {
-				m.verifyLatestBackup(true)
+				m.verifyLatestBackup(true, true)
 			})
 		}
 	}
