@@ -32,16 +32,16 @@ var idTokenVerifier *oidc.IDTokenVerifier
 
 func init() {
 	ctx := oidc.ClientContext(context.Background(), http.DefaultClient)
-	provider, _ = oidc.NewProvider(ctx, "http://auth.mariabackup.qa-de-1.cloud.sap")
+	provider, _ = oidc.NewProvider(ctx, "https://auth.mariabackup.qa-de-1.cloud.sap")
 	idTokenVerifier = provider.Verifier(&oidc.Config{ClientID: "15c685ee35e84572b877"})
 
 	oauth2Config = oauth2.Config{
 		// client_id and client_secret of the client.
-		ClientID:     "15c685ee35e84572b877",
-		ClientSecret: "a1925944912b409b9d0c8c38736d533a9cc5938c",
+		ClientID:     "mariadb_backup",
+		ClientSecret: "apie4eeX6hiC9ainieli",
 
 		// The redirectURL.
-		RedirectURL: "http://keystone-mariadb:8081/auth/callback",
+		RedirectURL: "http://keystone.mariabackup.cloud.sap/auth/callback",
 
 		// Discovery returns the OAuth2 endpoints.
 		Endpoint: provider.Endpoint(),
