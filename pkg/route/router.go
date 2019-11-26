@@ -24,11 +24,16 @@ import (
 
 func Init(m *backup.Manager) *echo.Echo {
 	e := echo.New()
-	e.GET("/", api.GetRoot(m))
-	e.GET("/restore", api.GetRestore(m))
-	e.POST("/restore", api.PostRestore(m))
 
-	e.POST("/restore/latestbackup", api.PostLatestRestore(m))
+	e.GET("/auth/callback", api.HandleOAuth2Callback(m))
+
+	i := e.Group("/")
+	i.Use(api.HandleRedirect)
+	i.GET("/", api.GetRoot(m))
+	i.GET("/restore", api.GetRestore(m))
+	i.POST("/restore", api.PostRestore(m))
+
+	i.POST("/restore/latestbackup", api.PostLatestRestore(m))
 
 	gb := e.Group("/backup")
 	gb.GET("/stop", api.GetGackup(m))
