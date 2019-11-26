@@ -32,7 +32,7 @@ var idTokenVerifier *oidc.IDTokenVerifier
 
 func init() {
 	ctx := oidc.ClientContext(context.Background(), http.DefaultClient)
-	provider, _ = oidc.NewProvider(ctx, "https://auth.mariabackup.qa-de-1.cloud.sap")
+	provider, _ = oidc.NewProvider(ctx, "http://auth.mariabackup.qa-de-1.cloud.sap")
 	idTokenVerifier = provider.Verifier(&oidc.Config{ClientID: "15c685ee35e84572b877"})
 
 	oauth2Config = oauth2.Config{
