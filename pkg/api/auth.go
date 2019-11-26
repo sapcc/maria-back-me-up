@@ -49,7 +49,7 @@ func init() {
 		// "openid" is a required scope for OpenID Connect flows.
 		//
 		// Other scopes, such as "groups" can be requested.
-		Scopes: []string{oidc.ScopeOpenID, "profile", "orgs", "teams"},
+		Scopes: []string{"read:org", "read:user"},
 	}
 
 }
