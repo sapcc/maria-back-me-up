@@ -18,6 +18,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/coreos/go-oidc"
@@ -32,8 +33,12 @@ var idTokenVerifier *oidc.IDTokenVerifier
 
 func init() {
 	ctx := oidc.ClientContext(context.Background(), http.DefaultClient)
-	provider, _ = oidc.NewProvider(ctx, "http://auth.mariabackup.qa-de-1.cloud.sap")
-	idTokenVerifier = provider.Verifier(&oidc.Config{ClientID: "15c685ee35e84572b877"})
+	provider, err := oidc.NewProvider(ctx, "https://auth.mariabackup.qa-de-1.cloud.sap")
+	if err != nil {
+		fmt.Println("-------------------------", err.Error())
+		return
+	}
+	idTokenVerifier = provider.Verifier(&oidc.Config{ClientID: "mariadb_backup"})
 
 	oauth2Config = oauth2.Config{
 		// client_id and client_secret of the client.
@@ -41,7 +46,7 @@ func init() {
 		ClientSecret: "apie4eeX6hiC9ainieli",
 
 		// The redirectURL.
-		RedirectURL: "http://keystone.mariabackup.qa-de-1.cloud.sap/auth/callback",
+		RedirectURL: "https://keystone.mariabackup.qa-de-1.cloud.sap/auth/callback",
 
 		// Discovery returns the OAuth2 endpoints.
 		Endpoint: provider.Endpoint(),
