@@ -41,7 +41,7 @@ func init() {
 		ClientSecret: "apie4eeX6hiC9ainieli",
 
 		// The redirectURL.
-		RedirectURL: "http://keystone.mariabackup.cloud.sap/auth/callback",
+		RedirectURL: "http://keystone.mariabackup.qa-de-1.cloud.sap/auth/callback",
 
 		// Discovery returns the OAuth2 endpoints.
 		Endpoint: provider.Endpoint(),
