@@ -28,6 +28,7 @@ import (
 	"github.com/labstack/echo"
 	"github.com/sapcc/maria-back-me-up/pkg/backup"
 	"github.com/sapcc/maria-back-me-up/pkg/constants"
+	"github.com/sapcc/maria-back-me-up/pkg/log"
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
 )
 
@@ -135,8 +136,19 @@ func PostRestore(m *backup.Manager) echo.HandlerFunc {
 		}
 
 		if len(params["backup"]) == 0 {
-			return sendJSONResponse(c, "No Backup selected", err.Error())
+			return sendJSONResponse(c, "No Backup selected", "")
 		}
+
+		session, err := store.Get(c.Request(), sessionCookieName)
+		if err != nil {
+			return sendJSONResponse(c, "Cannot read session cookie", err.Error())
+		}
+
+		user := session.Values["user"].(string)
+		if user == "" {
+			return sendJSONResponse(c, "Cannot read user info", "")
+		}
+		log.Info("RESTORE TRIGGERED BY USER: " + user)
 
 		p := params["backup"][0]
 		d, f := path.Split(p)
