@@ -62,7 +62,7 @@ func init() {
 		ClientID:     "mariadb_backup",
 		ClientSecret: "apie4eeX6hiC9ainieli",
 
-		RedirectURL: "http://localhost:8081/auth/callback",
+		RedirectURL: "https://keystone.mariabackup.qa-de-1.cloud.sap/auth/callback",
 		Endpoint:    provider.Endpoint(),
 
 		Scopes: []string{oidc.ScopeOpenID, "groups", "profile", "email"},
