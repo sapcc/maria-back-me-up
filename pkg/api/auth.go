@@ -52,17 +52,17 @@ func init() {
 		//MaxAge:   60,
 		HttpOnly: true,
 	}
-	provider, err := oidc.NewProvider(ctx, "https://auth.mariabackup.qa-de-1.cloud.sap")
+	provider, err := oidc.NewProvider(ctx, "")
 	if err != nil {
 		return
 	}
-	idTokenVerifier = provider.Verifier(&oidc.Config{ClientID: "mariadb_backup"})
+	idTokenVerifier = provider.Verifier(&oidc.Config{ClientID: ""})
 
 	oauth2Config = oauth2.Config{
-		ClientID:     "mariadb_backup",
-		ClientSecret: "apie4eeX6hiC9ainieli",
+		ClientID:     "",
+		ClientSecret: "",
 
-		RedirectURL: "https://keystone.mariabackup.qa-de-1.cloud.sap/auth/callback",
+		RedirectURL: "",
 		Endpoint:    provider.Endpoint(),
 
 		Scopes: []string{oidc.ScopeOpenID, "groups", "profile", "email"},
@@ -78,7 +78,7 @@ func HandleRedirect(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 
 		state, _ := genStateString()
-		hashedState := hashStatecode(state, "apie4eeX6hiC9ainieli")
+		hashedState := createStateCode(state)
 		writeCookie(c.Response(), hashedState, 1)
 		if err := updateSessionStore(c.Response(), c.Request(), "", "claims.Email", c.Request().URL.String()); err != nil {
 			fmt.Println(err)
@@ -121,7 +121,7 @@ func HandleOAuth2Callback(m *backup.Manager) echo.HandlerFunc {
 		if err != nil {
 			return echo.NewHTTPError(500, "OAuth Login failed")
 		}
-		queryState := hashStatecode(c.Request().URL.Query().Get("state"), "apie4eeX6hiC9ainieli")
+		queryState := createStateCode(c.Request().URL.Query().Get("state"))
 
 		if cookieState.Value != queryState {
 			return echo.NewHTTPError(500, "OAuth Login: state mismatch")
@@ -178,8 +178,8 @@ func writeCookie(w http.ResponseWriter, value string, sameSite http.SameSite) {
 	http.SetCookie(w, &cookie)
 }
 
-func hashStatecode(code, seed string) string {
-	hashBytes := sha256.Sum256([]byte(code + seed))
+func createStateCode(code string) string {
+	hashBytes := sha256.Sum256([]byte(code))
 	return hex.EncodeToString(hashBytes[:])
 }
 
