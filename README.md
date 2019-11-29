@@ -13,13 +13,13 @@ List of features currently available:
 
 ## UI
 The UI is available via localhost:8081/
-It shows a list of available full backups in S3. Any full backup contains 1 or more incremental backups, which can selected to perform a complete restore!\
+It shows a list of available full backups in S3. Any full backup contains 1 or more incremental backups, which can be selected to perform a complete restore!\
 The color of an incremental backups shows the state of the backup verfication:\
 ```diff
-# backup check not yet executed
-- backup check failed
-! Backup check partly succeeded. A restore was successful, however the table checksum failed
-+ backup check successful
+# backup verfication not yet executed
+- backup verfication failed
+! Backup verfication partly succeeded. A restore was successful, however the table checksum failed
++ backup verfication successful. A restore is save to perform!
 ```
 
 ## Incremental backups via binlogs
