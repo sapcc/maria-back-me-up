@@ -16,7 +16,7 @@ The UI is available via localhost:8081/
 It shows a list of available full backups in S3. Any full backup contains 1 or more incremental backups, which can selected to perform a complete restore!\
 The color of an incremental backups shows the state of the backup verfication:\
 ```diff
-# backup check not yet executed</span>
+# backup check not yet executed
 - backup check failed
 ! Backup check partly succeeded. A restore was successful, however the table checksum failed
 + <span style="color:green">backup check successful</span>
