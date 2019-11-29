@@ -19,7 +19,7 @@ The color of an incremental backups shows the state of the backup verfication:\
 # backup check not yet executed
 - backup check failed
 ! Backup check partly succeeded. A restore was successful, however the table checksum failed
-+ <span style="color:green">backup check successful</span>
++ backup check successful
 ```
 
 ## Incremental backups via binlogs
