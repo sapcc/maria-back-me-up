@@ -15,20 +15,21 @@ List of features currently available:
 The UI is available via localhost:8081/
 It shows a list of available full backups in S3. Any full backup contains 1 or more incremental backups, which can selected to perform a complete restore!\
 The color of an incremental backups shows the state of the backup verfication:\
-- <span style="color:grey">backup check not yet executed</span>
-- <span style="color:red">backup check failed</span>
-- <span style="color:orange">Backup check partly succeeded. A restore was successful, however the table checksum failed</span>
-- <span style="color:green">backup check successful</span>
-
+```diff
+# backup check not yet executed</span>
+- backup check failed
+! Backup check partly succeeded. A restore was successful, however the table checksum failed
++ <span style="color:green">backup check successful</span>
+```
 
 ## Incremental backups via binlogs
 This backup tool uses binlogs to make incremental backups.\ 
 Therefore the binlog needs to be enabled in the mariadb config
 ```
-log-bin=bin.log      # Binlog folder and name\
-binlog_format=MIXED  # Formant, described below\
-expire_logs_days=3   # After x days binlog files get purged. Important! Otherwise volume could be filling up fast\
-server_id=1          # Unique server id. Used for replication\
+og-bin=bin.log      # Binlog folder and name
+binlog_format=MIXED  # Formant, described below
+expire_logs_days=3   # After x days binlog files get purged. Important! Otherwise volume could be filling up fast
+server_id=1          # Unique server id. Used for replication
 ```
 
 ### Binlog
