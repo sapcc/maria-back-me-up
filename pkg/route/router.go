@@ -26,6 +26,8 @@ import (
 func Init(m *backup.Manager, opts config.Options) *echo.Echo {
 	e := echo.New()
 
+	api.InitAPI(m, opts)
+
 	e.GET("auth/callback", api.HandleOAuth2Callback(opts))
 
 	i := e.Group("/")

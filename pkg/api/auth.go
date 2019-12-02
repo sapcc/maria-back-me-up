@@ -42,7 +42,7 @@ var (
 	store                *sessions.CookieStore
 )
 
-func initAPI(m *backup.Manager, opts config.Options) {
+func InitAPI(m *backup.Manager, opts config.Options) {
 	ctx := oidc.ClientContext(context.Background(), http.DefaultClient)
 	key := make([]byte, 64)
 
