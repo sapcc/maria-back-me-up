@@ -10,6 +10,7 @@ List of features currently available:
 - Automatic verification of existing backups
 - UI to see and select an available backup to restore to
 - UI shows status of backup verfication
+- UI/API can be secured via OAuth openID
 
 ## UI
 The UI is available via localhost:8081/
@@ -68,3 +69,7 @@ With STATEMENT only the update statement will be recorded in the binlog.
   `aws_secret_access_key:` s3 secret access key\
   `region:` s3 region\
   `bucket_name:` bucket name to save the backup to\
+`outh:`\
+  `enabled:` enables oauth to access the API (openID)\
+  `provider_url:` Url of the openID provider (e.g. Dex)
+  `redirect_url:` oauth redirect url (this is the url of your mariabackup service)
