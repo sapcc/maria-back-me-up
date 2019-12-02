@@ -27,6 +27,7 @@ type Config struct {
 	Version                            string  `yaml:"version"`
 	MariaDB                            MariaDB `yaml:"maria_db"`
 	S3                                 S3      `yaml:"s3"`
+	OAuth                              OAuth   `yaml:"oauth"`
 	BackupDir                          string  `yaml:"backup_dir"`
 	AutomaticRecovery                  bool    `yaml:"automatic_recovery"`
 	ServiceName                        string  `yaml:"service_name"`
@@ -54,6 +55,12 @@ type S3 struct {
 	AwsEndpoint        string `yaml:"aws_endpoint"`
 	Region             string `yaml:"region"`
 	BucketName         string `yaml:"bucket_name"`
+}
+
+type OAuth struct {
+	Enabled     bool   `yaml:"enabled"`
+	ProviderURL string `yaml:"provider_url"`
+	RedirectURL string `yaml:"redirect_url"`
 }
 
 func GetConfig(opts Options) (cfg Config, err error) {

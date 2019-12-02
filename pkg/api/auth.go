@@ -29,6 +29,7 @@ import (
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo"
 	"github.com/sapcc/maria-back-me-up/pkg/backup"
+	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"golang.org/x/oauth2"
 )
 
@@ -41,28 +42,28 @@ var (
 	store                *sessions.CookieStore
 )
 
-func init() {
+func initAPI(m *backup.Manager, opts config.Options) {
 	ctx := oidc.ClientContext(context.Background(), http.DefaultClient)
 	key := make([]byte, 64)
 
 	_, err := rand.Read(key)
-	store = sessions.NewCookieStore([]byte("secure_key")) //TODO: load via env vars
+	store = sessions.NewCookieStore([]byte(opts.CookieSecret)) //TODO: load via env vars
 	store.Options = &sessions.Options{
 		Path: "/",
 		//MaxAge:   60,
 		HttpOnly: true,
 	}
-	provider, err := oidc.NewProvider(ctx, "")
+	provider, err := oidc.NewProvider(ctx, m.GetConfig().OAuth.ProviderURL)
 	if err != nil {
 		return
 	}
-	idTokenVerifier = provider.Verifier(&oidc.Config{ClientID: ""})
+	idTokenVerifier = provider.Verifier(&oidc.Config{ClientID: opts.ClientID})
 
 	oauth2Config = oauth2.Config{
-		ClientID:     "",
-		ClientSecret: "",
+		ClientID:     opts.ClientID,
+		ClientSecret: opts.ClientSecret,
 
-		RedirectURL: "",
+		RedirectURL: m.GetConfig().OAuth.RedirectURL + "/auth/callback",
 		Endpoint:    provider.Endpoint(),
 
 		Scopes: []string{oidc.ScopeOpenID, "groups", "profile", "email"},
@@ -70,21 +71,26 @@ func init() {
 
 }
 
-// handleRedirect is used to start an OAuth2 flow with the dex server.
-func HandleRedirect(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) (err error) {
-		if ok := checkAuthenticated(c.Request()); ok {
-			return next(c)
-		}
+// Oauth middleware is used to start an OAuth2 flow with the dex server.
+func Oauth(enabled bool, opts config.Options) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) (err error) {
+			if !enabled {
+				return next(c)
+			}
+			if ok := checkAuthenticated(c.Request()); ok {
+				return next(c)
+			}
 
-		state, _ := genStateString()
-		hashedState := createStateCode(state)
-		writeCookie(c.Response(), hashedState, 1)
-		if err := updateSessionStore(c.Response(), c.Request(), "", "claims.Email", c.Request().URL.String()); err != nil {
-			fmt.Println(err)
-			return echo.NewHTTPError(http.StatusUnauthorized, "Error OAuth", err)
+			state, _ := genStateString()
+			hashedState := hashStatecode(state, opts.ClientSecret)
+			writeCookie(c.Response(), hashedState, 1)
+			if err := updateSessionStore(c.Response(), c.Request(), "", "claims.Email", c.Request().URL.String()); err != nil {
+				fmt.Println(err)
+				return echo.NewHTTPError(http.StatusUnauthorized, "Error OAuth", err)
+			}
+			return c.Redirect(http.StatusTemporaryRedirect, oauth2Config.AuthCodeURL(state, oauth2.AccessTypeOnline))
 		}
-		return c.Redirect(http.StatusTemporaryRedirect, oauth2Config.AuthCodeURL(state, oauth2.AccessTypeOnline))
 	}
 }
 
@@ -114,14 +120,14 @@ func updateSessionStore(w http.ResponseWriter, r *http.Request, token string, us
 	return session.Save(r, w)
 }
 
-func HandleOAuth2Callback(m *backup.Manager) echo.HandlerFunc {
+func HandleOAuth2Callback(opts config.Options) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		ctx := c.Request().Context()
 		cookieState, err := c.Cookie(oauthStateCookieName)
 		if err != nil {
 			return echo.NewHTTPError(500, "OAuth Login failed")
 		}
-		queryState := createStateCode(c.Request().URL.Query().Get("state"))
+		queryState := hashStatecode(c.Request().URL.Query().Get("state"), opts.ClientSecret)
 
 		if cookieState.Value != queryState {
 			return echo.NewHTTPError(500, "OAuth Login: state mismatch")
@@ -178,8 +184,8 @@ func writeCookie(w http.ResponseWriter, value string, sameSite http.SameSite) {
 	http.SetCookie(w, &cookie)
 }
 
-func createStateCode(code string) string {
-	hashBytes := sha256.Sum256([]byte(code))
+func hashStatecode(code, seed string) string {
+	hashBytes := sha256.Sum256([]byte(code + seed))
 	return hex.EncodeToString(hashBytes[:])
 }
 

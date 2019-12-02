@@ -20,15 +20,16 @@ import (
 	"github.com/labstack/echo"
 	"github.com/sapcc/maria-back-me-up/pkg/api"
 	"github.com/sapcc/maria-back-me-up/pkg/backup"
+	"github.com/sapcc/maria-back-me-up/pkg/config"
 )
 
-func Init(m *backup.Manager) *echo.Echo {
+func Init(m *backup.Manager, opts config.Options) *echo.Echo {
 	e := echo.New()
 
-	e.GET("auth/callback", api.HandleOAuth2Callback(m))
+	e.GET("auth/callback", api.HandleOAuth2Callback(opts))
 
 	i := e.Group("/")
-	i.Use(api.HandleRedirect)
+	i.Use(api.Oauth(m.GetConfig().OAuth.Enabled, opts))
 	i.GET("", api.GetRoot(m))
 	i.GET("restore", api.GetRestore(m))
 	i.POST("restore", api.PostRestore(m))
@@ -36,7 +37,7 @@ func Init(m *backup.Manager) *echo.Echo {
 	i.POST("restore/latestbackup", api.PostLatestRestore(m))
 
 	gb := e.Group("/backup")
-	gb.Use(api.HandleRedirect)
+	gb.Use(api.Oauth(m.GetConfig().OAuth.Enabled, opts))
 	gb.GET("/stop", api.GetGackup(m))
 	gb.GET("/start", api.GetGackup(m))
 

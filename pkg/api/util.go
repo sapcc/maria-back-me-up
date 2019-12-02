@@ -14,18 +14,18 @@
  * limitations under the License.
  */
 
-package config
+package api
 
-// Options passed via cmd line
-type Options struct {
-	LogLevel       string
-	WriteTo        string
-	ConfigmapName  string
-	Version        string
-	ConfigFilePath string
-	NameSpace      string
-	Region         string
-	ClientID       string
-	ClientSecret   string
-	CookieSecret   string
+import (
+	"fmt"
+	"io/ioutil"
+)
+
+func ReadFile(path string) (d string, err error) {
+	fBytes, err := ioutil.ReadFile(path)
+	if err != nil {
+		return d, fmt.Errorf("read file: %s", err.Error())
+	}
+
+	return string(fBytes), nil
 }
