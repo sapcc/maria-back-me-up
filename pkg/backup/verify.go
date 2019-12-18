@@ -81,29 +81,34 @@ func (m *Manager) verifyBackup(withChecksum bool, backupFolder string, resetTime
 	svc, err := m.maria.CreateMariaService(cfg.MariaDB)
 	defer func() {
 		if err = m.maria.DeleteMariaResources(dp, svc); err != nil {
-			logger.Error(fmt.Errorf("error deleting mariadb resources for verifying: %s", err.Error()))
+			logger.Error(fmt.Errorf("backup verify error: error deleting mariadb resources: %s", err.Error()))
 		}
 	}()
 	if err != nil {
-		m.updateVerifyStatus(0, 0, fmt.Errorf("error creating mariadb for verifying: %s", err.Error()))
+		m.updateVerifyStatus(0, 0, fmt.Errorf("error creating mariadb: %s", err.Error()))
 		return
 	}
 
 	r := NewRestore(cfg)
 	if err = r.verifyRestore(backupFolder); err != nil {
-		m.updateVerifyStatus(0, 0, fmt.Errorf("error restoring backup for verifying: %s", err.Error()))
+		m.updateVerifyStatus(0, 0, fmt.Errorf("error restoring backup: %s", err.Error()))
+		return
+	}
+	m.updateVerifyStatus(1, 0, nil)
+	if out, err := runMysqlDiff(m.cfg.MariaDB, cfg.MariaDB); err != nil {
+		//This is very bad. 1 or more tables are different
+		m.updateVerifyStatus(0, 0, fmt.Errorf("error mysqldiff: %s", string(out)))
 		return
 	}
 
-	m.updateVerifyStatus(1, 0, nil)
-
 	if len(m.backupCheckSums) > 0 && len(m.cfg.MariaDB.VerifyTables) > 0 {
 		if err = m.verifyChecksums(cfg); err != nil {
-			m.updateVerifyStatus(1, 0, fmt.Errorf("error doing table checksum: %s", err.Error()))
+			m.updateVerifyStatus(1, 0, fmt.Errorf("error table checksum: %s", err.Error()))
 		} else {
 			m.updateVerifyStatus(1, 1, nil)
 		}
 	}
+
 	logger.Info("successfully verified backup")
 }
 
@@ -123,6 +128,10 @@ func (m *Manager) updateVerifyStatus(vb, vt int, err error) {
 	m.updateSts.Lock()
 	m.updateSts.VerifyTables = vt
 	m.updateSts.VerifyBackup = vb
+	if err != nil {
+		m.updateSts.VerifyError = err.Error()
+		logger.Error(fmt.Errorf("backup verify error: %s", err.Error()))
+	}
 	m.updateSts.Unlock()
 }
 

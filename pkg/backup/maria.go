@@ -136,3 +136,21 @@ func getCheckSumForTable(c config.MariaDB) (cs map[string]int64, err error) {
 
 	return
 }
+
+func runMysqlDiff(c1, c2 config.MariaDB) (out []byte, err error) {
+	//mysqldiff --server1=root:pw@localhost:3306 --server2=root:pw@db_backup:3306 test:test
+	s1 := fmt.Sprintf("%s:%s@%s:%s", c1.User, c1.Password, c1.Host, strconv.Itoa(c1.Port))
+	s2 := fmt.Sprintf("%s:%s@%s:%s", c2.User, c2.Password, c2.Host, strconv.Itoa(c2.Port))
+	dbs := make([]string, 0)
+	for _, db := range c1.Databases {
+		dbs = append(dbs, fmt.Sprintf("%s:%s", db, db))
+	}
+	e := exec.Command("mysqldiff",
+		"--server1="+s1,
+		"--server2="+s2,
+	)
+	e.Args = append(e.Args, dbs...)
+
+	out, err = e.CombinedOutput()
+	return
+}

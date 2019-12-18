@@ -48,8 +48,9 @@ type (
 		serviceName string
 	}
 	Verify struct {
-		Backup int `yaml:"verify_backup"`
-		Tables int `yaml:"verify_tables"`
+		Backup int    `yaml:"verify_backup"`
+		Tables int    `yaml:"verify_tables"`
+		Error  string `yaml:"verify_error"`
 		Time   time.Time
 	}
 

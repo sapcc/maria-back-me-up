@@ -52,33 +52,44 @@ func getServiceName(key string) string {
 	return fmt.Sprintf("Service: %s", s[0])
 }
 
-func verifyBackup(v []storage.Verify, t time.Time) string {
+func getVerifyBackupState(v []storage.Verify, t time.Time, err bool) string {
 	var duration time.Duration
 	duration = time.Duration(1000 * time.Hour)
-	verifyState := "grey"
+	verifyState := "#6c757d"
+	verifyError := "All is well"
 	for _, k := range v {
+		fmt.Println(k)
 		if t.Before(k.Time) {
 			if k.Time.Sub(t) < duration {
 				if k.Backup == 1 {
-					verifyState = "orange"
+					verifyState = "#ffc107"
+					if k.Error != "" {
+						verifyError = k.Error
+					}
 				}
 				if k.Tables == 1 {
-					verifyState = "green"
+					verifyState = "#28a745"
 				}
 				if k.Backup == 0 {
-					verifyState = "red"
+					verifyState = "#dc3545"
+					if k.Error != "" {
+						verifyError = k.Error
+					}
 				}
 			}
 			duration = k.Time.Sub(t)
 		}
 	}
+	if err {
+		return verifyError
+	}
 	return verifyState
 }
 
 var funcMap = template.FuncMap{
-	"getKeyPath":     getKeyPath,
-	"verifyBackup":   verifyBackup,
-	"getServiceName": getServiceName,
+	"getKeyPath":           getKeyPath,
+	"getVerifyBackupState": getVerifyBackupState,
+	"getServiceName":       getServiceName,
 }
 
 func GetRoot(m *backup.Manager) echo.HandlerFunc {

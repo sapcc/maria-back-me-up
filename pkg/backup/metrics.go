@@ -30,8 +30,9 @@ type (
 		up           int
 		incBackup    time.Time
 		fullBackup   time.Time
-		VerifyBackup int `yaml:"verify_backup"`
-		VerifyTables int `yaml:"verify_tables"`
+		VerifyBackup int    `yaml:"verify_backup"`
+		VerifyTables int    `yaml:"verify_tables"`
+		VerifyError  string `yaml:"verify_error"`
 	}
 
 	MetricsCollector struct {
