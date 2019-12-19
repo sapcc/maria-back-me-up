@@ -25,6 +25,7 @@ import (
 	"github.com/namsral/flag"
 	"github.com/sapcc/maria-back-me-up/pkg/backup"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
+	"github.com/sapcc/maria-back-me-up/pkg/constants"
 	log "github.com/sapcc/maria-back-me-up/pkg/log"
 	"github.com/sapcc/maria-back-me-up/pkg/route"
 	"github.com/sapcc/maria-back-me-up/pkg/server"
@@ -65,12 +66,17 @@ func main() {
 		log.Fatal("cannot create backup handler: ", err.Error())
 	}
 
-	e := route.Init(m, opts)
+	api := route.InitAPI(m, opts)
+	metrics := route.InitMetrics(m)
 
 	var eg errgroup.Group
-	s := server.NewServer(e)
+	s1 := server.NewServer(metrics)
+	s2 := server.NewServer(api)
 	eg.Go(func() error {
-		return s.Start()
+		return s1.Start(constants.PORT_METRICS)
+	})
+	eg.Go(func() error {
+		return s2.Start(constants.PORT)
 	})
 	eg.Go(func() error {
 		return m.Start()
@@ -87,7 +93,8 @@ func main() {
 
 	select {
 	case <-c:
-		s.Stop(ctx)
+		s1.Stop(ctx)
+		s2.Stop(ctx)
 		m.Stop()
 		cancel()
 	case <-ctx.Done():
