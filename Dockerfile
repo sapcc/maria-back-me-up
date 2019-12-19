@@ -8,7 +8,7 @@ RUN make all
 FROM alpine:edge
 LABEL maintainer="Stefan Hipfel <stefan.hipfel@sap.com>"
 
-ENV PACKAGES="mysql-client mariadb curl mysql-utilities" \
+ENV PACKAGES="mysql-client mariadb curl python" \
     LIB_PACKAGES="glib-dev mariadb-dev zlib-dev pcre-dev libressl-dev" \
     BUILD_PACKAGES="cmake build-base git" \
     BUILD_PATH="/opt/mydumper-src/"
@@ -30,6 +30,12 @@ RUN apk --no-cache add \
     (rm "/tmp/"* 2>/dev/null || true) && \
     (rm -rf /var/cache/apk/* 2>/dev/null || true)
 
+ADD mysql-utilities-1.6.5.tar.gz /tmp/
+WORKDIR /tmp/mysql-utilities-1.6.5/
+RUN python setup.py install
+RUN rm -rf /tmp/mysql-utilities-1.6.5/
+
+WORKDIR /
 RUN curl -Lo /bin/dumb-init https://github.com/Yelp/dumb-init/releases/download/v1.2.2/dumb-init_1.2.2_amd64 \
 	&& chmod +x /bin/dumb-init \
 	&& dumb-init -V

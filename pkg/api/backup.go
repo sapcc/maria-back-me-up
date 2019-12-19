@@ -55,8 +55,8 @@ func getServiceName(key string) string {
 func getVerifyBackupState(v []storage.Verify, t time.Time, err bool) string {
 	var duration time.Duration
 	duration = time.Duration(1000 * time.Hour)
-	verifyState := "#6c757d"
-	verifyError := "All is well"
+	verifyState := "#6c757d" // grey
+	verifyError := "Verfication not completed..."
 	for _, k := range v {
 		fmt.Println(k)
 		if t.Before(k.Time) {
@@ -68,7 +68,8 @@ func getVerifyBackupState(v []storage.Verify, t time.Time, err bool) string {
 					}
 				}
 				if k.Tables == 1 {
-					verifyState = "#28a745"
+					verifyState = "#28a745" // green
+					verifyError = "All is well"
 				}
 				if k.Backup == 0 {
 					verifyState = "#dc3545"

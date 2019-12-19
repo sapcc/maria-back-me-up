@@ -18,12 +18,13 @@ package route
 
 import (
 	"github.com/labstack/echo"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sapcc/maria-back-me-up/pkg/api"
 	"github.com/sapcc/maria-back-me-up/pkg/backup"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 )
 
-func Init(m *backup.Manager, opts config.Options) *echo.Echo {
+func InitAPI(m *backup.Manager, opts config.Options) *echo.Echo {
 	e := echo.New()
 
 	api.InitAPI(m, opts)
@@ -43,8 +44,13 @@ func Init(m *backup.Manager, opts config.Options) *echo.Echo {
 	gb.GET("/stop", api.GetGackup(m))
 	gb.GET("/start", api.GetGackup(m))
 
+	return e
+}
+
+func InitMetrics(m *backup.Manager) *echo.Echo {
+	e := echo.New()
+	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
 	gh := e.Group("/health")
 	gh.GET("/readiness", api.GetReadiness(m))
-
 	return e
 }

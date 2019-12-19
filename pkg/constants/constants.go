@@ -18,6 +18,7 @@ package constants
 
 const (
 	PORT            = "8081"
+	PORT_METRICS    = "8082"
 	INDEX           = "templates/index.html"
 	RESTORE         = "templates/restore.html"
 	MARIADEPLOYMENT = "templates/maria_deployment.yaml"
