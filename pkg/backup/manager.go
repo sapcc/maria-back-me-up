@@ -130,10 +130,10 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 			logger.Error(fmt.Sprintf("error creating mysqldump: %s", err.Error()))
 			m.updateStatus(0, time.Time{})
 			if err = m.initRestore(err); err != nil {
-				time.Sleep(time.Duration(10) * time.Second)
+				time.Sleep(time.Duration(2) * time.Minute)
 				continue
 			}
-			time.Sleep(time.Duration(5) * time.Minute)
+			time.Sleep(time.Duration(30) * time.Second)
 			continue
 		}
 		ctxBin := context.Background()

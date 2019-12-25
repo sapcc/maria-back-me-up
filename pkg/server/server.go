@@ -19,7 +19,7 @@ func NewServer(e *echo.Echo) *Server {
 
 func (s *Server) Start(port string) (err error) {
 	if err = s.echo.Start(":" + port); err != nil {
-		log.Error("shutting down the server")
+		log.Error("shutting down the server", err)
 		return
 	}
 	return

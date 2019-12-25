@@ -58,13 +58,14 @@ func getVerifyBackupState(v []storage.Verify, t time.Time, err bool) string {
 	verifyState := "#6c757d" // grey
 	verifyError := "Verfication not completed..."
 	for _, k := range v {
-		fmt.Println(k)
 		if t.Before(k.Time) {
 			if k.Time.Sub(t) < duration {
 				if k.Backup == 1 {
-					verifyState = "#ffc107"
+					verifyState = "#ffc107" // orange
 					if k.Error != "" {
 						verifyError = k.Error
+					} else {
+						verifyError = "Table checksum was not executed."
 					}
 				}
 				if k.Tables == 1 {
@@ -72,7 +73,7 @@ func getVerifyBackupState(v []storage.Verify, t time.Time, err bool) string {
 					verifyError = "All is well"
 				}
 				if k.Backup == 0 {
-					verifyState = "#dc3545"
+					verifyState = "#dc3545" // red
 					if k.Error != "" {
 						verifyError = k.Error
 					}

@@ -95,6 +95,10 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 	defer func() {
 		pw.Close()
 		syncer.Close()
+		if b.flushTimer != nil {
+			b.flushTimer.Stop()
+			b.flushTimer = nil
+		}
 	}()
 
 	// Start sync with specified binlog file and position
@@ -164,6 +168,7 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 		case <-ctx.Done():
 			if b.flushTimer != nil {
 				b.flushTimer.Stop()
+				b.flushTimer = nil
 			}
 			log.Info("stop binlog streaming")
 			return

@@ -146,6 +146,7 @@ func runMysqlDiff(c1, c2 config.MariaDB) (out []byte, err error) {
 		dbs = append(dbs, fmt.Sprintf("%s:%s", db, db))
 	}
 	e := exec.Command("mysqldiff",
+		"--skip-table-options",
 		"--server1="+s1,
 		"--server2="+s2,
 		"--difftype=differ",
