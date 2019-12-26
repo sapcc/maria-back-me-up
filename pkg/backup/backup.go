@@ -93,6 +93,7 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 	syncer := replication.NewBinlogSyncer(cfg)
 	pr, pw := io.Pipe()
 	defer func() {
+		log.Debug("closing syncer")
 		pw.Close()
 		syncer.Close()
 		if b.flushTimer != nil {
@@ -166,11 +167,6 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 
 		select {
 		case <-ctx.Done():
-			if b.flushTimer != nil {
-				b.flushTimer.Stop()
-				b.flushTimer = nil
-			}
-			log.Info("stop binlog streaming")
 			return
 		default:
 			continue

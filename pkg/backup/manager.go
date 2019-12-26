@@ -113,13 +113,14 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 		return
 	}
 	for c := time.Tick(time.Duration(m.cfg.FullBackupIntervalInHours) * time.Hour); ; {
-		log.Debug("Start full backup cycle")
+		log.Debug("Start backup cycle")
 		//verify last full backup cycle
 		m.verifyLatestBackup(false, false)
 
 		// Stop binlog
 		if binlogCancel != nil {
 			binlogCancel()
+			time.Sleep(time.Duration(100) * time.Millisecond)
 		}
 
 		m.lastBackupTime = time.Now().Format(time.RFC3339)
