@@ -20,6 +20,7 @@ const (
 	PORT            = "8081"
 	PORT_METRICS    = "8082"
 	INDEX           = "templates/index.html"
+	BACKUP          = "templates/backup.html"
 	RESTORE         = "templates/restore.html"
 	MARIADEPLOYMENT = "templates/maria_deployment.yaml"
 	MARIASERIVCE    = "templates/maria_svc.yaml"

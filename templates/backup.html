@@ -10,7 +10,7 @@
         <div class="card">
             <div class="card-header">
                 <h1>MariaDB Restore</h1>
-                <p>Choose a storage</p>
+                <p>Choose a full backup</p>
             </div>
         </div>
 
@@ -19,8 +19,8 @@
         {{ range $index, $backup := . }}
             <ul class="list-group">
                 <li class="list-group-item  list-group-item-info" style="background-color: rgba(0,0,0,.03);">
-                    <a style="color:black" aria-expanded="false" href="/backup?storage={{ $index }}">
-                    {{ $backup.Name }}
+                    <a style="color:black" aria-expanded="false" href="/restore?key={{ $backup.Key }}&storage={{ $backup.Storage }}">
+                    {{ $backup.Time }}
                 </a>
                 </li>
             </ul>

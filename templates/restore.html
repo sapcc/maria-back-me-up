@@ -31,6 +31,7 @@
                     <ul>
                         <div class="form-check">
                             <form action="/restore" method="post">
+                                <input class="form-check-input" type="hidden" name="storage" id="storage" value="{{$backup.Storage}}">
                                 {{ range $backup.IncList}}
                                 <li class="list-group-item" style="background-color: {{ getVerifyBackupState $backup.Verify .LastModified false}}" data-toggle="popover" data-trigger="hover" data-placement="top" data-content="{{ getVerifyBackupState $backup.Verify .LastModified true}}">
                                     <input class="form-check-input" type="radio" name="backup" id="backup" value="{{.Key}}">

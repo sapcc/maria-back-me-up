@@ -73,7 +73,10 @@ func (b *Backup) createMysqlDump(toPath string) (err error) {
 		return
 	}
 	log.Debug("Uploading full backup")
-	if err = b.storage.WriteFolder(toPath); err != nil {
+	if err = b.storage.WriteFolder(0, toPath); err != nil {
+		return
+	}
+	if err = b.storage.WriteFolder(1, toPath); err != nil {
 		return
 	}
 	log.Debug("Done uploading full backup")
@@ -91,10 +94,14 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 		Password: b.cfg.MariaDB.Password,
 	}
 	syncer := replication.NewBinlogSyncer(cfg)
-	pr, pw := io.Pipe()
+	binlogReader, binlogWriter := io.Pipe()
+	copyReader, copyWriter := io.Pipe()
+	//copy binlog writer for second storage
+	copiedReader := io.TeeReader(binlogReader, copyWriter)
 	defer func() {
 		log.Debug("closing syncer")
-		pw.Close()
+		binlogWriter.Close()
+		copyWriter.Close()
 		syncer.Close()
 		if b.flushTimer != nil {
 			b.flushTimer.Stop()
@@ -126,15 +133,21 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 				continue
 			}
 		} else if ev.Header.EventType == replication.FORMAT_DESCRIPTION_EVENT {
-			// FormateDescriptionEvent is the first event in binlog, we will close old one and create a new log file
+			// FormateDescriptionEvent is the first event in binlog, we will close old writer and create new ones
 			if binlogFile != "" {
-				pw.Close()
+				binlogWriter.Close()
+				copyWriter.Close()
 				time.Sleep(100 * time.Millisecond)
 			}
-			pr, pw = io.Pipe()
+			binlogReader, binlogWriter = io.Pipe()
+			copyReader, copyWriter = io.Pipe()
+			copiedReader = io.TeeReader(binlogReader, copyWriter)
 			var eg errgroup.Group
 			eg.Go(func() error {
-				return b.storage.WriteStream(path.Join(dir, binlogFile), "", pr)
+				return b.storage.WriteStream(0, path.Join(dir, binlogFile), "", copyReader)
+			})
+			eg.Go(func() error {
+				return b.storage.WriteStream(1, path.Join(dir, binlogFile), "", copiedReader)
 			})
 			go func() error {
 				if err = eg.Wait(); err != nil {
@@ -149,10 +162,10 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 				return nil
 			}()
 
-			pw.Write(replication.BinLogFileHeader)
+			binlogWriter.Write(replication.BinLogFileHeader)
 
 		}
-		pw.Write(ev.RawData)
+		binlogWriter.Write(ev.RawData)
 
 		switch ev.Event.(type) {
 		case *replication.RowsEvent:

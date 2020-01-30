@@ -26,7 +26,7 @@ import (
 type Config struct {
 	Version                            string  `yaml:"version"`
 	MariaDB                            MariaDB `yaml:"maria_db"`
-	S3                                 S3      `yaml:"s3"`
+	S3                                 []S3    `yaml:"s3"`
 	OAuth                              OAuth   `yaml:"oauth"`
 	BackupDir                          string  `yaml:"backup_dir"`
 	AutomaticRecovery                  bool    `yaml:"automatic_recovery"`
@@ -50,6 +50,7 @@ type MariaDB struct {
 }
 
 type S3 struct {
+	Name               string `yaml:"name"`
 	AwsAccessKeyID     string `yaml:"aws_access_key_id"`
 	AwsSecretAccessKey string `yaml:"aws_secret_access_key"`
 	AwsEndpoint        string `yaml:"aws_endpoint"`

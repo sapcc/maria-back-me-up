@@ -33,7 +33,7 @@ import (
 )
 
 func (m *Manager) verifyLatestBackup(withChecksum bool, resetTimer bool) {
-	backupFolder, err := m.Storage.DownloadLatestBackup()
+	backupFolder, err := m.Storage.DownloadLatestBackup(0)
 	if err != nil {
 		var e *storage.NoBackupError
 		if errors.As(err, &e) {
@@ -139,12 +139,17 @@ func (m *Manager) uploadVerfiyStatus(backupFolder string) {
 	m.updateSts.RLock()
 	out, err := yaml.Marshal(m.updateSts)
 	m.updateSts.RUnlock()
-	if err == nil {
-		u := strconv.FormatInt(time.Now().Unix(), 10)
-		//remove restore and servicename dir from path
-		vp := strings.Replace(backupFolder, filepath.Join(constants.RESTOREFOLDER, m.cfg.ServiceName), "", 1)
-		m.Storage.WriteStream(vp+"/verify_"+u+".yaml", "", bytes.NewReader(out))
-	} else {
-		logger.Error(fmt.Errorf("cannot write verify status: %s", err.Error()))
+	if err != nil {
+		logger.Error(fmt.Errorf("cannot marshal verify status: %s", err.Error()))
+		return
+	}
+	u := strconv.FormatInt(time.Now().Unix(), 10)
+	//remove restore and servicename dir from path
+	vp := strings.Replace(backupFolder, filepath.Join(constants.RESTOREFOLDER, m.cfg.ServiceName), "", 1)
+	logger.Debug("Uploading verify status to: ", vp+"/verify_"+u+".yaml")
+	err = m.Storage.WriteStream(0, vp+"/verify_"+u+".yaml", "", bytes.NewReader(out))
+	err = m.Storage.WriteStream(1, vp+"/verify_"+u+".yaml", "", bytes.NewReader(out))
+	if err != nil {
+		logger.Error(fmt.Errorf("cannot upload verify status: %s", err.Error()))
 	}
 }

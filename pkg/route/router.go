@@ -34,15 +34,15 @@ func InitAPI(m *backup.Manager, opts config.Options) *echo.Echo {
 	i := e.Group("/")
 	i.Use(api.Oauth(m.GetConfig().OAuth.Enabled, opts))
 	i.GET("", api.GetRoot(m))
+	i.GET("backup", api.GetBackup(m))
 	i.GET("restore", api.GetRestore(m))
 	i.POST("restore", api.PostRestore(m))
 
-	i.POST("restore/latestbackup", api.PostLatestRestore(m))
-
-	gb := e.Group("/backup")
+	gb := e.Group("/api")
 	gb.Use(api.Oauth(m.GetConfig().OAuth.Enabled, opts))
-	gb.GET("/stop", api.GetGackup(m))
-	gb.GET("/start", api.GetGackup(m))
+	i.POST("/restore/latestbackup", api.PostLatestRestore(m))
+	gb.GET("/stop_backup", api.GetGackup(m))
+	gb.GET("/start_backup", api.GetGackup(m))
 
 	return e
 }

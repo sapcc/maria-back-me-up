@@ -18,7 +18,6 @@ package storage
 
 import (
 	"archive/tar"
-	"compress/gzip"
 	"fmt"
 	"io"
 	"os"
@@ -43,8 +42,8 @@ var logger *logrus.Entry
 
 type (
 	S3 struct {
-		cfg         config.S3
-		session     *session.Session
+		cfg         []config.S3
+		sessions    []*session.Session
 		serviceName string
 	}
 	Verify struct {
@@ -55,6 +54,7 @@ type (
 	}
 
 	Backup struct {
+		Storage int
 		Time    time.Time
 		Key     string
 		IncList []s3.Object
@@ -66,23 +66,30 @@ func init() {
 	logger = log.WithFields(logrus.Fields{"component": "s3"})
 }
 
-func NewS3(c config.S3, sn string) (s3 *S3, err error) {
-	s, err := session.NewSession(&aws.Config{
-		Endpoint:    aws.String(c.AwsEndpoint),
-		Region:      aws.String(c.Region),
-		Credentials: credentials.NewStaticCredentials(c.AwsAccessKeyID, c.AwsSecretAccessKey, ""),
-	})
-	if err != nil {
-		logger.Fatal(err)
+func NewS3(c config.Config, sn string) (s3 *S3, err error) {
+	ms := make([]*session.Session, 2)
+	mc := make([]config.S3, 2)
+	for name, s3 := range c.S3 {
+		s, err := session.NewSession(&aws.Config{
+			Endpoint:    aws.String(s3.AwsEndpoint),
+			Region:      aws.String(s3.Region),
+			Credentials: credentials.NewStaticCredentials(s3.AwsAccessKeyID, s3.AwsSecretAccessKey, ""),
+		})
+		if err != nil {
+			logger.Fatal(err)
+		}
+		ms[name] = s
+		mc[name] = s3
 	}
 
 	return &S3{
-		cfg:         c,
-		session:     s,
+		cfg:         mc,
+		sessions:    ms,
 		serviceName: sn,
 	}, err
 }
 
+/*
 func (s *S3) WriteBytes(f string, b []byte) (err error) {
 	pr, pw := io.Pipe()
 	go func() {
@@ -108,23 +115,23 @@ func (s *S3) WriteBytes(f string, b []byte) (err error) {
 
 	return
 }
-
-func (s *S3) WriteFolder(p string) (err error) {
+*/
+func (s *S3) WriteFolder(backup int, p string) (err error) {
 	r, err := s.zipFolderPath(p)
 	if err != nil {
 		return
 	}
-	return s.WriteStream(path.Join(filepath.Base(p), "dump.tar"), "zip", r)
+	return s.WriteStream(backup, path.Join(filepath.Base(p), "dump.tar"), "zip", r)
 }
 
-func (s *S3) WriteStream(fileName, mimeType string, body io.Reader) (err error) {
-	uploader := s3manager.NewUploader(s.session, func(u *s3manager.Uploader) {
+func (s *S3) WriteStream(backup int, fileName, mimeType string, body io.Reader) (err error) {
+	uploader := s3manager.NewUploader(s.sessions[backup], func(u *s3manager.Uploader) {
 		u.PartSize = 20 << 20 // 20MB
 		u.MaxUploadParts = 10000
 	})
 
 	input := s3manager.UploadInput{
-		Bucket:               aws.String(s.cfg.BucketName),
+		Bucket:               aws.String(s.cfg[backup].BucketName),
 		Key:                  aws.String(path.Join(s.serviceName, fileName)),
 		Body:                 body,
 		ServerSideEncryption: aws.String("AES256"),
@@ -136,11 +143,10 @@ func (s *S3) WriteStream(fileName, mimeType string, body io.Reader) (err error) 
 	}
 	return
 }
-
-func (s *S3) DownloadBackupFrom(fullBackupPath, binlog string) (path string, err error) {
-	svc := s3.New(s.session)
+func (s *S3) DownloadBackupFrom(backup int, fullBackupPath, binlog string) (path string, err error) {
+	svc := s3.New(s.sessions[backup])
 	until := strings.Split(binlog, ".")
-	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(fullBackupPath)})
+	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg[backup].BucketName), Prefix: aws.String(fullBackupPath)})
 	if err != nil {
 		return
 	}
@@ -149,28 +155,29 @@ func (s *S3) DownloadBackupFrom(fullBackupPath, binlog string) (path string, err
 			continue
 		}
 		if strings.Contains(*listObj.Key, "dump.tar") {
-			s.downloadFile(constants.RESTOREFOLDER, listObj)
+			s.downloadFile(backup, constants.RESTOREFOLDER, listObj)
 			continue
 		}
 		_, file := filepath.Split(*listObj.Key)
 		nbr := strings.Split(file, ".")
 		if nbr[1] <= until[1] {
-			s.downloadFile(constants.RESTOREFOLDER, listObj)
+			s.downloadFile(backup, constants.RESTOREFOLDER, listObj)
 		}
 	}
 	path = filepath.Join(constants.RESTOREFOLDER, fullBackupPath)
 	return
 }
 
-func (s *S3) ListIncBackupsFor(key string) (bl []Backup, err error) {
-	svc := s3.New(s.session)
+func (s *S3) ListIncBackupsFor(backup int, key string) (bl []Backup, err error) {
+	svc := s3.New(s.sessions[backup])
 	b := Backup{
+		Storage: backup,
 		IncList: make([]s3.Object, 0),
 		Verify:  make([]Verify, 0),
 		Key:     key,
 	}
 
-	list, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.Replace(key, "dump.tar", "", -1))})
+	list, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg[backup].BucketName), Prefix: aws.String(strings.Replace(key, "dump.tar", "", -1))})
 	if err != nil {
 		log.Error(err.Error())
 		return
@@ -179,7 +186,7 @@ func (s *S3) ListIncBackupsFor(key string) (bl []Backup, err error) {
 		if strings.Contains(*incObj.Key, "verify_") {
 			v := Verify{}
 			w := aws.NewWriteAtBuffer([]byte{})
-			s.downloadStream(w, incObj)
+			s.downloadStream(backup, w, incObj)
 			err = yaml.Unmarshal(w.Bytes(), &v)
 			v.Time = *incObj.LastModified
 			b.Verify = append(b.Verify, v)
@@ -193,9 +200,9 @@ func (s *S3) ListIncBackupsFor(key string) (bl []Backup, err error) {
 	return
 }
 
-func (s *S3) ListFullBackups() (bl []Backup, err error) {
-	svc := s3.New(s.session)
-	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(s.serviceName + "/"), Delimiter: aws.String("y")})
+func (s *S3) ListFullBackups(backup int) (bl []Backup, err error) {
+	svc := s3.New(s.sessions[backup])
+	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg[backup].BucketName), Prefix: aws.String(s.serviceName + "/"), Delimiter: aws.String("y")})
 	if err != nil {
 		return
 	}
@@ -208,6 +215,7 @@ func (s *S3) ListFullBackups() (bl []Backup, err error) {
 
 		if strings.Contains(*fullObj.Key, "dump.tar") {
 			b := Backup{
+				Storage: backup,
 				Time:    *fullObj.LastModified,
 				Key:     *fullObj.Key,
 				IncList: make([]s3.Object, 0),
@@ -219,11 +227,11 @@ func (s *S3) ListFullBackups() (bl []Backup, err error) {
 	return
 }
 
-func (s *S3) DownloadLatestBackup() (path string, err error) {
+func (s *S3) DownloadLatestBackup(backup int) (path string, err error) {
 	var newestBackup *s3.Object
 	var newestTime int64 = 0
-	svc := s3.New(s.session)
-	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(s.serviceName + "/"), Delimiter: aws.String("y")})
+	svc := s3.New(s.sessions[backup])
+	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg[backup].BucketName), Prefix: aws.String(s.serviceName + "/"), Delimiter: aws.String("y")})
 	if err != nil {
 		return
 	}
@@ -245,14 +253,14 @@ func (s *S3) DownloadLatestBackup() (path string, err error) {
 		return path, &NoBackupError{}
 	}
 
-	listRes, err = svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.Replace(*newestBackup.Key, "dump.tar", "", -1))})
+	listRes, err = svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg[backup].BucketName), Prefix: aws.String(strings.Replace(*newestBackup.Key, "dump.tar", "", -1))})
 	if err != nil {
 		return
 	}
 
 	for _, listObj := range listRes.Contents {
 		if !strings.HasSuffix(*listObj.Key, "/") {
-			s.downloadFile(constants.RESTOREFOLDER, listObj)
+			s.downloadFile(backup, constants.RESTOREFOLDER, listObj)
 		}
 	}
 	path = filepath.Join(constants.RESTOREFOLDER, *newestBackup.Key)
@@ -260,11 +268,11 @@ func (s *S3) DownloadLatestBackup() (path string, err error) {
 	return
 }
 
-func (s *S3) GetBackupByTimestamp(t time.Time) (path string, err error) {
-	var backup *s3.Object
+func (s *S3) GetBackupByTimestamp(backup int, t time.Time) (path string, err error) {
+	var s3Backup *s3.Object
 	minAge := 100.0
-	svc := s3.New(s.session)
-	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(s.serviceName + "/")})
+	svc := s3.New(s.sessions[backup])
+	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg[backup].BucketName), Prefix: aws.String(s.serviceName + "/")})
 	if err != nil {
 		return
 	}
@@ -278,7 +286,7 @@ func (s *S3) GetBackupByTimestamp(t time.Time) (path string, err error) {
 			age := t.Sub(*listObj.LastModified).Minutes()
 			if age < minAge {
 				minAge = age
-				backup = listObj
+				s3Backup = listObj
 			}
 			continue
 		}
@@ -287,11 +295,11 @@ func (s *S3) GetBackupByTimestamp(t time.Time) (path string, err error) {
 		}
 	}
 
-	if backup == nil {
+	if s3Backup == nil {
 		return path, &NoBackupError{}
 	}
 
-	listRes, err = svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.Replace(*backup.Key, "dump.tar", "", -1))})
+	listRes, err = svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg[backup].BucketName), Prefix: aws.String(strings.Replace(*s3Backup.Key, "dump.tar", "", -1))})
 	if err != nil {
 		return
 	}
@@ -299,16 +307,16 @@ func (s *S3) GetBackupByTimestamp(t time.Time) (path string, err error) {
 	for _, listObj := range listRes.Contents {
 		if !strings.HasSuffix(*listObj.Key, "/") {
 			if listObj.LastModified.Before(t) {
-				s.downloadFile(constants.RESTOREFOLDER, listObj)
+				s.downloadFile(backup, constants.RESTOREFOLDER, listObj)
 			}
 		}
 	}
-	path = filepath.Join(constants.RESTOREFOLDER, *backup.Key)
+	path = filepath.Join(constants.RESTOREFOLDER, *s3Backup.Key)
 	path = filepath.Dir(path)
 	return
 }
 
-func (s *S3) downloadFile(path string, obj *s3.Object) (err error) {
+func (s *S3) downloadFile(backup int, path string, obj *s3.Object) (err error) {
 	err = os.MkdirAll(filepath.Join(path, filepath.Dir(*obj.Key)), os.ModePerm)
 	if err != nil {
 		return
@@ -320,26 +328,26 @@ func (s *S3) downloadFile(path string, obj *s3.Object) (err error) {
 
 	defer file.Close()
 	// Create a downloader with the session and custom options
-	downloader := s3manager.NewDownloader(s.session, func(d *s3manager.Downloader) {
+	downloader := s3manager.NewDownloader(s.sessions[backup], func(d *s3manager.Downloader) {
 		d.PartSize = 64 * 1024 * 1024 // 64MB per part
 		d.Concurrency = 6
 	})
 	_, err = downloader.Download(file,
 		&s3.GetObjectInput{
-			Bucket: aws.String(s.cfg.BucketName),
+			Bucket: aws.String(s.cfg[backup].BucketName),
 			Key:    aws.String(*obj.Key),
 		})
 	return
 }
 
-func (s *S3) downloadStream(w io.WriterAt, obj *s3.Object) (err error) {
-	downloader := s3manager.NewDownloader(s.session, func(d *s3manager.Downloader) {
+func (s *S3) downloadStream(backup int, w io.WriterAt, obj *s3.Object) (err error) {
+	downloader := s3manager.NewDownloader(s.sessions[backup], func(d *s3manager.Downloader) {
 		d.PartSize = 64 * 1024 * 1024 // 64MB per part
 		d.Concurrency = 6
 	})
 	_, err = downloader.Download(w,
 		&s3.GetObjectInput{
-			Bucket: aws.String(s.cfg.BucketName),
+			Bucket: aws.String(s.cfg[backup].BucketName),
 			Key:    aws.String(*obj.Key),
 		})
 	return

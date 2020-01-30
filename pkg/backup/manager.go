@@ -69,7 +69,7 @@ func init() {
 }
 
 func NewManager(c config.Config) (m *Manager, err error) {
-	s3, err := storage.NewS3(c.S3, c.ServiceName)
+	s3, err := storage.NewS3(c, c.ServiceName)
 	b, err := NewBackup(c, s3)
 	if err != nil {
 		return
@@ -219,7 +219,7 @@ func (m *Manager) initRestore(err error) error {
 	var ed *DatabaseMissingError
 	if errors.As(err, &ed) && m.cfg.EnableInitRestore {
 		var eb *storage.NoBackupError
-		bf, err := m.Storage.DownloadLatestBackup()
+		bf, err := m.Storage.DownloadLatestBackup(0)
 		if errors.As(err, &eb) {
 			logger.Info("Cannot restore. No backup available")
 			return nil
