@@ -66,7 +66,7 @@ func InitAPI(m *backup.Manager, opts config.Options) {
 		RedirectURL: m.GetConfig().OAuth.RedirectURL + "/auth/callback",
 		Endpoint:    provider.Endpoint(),
 
-		Scopes: []string{oidc.ScopeOpenID, "groups", "profile", "email"},
+		Scopes: []string{oidc.ScopeOpenID, "groups", "email"},
 	}
 
 }
