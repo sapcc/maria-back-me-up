@@ -79,6 +79,7 @@ func (m *Manager) verifyBackup(withChecksum bool, backupFolder string, resetTime
 			Version:      m.cfg.MariaDB.Version,
 			VerifyTables: m.cfg.MariaDB.VerifyTables,
 			Databases:    m.cfg.MariaDB.Databases,
+			LogBin:       m.cfg.MariaDB.LogBin,
 		},
 	}
 
