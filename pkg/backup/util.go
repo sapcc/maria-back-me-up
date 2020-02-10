@@ -57,7 +57,6 @@ func readMetadata(p string) (mp mysql.Position, err error) {
 
 func compareChecksums(cs map[string]int64, with map[string]int64) error {
 	for k, v := range cs {
-		fmt.Println("--------------------------------", k, with[k], v)
 		if with[k] != v {
 			return fmt.Errorf("Backup verify table checksum mismatch for table %s", k)
 		}

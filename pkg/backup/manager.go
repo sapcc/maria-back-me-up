@@ -113,7 +113,7 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 		return
 	}
 	for c := time.Tick(time.Duration(m.cfg.FullBackupIntervalInHours) * time.Hour); ; {
-		log.Debug("Start backup cycle")
+		logger.Debug("Start backup cycle")
 		//verify last full backup cycle
 		m.verifyLatestBackup(false, false)
 
@@ -230,7 +230,7 @@ func (m *Manager) initRestore(err error) error {
 		if err != nil {
 			logger.Error(err.Error())
 		}
-		log.Info("Starting init restore")
+		logger.Info("Starting init restore")
 		return m.restore.restore(bf)
 	}
 	return nil
@@ -240,6 +240,7 @@ func (m *Manager) onBinlogRotation(c chan time.Time) {
 	for {
 		t, ok := <-c
 		if !ok {
+			logger.Error("Binlog Rotation channel closed")
 			break
 		}
 		m.updateSts.Lock()
@@ -262,7 +263,7 @@ func (m *Manager) GetConfig() config.Config {
 }
 
 func (m *Manager) Restore(p string) (err error) {
-	log.Info("STARTING RESTORE")
+	logger.Info("STARTING RESTORE")
 	m.Health.Lock()
 	m.Health.Ready = false
 	m.Health.Unlock()

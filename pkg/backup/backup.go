@@ -83,7 +83,7 @@ func (b *Backup) createMysqlDump(toPath string) (err error) {
 	return
 }
 
-func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c chan time.Time) (err error) {
+func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, ch chan time.Time) (err error) {
 	var binlogFile string
 	cfg := replication.BinlogSyncerConfig{
 		ServerID: 999,
@@ -151,13 +151,14 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 			})
 			go func() error {
 				if err = eg.Wait(); err != nil {
+					log.Error(err)
 					return err
 				}
 				if ctx.Err() == nil {
-					c <- time.Now()
+					ch <- time.Now()
 				} else {
-					c <- time.Now()
-					close(c)
+					ch <- time.Now()
+					close(ch)
 				}
 				return nil
 			}()

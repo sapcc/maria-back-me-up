@@ -36,6 +36,9 @@ func (m *Manager) verifyLatestBackup(withChecksum bool, resetTimer bool) {
 	backupFolder, err := m.Storage.DownloadLatestBackup(0)
 	if err != nil {
 		var e *storage.NoBackupError
+		if resetTimer {
+			m.verifyTimer = nil
+		}
 		if errors.As(err, &e) {
 			logger.Info(e.Error())
 			return
@@ -52,7 +55,9 @@ func (m *Manager) verifyBackup(withChecksum bool, backupFolder string, resetTime
 	logger.Info("Start verifying backup")
 
 	defer func() {
-		os.RemoveAll(backupFolder)
+		if err = os.RemoveAll(backupFolder); err != nil {
+			logger.Error(err)
+		}
 		if resetTimer {
 			m.verifyTimer = nil
 		}

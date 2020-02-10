@@ -128,7 +128,7 @@ func (r *Restore) restoreIncBackup(p string) (err error) {
 			return filepath.SkipDir
 		}
 
-		if !f.IsDir() && strings.Contains(f.Name(), "mysqld-bin") {
+		if !f.IsDir() && strings.Contains(f.Name(), r.cfg.MariaDB.LogBin) {
 			binlogFiles = append(binlogFiles, p)
 		}
 		return nil
