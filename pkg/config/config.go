@@ -56,6 +56,7 @@ type S3 struct {
 	AwsSecretAccessKey   string  `yaml:"aws_secret_access_key"`
 	AwsEndpoint          string  `yaml:"aws_endpoint"`
 	ServerSideEncryption *string `yaml:"server_side_encryption"`
+	S3ForcePathStyle     *bool   `yaml:"s3_force_path_style"`
 	Region               string  `yaml:"region"`
 	BucketName           string  `yaml:"bucket_name"`
 }

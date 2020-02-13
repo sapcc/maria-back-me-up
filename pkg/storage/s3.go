@@ -69,16 +69,12 @@ func init() {
 func NewS3(c config.Config, sn string) (s3 *S3, err error) {
 	ms := make([]*session.Session, 2)
 	mc := make([]config.S3, 2)
-	s3ForcePathStyle := false
 	for name, s3 := range c.S3 {
-		if s3.AwsEndpoint != "" {
-			s3ForcePathStyle = true
-		}
 		s, err := session.NewSession(&aws.Config{
 			Endpoint:         aws.String(s3.AwsEndpoint),
 			Region:           aws.String(s3.Region),
 			Credentials:      credentials.NewStaticCredentials(s3.AwsAccessKeyID, s3.AwsSecretAccessKey, ""),
-			S3ForcePathStyle: aws.Bool(s3ForcePathStyle),
+			S3ForcePathStyle: s3.S3ForcePathStyle,
 		})
 		if err != nil {
 			logger.Fatal(err)
