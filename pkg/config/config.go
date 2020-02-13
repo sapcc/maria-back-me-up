@@ -51,12 +51,13 @@ type MariaDB struct {
 }
 
 type S3 struct {
-	Name               string `yaml:"name"`
-	AwsAccessKeyID     string `yaml:"aws_access_key_id"`
-	AwsSecretAccessKey string `yaml:"aws_secret_access_key"`
-	AwsEndpoint        string `yaml:"aws_endpoint"`
-	Region             string `yaml:"region"`
-	BucketName         string `yaml:"bucket_name"`
+	Name                 string  `yaml:"name"`
+	AwsAccessKeyID       string  `yaml:"aws_access_key_id"`
+	AwsSecretAccessKey   string  `yaml:"aws_secret_access_key"`
+	AwsEndpoint          string  `yaml:"aws_endpoint"`
+	ServerSideEncryption *string `yaml:"server_side_encryption"`
+	Region               string  `yaml:"region"`
+	BucketName           string  `yaml:"bucket_name"`
 }
 
 type OAuth struct {

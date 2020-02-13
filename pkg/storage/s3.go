@@ -69,11 +69,16 @@ func init() {
 func NewS3(c config.Config, sn string) (s3 *S3, err error) {
 	ms := make([]*session.Session, 2)
 	mc := make([]config.S3, 2)
+	s3ForcePathStyle := false
 	for name, s3 := range c.S3 {
+		if s3.AwsEndpoint != "" {
+			s3ForcePathStyle = true
+		}
 		s, err := session.NewSession(&aws.Config{
-			Endpoint:    aws.String(s3.AwsEndpoint),
-			Region:      aws.String(s3.Region),
-			Credentials: credentials.NewStaticCredentials(s3.AwsAccessKeyID, s3.AwsSecretAccessKey, ""),
+			Endpoint:         aws.String(s3.AwsEndpoint),
+			Region:           aws.String(s3.Region),
+			Credentials:      credentials.NewStaticCredentials(s3.AwsAccessKeyID, s3.AwsSecretAccessKey, ""),
+			S3ForcePathStyle: aws.Bool(s3ForcePathStyle),
 		})
 		if err != nil {
 			logger.Fatal(err)
@@ -134,7 +139,7 @@ func (s *S3) WriteStream(backup int, fileName, mimeType string, body io.Reader) 
 		Bucket:               aws.String(s.cfg[backup].BucketName),
 		Key:                  aws.String(path.Join(s.serviceName, fileName)),
 		Body:                 body,
-		ServerSideEncryption: aws.String("AES256"),
+		ServerSideEncryption: s.cfg[backup].ServerSideEncryption,
 	}
 	_, err = uploader.Upload(&input)
 	if err != nil {
