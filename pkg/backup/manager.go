@@ -104,7 +104,7 @@ func (m *Manager) Start() (err error) {
 		done <- err
 	}()
 	err = <-done
-	return
+	return err
 }
 
 func (m *Manager) startBackup(ctx context.Context) (err error) {
@@ -225,10 +225,8 @@ func (m *Manager) initRestore(err error) error {
 			return nil
 		}
 		if err != nil {
-			return err
-		}
-		if err != nil {
 			logger.Error(err.Error())
+			return err
 		}
 		logger.Info("Starting init restore")
 		return m.restore.restore(bf)

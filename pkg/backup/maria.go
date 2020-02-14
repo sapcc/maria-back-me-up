@@ -95,6 +95,21 @@ func PingMariaDB(c config.MariaDB) (err error) {
 	return
 }
 
+//PURGE BINARY LOGS TO 'mysqld-bin.020855'
+
+func purgeBinlogsTo(c config.MariaDB, log string) (err error) {
+	conn, err := client.Connect(fmt.Sprintf("%s:%s", c.Host, strconv.Itoa(c.Port)), c.User, c.Password, "")
+	if err = conn.Ping(); err != nil {
+		return
+	}
+
+	_, err = conn.Execute(fmt.Sprintf("PURGE BINARY LOGS TO '%s'", log))
+	if err != nil {
+		return
+	}
+	return
+}
+
 func getCheckSumForTable(c config.MariaDB) (cs map[string]int64, err error) {
 	cs = make(map[string]int64)
 	cf := wait.ConditionFunc(func() (bool, error) {
