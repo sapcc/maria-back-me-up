@@ -27,25 +27,25 @@ import (
 type (
 	updateStatus struct {
 		sync.RWMutex `yaml:"-"`
-		up           int
-		incBackup    time.Time
-		fullBackup   time.Time
+		incBackup    map[string]int
+		fullBackup   map[string]int
 		VerifyBackup int    `yaml:"verify_backup"`
 		VerifyTables int    `yaml:"verify_tables"`
 		VerifyError  string `yaml:"verify_error"`
 	}
 
+	backup struct {
+		up   int
+		last time.Time
+	}
+
 	MetricsCollector struct {
 		upGauge   *prometheus.Desc
 		backup    *prometheus.Desc
+		verify    *prometheus.Desc
 		cfg       config.MariaDB
 		updateSts *updateStatus
 	}
-)
-
-var (
-	incBackupUp  int
-	fullBackupUp int
 )
 
 func (c *MetricsCollector) Describe(ch chan<- *prometheus.Desc) {
@@ -55,34 +55,35 @@ func (c *MetricsCollector) Describe(ch chan<- *prometheus.Desc) {
 func (c *MetricsCollector) Collect(ch chan<- prometheus.Metric) {
 	c.updateSts.RLock()
 	defer c.updateSts.RUnlock()
+	for storage, up := range c.updateSts.fullBackup {
+		ch <- prometheus.MustNewConstMetric(
+			c.backup,
+			prometheus.GaugeValue,
+			float64(up),
+			"full_backup",
+			storage,
+		)
+	}
+	for storage, up := range c.updateSts.incBackup {
+		ch <- prometheus.MustNewConstMetric(
+			c.backup,
+			prometheus.GaugeValue,
+			float64(up),
+			"inc_backup",
+			storage,
+		)
+	}
 	ch <- prometheus.MustNewConstMetric(
-		c.backup,
-		prometheus.GaugeValue,
-		float64(c.updateSts.fullBackup.Unix()),
-		"full_backup",
-	)
-	ch <- prometheus.MustNewConstMetric(
-		c.backup,
-		prometheus.GaugeValue,
-		float64(c.updateSts.incBackup.Unix()),
-		"inc_backup",
-	)
-	ch <- prometheus.MustNewConstMetric(
-		c.backup,
+		c.verify,
 		prometheus.GaugeValue,
 		float64(c.updateSts.VerifyBackup),
 		"verify_backup",
 	)
 	ch <- prometheus.MustNewConstMetric(
-		c.backup,
+		c.verify,
 		prometheus.GaugeValue,
 		float64(c.updateSts.VerifyTables),
 		"verify_tables",
-	)
-	ch <- prometheus.MustNewConstMetric(
-		c.upGauge,
-		prometheus.GaugeValue,
-		float64(c.updateSts.up),
 	)
 }
 
@@ -90,14 +91,14 @@ func NewMetricsCollector(c config.MariaDB, u *updateStatus) *MetricsCollector {
 	m := MetricsCollector{
 		updateSts: u,
 		cfg:       c,
-		upGauge: prometheus.NewDesc(
-			"backup_running",
-			"Shows if mariadb backup is running",
-			nil,
-			prometheus.Labels{}),
 		backup: prometheus.NewDesc(
 			"maria_backup_status",
 			"backup status of mariadb",
+			[]string{"kind", "storage"},
+			prometheus.Labels{}),
+		verify: prometheus.NewDesc(
+			"maria_verify_status",
+			"verify status of mariadb",
 			[]string{"kind"},
 			prometheus.Labels{}),
 	}

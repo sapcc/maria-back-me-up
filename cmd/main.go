@@ -72,12 +72,8 @@ func main() {
 	var eg errgroup.Group
 	s1 := server.NewServer(metrics)
 	s2 := server.NewServer(api)
-	eg.Go(func() error {
-		return s1.Start(constants.PORT_METRICS)
-	})
-	eg.Go(func() error {
-		return s2.Start(constants.PORT)
-	})
+	go s1.Start(constants.PORT_METRICS)
+	go s2.Start(constants.PORT)
 	eg.Go(func() error {
 		return m.Start()
 	})

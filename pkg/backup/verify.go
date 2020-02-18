@@ -153,9 +153,10 @@ func (m *Manager) uploadVerfiyStatus(backupFolder string) {
 	//remove restore and servicename dir from path
 	vp := strings.Replace(backupFolder, filepath.Join(constants.RESTOREFOLDER, m.cfg.ServiceName), "", 1)
 	logger.Debug("Uploading verify status to: ", vp+"/verify_"+u+".yaml")
-	err = m.Storage.WriteStream(0, vp+"/verify_"+u+".yaml", "", bytes.NewReader(out))
-	err = m.Storage.WriteStream(1, vp+"/verify_"+u+".yaml", "", bytes.NewReader(out))
-	if err != nil {
-		logger.Error(fmt.Errorf("cannot upload verify status: %s", err.Error()))
+	for i := range m.Storage.GetRemoteStorageServices() {
+		err = m.Storage.WriteStream(i, vp+"/verify_"+u+".yaml", "", bytes.NewReader(out))
+		if err != nil {
+			logger.Error(fmt.Errorf("cannot upload verify status: %s", err.Error()))
+		}
 	}
 }

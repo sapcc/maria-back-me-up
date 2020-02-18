@@ -70,7 +70,15 @@ func init() {
 
 func NewManager(c config.Config) (m *Manager, err error) {
 	s3, err := storage.NewS3(c, c.ServiceName)
-	b, err := NewBackup(c, s3)
+	us := updateStatus{
+		fullBackup: make(map[string]int, 0),
+		incBackup:  make(map[string]int, 0),
+	}
+	for _, v := range s3.GetRemoteStorageServices() {
+		us.incBackup[v] = 0
+		us.fullBackup[v] = 0
+	}
+	b, err := NewBackup(c, s3, &us)
 	if err != nil {
 		return
 	}
@@ -79,7 +87,6 @@ func NewManager(c config.Config) (m *Manager, err error) {
 	if err != nil {
 		return
 	}
-	us := updateStatus{up: 1}
 
 	prometheus.MustRegister(NewMetricsCollector(c.MariaDB, &us))
 
@@ -125,16 +132,15 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 
 		m.lastBackupTime = time.Now().Format(time.RFC3339)
 		bpath := path.Join(m.cfg.BackupDir, m.lastBackupTime)
-		ch := make(chan time.Time)
+		ch := make(chan error)
 		mp, err := m.createMysqlDump(bpath)
 		if err != nil {
 			logger.Error(fmt.Sprintf("error creating mysqldump: %s", err.Error()))
-			m.updateStatus(0, time.Time{})
 			if err = m.initRestore(err); err != nil {
 				time.Sleep(time.Duration(2) * time.Minute)
 				continue
 			}
-			time.Sleep(time.Duration(30) * time.Second)
+			time.Sleep(time.Duration(120) * time.Second)
 			continue
 		}
 		ctxBin := context.Background()
@@ -146,12 +152,14 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 		})
 		go func() {
 			if err = eg.Wait(); err != nil {
+				m.updateSts.Lock()
+				for _, v := range m.Storage.GetRemoteStorageServices() {
+					m.updateSts.incBackup[v] = 0
+				}
+				m.updateSts.Unlock()
 				logger.Error(fmt.Errorf("Error saving log files %s", err.Error()))
-				m.updateStatus(0, time.Time{})
 			}
 		}()
-
-		m.updateStatus(1, time.Now())
 
 		select {
 		case <-c:
@@ -170,15 +178,6 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 			return nil
 		}
 	}
-}
-
-func (m *Manager) updateStatus(s int, t time.Time) {
-	m.updateSts.Lock()
-	if !t.IsZero() {
-		m.updateSts.fullBackup = t
-	}
-	m.updateSts.up = s
-	m.updateSts.Unlock()
 }
 
 func (m *Manager) createMysqlDump(bpath string) (mp mysql.Position, err error) {
@@ -234,16 +233,13 @@ func (m *Manager) initRestore(err error) error {
 	return nil
 }
 
-func (m *Manager) onBinlogRotation(c chan time.Time) {
+func (m *Manager) onBinlogRotation(c chan error) {
 	for {
-		t, ok := <-c
+		_, ok := <-c
 		if !ok {
 			logger.Error("Binlog Rotation channel closed")
 			break
 		}
-		m.updateSts.Lock()
-		m.updateSts.incBackup = t
-		m.updateSts.Unlock()
 		if m.verifyTimer == nil {
 			m.verifyTimer = time.AfterFunc(time.Duration(15)*time.Minute, func() {
 				m.verifyLatestBackup(true, true)

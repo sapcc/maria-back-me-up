@@ -45,6 +45,7 @@ type (
 		cfg         []config.S3
 		sessions    []*session.Session
 		serviceName string
+		Storage     map[int]string
 	}
 	Verify struct {
 		Backup int    `yaml:"verify_backup"`
@@ -69,7 +70,8 @@ func init() {
 func NewS3(c config.Config, sn string) (s3 *S3, err error) {
 	ms := make([]*session.Session, 2)
 	mc := make([]config.S3, 2)
-	for name, s3 := range c.S3 {
+	st := make(map[int]string, 0)
+	for i, s3 := range c.S3 {
 		s, err := session.NewSession(&aws.Config{
 			Endpoint:         aws.String(s3.AwsEndpoint),
 			Region:           aws.String(s3.Region),
@@ -79,15 +81,21 @@ func NewS3(c config.Config, sn string) (s3 *S3, err error) {
 		if err != nil {
 			logger.Fatal(err)
 		}
-		ms[name] = s
-		mc[name] = s3
+		ms[i] = s
+		mc[i] = s3
+		st[i] = s3.Name
 	}
 
 	return &S3{
 		cfg:         mc,
 		sessions:    ms,
 		serviceName: sn,
+		Storage:     st,
 	}, err
+}
+
+func (s *S3) GetRemoteStorageServices() (storages map[int]string) {
+	return s.Storage
 }
 
 /*
@@ -139,8 +147,10 @@ func (s *S3) WriteStream(backup int, fileName, mimeType string, body io.Reader) 
 	}
 	_, err = uploader.Upload(&input)
 	if err != nil {
-		err = fmt.Errorf("WriteStream: Failed to upload to s3. Error: %s", err.Error())
-		return err
+		return &StorageError{
+			message: fmt.Sprintf("WriteStream: Failed to upload to storage no %s. Error: %s", s.Storage[backup], err.Error()),
+			Storage: s.Storage[backup],
+		}
 	}
 	return
 }

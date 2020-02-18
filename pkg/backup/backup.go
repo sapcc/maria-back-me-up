@@ -2,6 +2,7 @@ package backup
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,11 +13,11 @@ import (
 
 	"github.com/docker/docker/client"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
+	"github.com/sapcc/maria-back-me-up/pkg/errgroup"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
-	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -30,6 +31,7 @@ type (
 		docker     *client.Client
 		storage    storage.Storage
 		flushTimer *time.Timer
+		updateSts  *updateStatus
 	}
 	metadata struct {
 		Status binlog `yaml:"SHOW MASTER STATUS"`
@@ -41,22 +43,27 @@ type (
 	}
 )
 
-func NewBackup(c config.Config, s storage.Storage) (m *Backup, err error) {
+func NewBackup(c config.Config, s storage.Storage, us *updateStatus) (m *Backup, err error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return
 	}
 
 	m = &Backup{
-		cfg:     c,
-		docker:  cli,
-		storage: s,
+		cfg:       c,
+		docker:    cli,
+		storage:   s,
+		updateSts: us,
 	}
 
 	return
 }
 
 func (b *Backup) createMysqlDump(toPath string) (err error) {
+	for _, v := range b.storage.GetRemoteStorageServices() {
+		b.updateSts.fullBackup[v] = 0
+	}
+	errs := 0
 	mydumperCmd := exec.Command(
 		"mydumper",
 		"--port="+strconv.Itoa(b.cfg.MariaDB.Port),
@@ -73,17 +80,25 @@ func (b *Backup) createMysqlDump(toPath string) (err error) {
 		return
 	}
 	log.Debug("Uploading full backup")
-	if err = b.storage.WriteFolder(0, toPath); err != nil {
-		return
+	for i := range b.storage.GetRemoteStorageServices() {
+		if err := b.storage.WriteFolder(i, toPath); err != nil {
+			log.Error(err)
+			errs++
+		} else {
+			b.updateSts.Lock()
+			b.updateSts.fullBackup[b.storage.GetRemoteStorageServices()[i]] = 1
+			b.updateSts.Unlock()
+		}
 	}
-	if err = b.storage.WriteFolder(1, toPath); err != nil {
-		return
+	if errs == 2 {
+		return errors.New("Writing to both storages failed")
 	}
+
 	log.Debug("Done uploading full backup")
 	return
 }
 
-func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, ch chan time.Time) (err error) {
+func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, ch chan error) (err error) {
 	var binlogFile string
 	cfg := replication.BinlogSyncerConfig{
 		ServerID: 999,
@@ -150,17 +165,7 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 				return b.storage.WriteStream(1, path.Join(dir, binlogFile), "", copiedReader)
 			})
 			go func() error {
-				if err = eg.Wait(); err != nil {
-					log.Error(err)
-					return err
-				}
-				if ctx.Err() == nil {
-					ch <- time.Now()
-				} else {
-					ch <- time.Now()
-					close(ch)
-				}
-				return nil
+				return b.handleWriteErrors(ctx, &eg, ch)
 			}()
 
 			binlogWriter.Write(replication.BinLogFileHeader)
@@ -186,6 +191,34 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 			continue
 		}
 	}
+}
+
+func (b *Backup) handleWriteErrors(ctx context.Context, eg *errgroup.Group, ch chan error) (err error) {
+	if errs := eg.Wait(); len(errs) > 0 {
+		b.updateSts.Lock()
+		defer b.updateSts.Unlock()
+		for _, i := range b.storage.GetRemoteStorageServices() {
+			b.updateSts.incBackup[i] = 1
+		}
+		for i := 0; i < len(errs); i++ {
+			switch e := errs[i].(type) {
+			case *storage.StorageError:
+				b.updateSts.incBackup[e.Storage] = 0
+			default:
+				log.Error(errs[i])
+			}
+			if i == 1 {
+				return err
+			}
+		}
+	}
+	if ctx.Err() == nil {
+		ch <- nil
+	} else {
+		ch <- nil
+		close(ch)
+	}
+	return nil
 }
 
 func (b *Backup) flushLogs(binlogFile string) (err error) {
