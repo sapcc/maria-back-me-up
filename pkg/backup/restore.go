@@ -115,10 +115,10 @@ func (r *Restore) restoreDump(backupPath string) (err error) {
 		"--directory="+path.Join(backupPath, "dump"),
 		"--overwrite-tables",
 	).CombinedOutput()
-	log.Debug("myloader restore finished", string(b))
 	if err != nil {
-		return
+		return fmt.Errorf("myloader error: %s", string(b))
 	}
+	log.Debug("myloader restore finished")
 	return
 }
 
@@ -156,8 +156,8 @@ func (r *Restore) restoreIncBackup(p string) (err error) {
 	if err = mysqlPipe.Start(); err != nil {
 		return
 	}
-	if err = binlogCMD.Run(); err != nil {
-		return
+	if o, err := binlogCMD.CombinedOutput(); err != nil {
+		return fmt.Errorf("mysqlbinlog error: %s", string(o))
 	}
 	return mysqlPipe.Wait()
 }
@@ -230,6 +230,7 @@ func (r *Restore) waitMariaDbUp(timeout time.Duration) (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
 		err := PingMariaDB(r.cfg.MariaDB)
 		if err != nil {
+			log.Error("Error Pinging mariadb. error: ", err.Error())
 			return false, nil
 		}
 		return true, nil
