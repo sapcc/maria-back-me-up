@@ -92,7 +92,7 @@ func NewMetricsCollector(c config.MariaDB, u *updateStatus) *MetricsCollector {
 			[]string{"kind", "storage"},
 			prometheus.Labels{}),
 		verify: prometheus.NewDesc(
-			"maria_verify_status",
+			"maria_backup_verify_status",
 			"verify status of mariadb",
 			[]string{"kind"},
 			prometheus.Labels{}),

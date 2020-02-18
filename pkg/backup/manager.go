@@ -140,7 +140,7 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 				time.Sleep(time.Duration(2) * time.Minute)
 				continue
 			}
-			time.Sleep(time.Duration(120) * time.Second)
+			time.Sleep(time.Duration(1) * time.Minute)
 			continue
 		}
 		ctxBin := context.Background()

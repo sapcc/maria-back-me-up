@@ -194,12 +194,13 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 }
 
 func (b *Backup) handleWriteErrors(ctx context.Context, eg *errgroup.Group, ch chan error) (err error) {
-	if errs := eg.Wait(); len(errs) > 0 {
-		b.updateSts.Lock()
-		defer b.updateSts.Unlock()
-		for _, i := range b.storage.GetRemoteStorageServices() {
-			b.updateSts.incBackup[i] = 1
-		}
+	errs := eg.Wait()
+	b.updateSts.Lock()
+	defer b.updateSts.Unlock()
+	for _, i := range b.storage.GetRemoteStorageServices() {
+		b.updateSts.incBackup[i] = 1
+	}
+	if len(errs) > 0 {
 		for i := 0; i < len(errs); i++ {
 			switch e := errs[i].(type) {
 			case *storage.StorageError:
