@@ -106,7 +106,7 @@ func (r *Restore) restoreDump(backupPath string) (err error) {
 		return
 	}
 
-	if err = exec.Command(
+	b, err := exec.Command(
 		"myloader",
 		"--port="+strconv.Itoa(r.cfg.MariaDB.Port),
 		"--host="+r.cfg.MariaDB.Host,
@@ -114,10 +114,11 @@ func (r *Restore) restoreDump(backupPath string) (err error) {
 		"--password="+r.cfg.MariaDB.Password,
 		"--directory="+path.Join(backupPath, "dump"),
 		"--overwrite-tables",
-	).Run(); err != nil {
+	).CombinedOutput()
+	log.Debug("myloader restore finished", string(b))
+	if err != nil {
 		return
 	}
-	log.Debug("myloader restore finished")
 	return
 }
 
