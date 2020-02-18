@@ -17,8 +17,8 @@
 package backup
 
 import (
+	"fmt"
 	"sync"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
@@ -34,13 +34,7 @@ type (
 		VerifyError  string `yaml:"verify_error"`
 	}
 
-	backup struct {
-		up   int
-		last time.Time
-	}
-
 	MetricsCollector struct {
-		upGauge   *prometheus.Desc
 		backup    *prometheus.Desc
 		verify    *prometheus.Desc
 		cfg       config.MariaDB
@@ -49,7 +43,7 @@ type (
 )
 
 func (c *MetricsCollector) Describe(ch chan<- *prometheus.Desc) {
-	ch <- c.upGauge
+	ch <- c.backup
 }
 
 func (c *MetricsCollector) Collect(ch chan<- prometheus.Metric) {
@@ -88,6 +82,7 @@ func (c *MetricsCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 func NewMetricsCollector(c config.MariaDB, u *updateStatus) *MetricsCollector {
+	fmt.Println(c, u)
 	m := MetricsCollector{
 		updateSts: u,
 		cfg:       c,

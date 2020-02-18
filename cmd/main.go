@@ -74,6 +74,7 @@ func main() {
 	s2 := server.NewServer(api)
 	go s1.Start(constants.PORT_METRICS)
 	go s2.Start(constants.PORT)
+
 	eg.Go(func() error {
 		return m.Start()
 	})
