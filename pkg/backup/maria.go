@@ -82,16 +82,17 @@ func HealthCheck(c config.MariaDB) (status Status, err error) {
 }
 
 func PingMariaDB(c config.MariaDB) (err error) {
-	if err = exec.Command("mysqladmin",
+	var out []byte
+	if out, err = exec.Command("mysqladmin",
 		"status",
 		"-u"+c.User,
 		"-p"+c.Password,
 		"-h"+c.Host,
 		"-P"+strconv.Itoa(c.Port),
-	).Run(); err != nil {
-		return fmt.Errorf("mysqladmin status error: %s", err.Error())
+	).CombinedOutput(); err != nil {
+		return fmt.Errorf("mysqladmin status error: %s", string(out))
 	}
-
+	logger.Debugf("Pinging Mariadb %s successful: %s", c.Host, string(out))
 	return
 }
 

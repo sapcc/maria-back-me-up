@@ -233,6 +233,7 @@ func (r *Restore) waitMariaDbUp(timeout time.Duration) (err error) {
 			log.Error("Error Pinging mariadb. error: ", err.Error())
 			return false, nil
 		}
+		log.Debug("Pinging mariadb successful")
 		return true, nil
 	})
 	return wait.Poll(5*time.Second, timeout, cf)
