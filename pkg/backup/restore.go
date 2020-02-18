@@ -47,7 +47,7 @@ func NewRestore(c config.Config) (r *Restore) {
 
 func (r *Restore) verifyRestore(backupPath string) (err error) {
 	if err = r.waitMariaDbUp(5 * time.Minute); err != nil {
-		return fmt.Errorf("Timed out waiting for mariadb to boot. Cant perform restore")
+		return fmt.Errorf("Timed out waiting for verfiy mariadb to boot. Cant perform verification")
 	}
 	if err = r.restoreDump(backupPath); err != nil {
 		return
@@ -156,8 +156,8 @@ func (r *Restore) restoreIncBackup(p string) (err error) {
 	if err = mysqlPipe.Start(); err != nil {
 		return
 	}
-	if o, err := binlogCMD.CombinedOutput(); err != nil {
-		return fmt.Errorf("mysqlbinlog error: %s", string(o))
+	if err = binlogCMD.Run(); err != nil {
+		return fmt.Errorf("mysqlbinlog error: %s", err.Error())
 	}
 	return mysqlPipe.Wait()
 }
