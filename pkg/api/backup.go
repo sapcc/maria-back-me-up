@@ -183,6 +183,9 @@ func PostRestore(m *backup.Manager) echo.HandlerFunc {
 			return sendJSONResponse(c, "Cannot read session cookie", err.Error())
 		}
 
+		if session.Values["user"] == nil {
+			return sendJSONResponse(c, "No session user provided", "")
+		}
 		user := session.Values["user"].(string)
 		if user == "" {
 			return sendJSONResponse(c, "Cannot read user info", "")

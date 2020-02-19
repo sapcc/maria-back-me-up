@@ -143,8 +143,10 @@ func (s *S3) WriteStream(backup int, fileName, mimeType string, body io.Reader) 
 		Bucket:               aws.String(s.cfg[backup].BucketName),
 		Key:                  aws.String(path.Join(s.serviceName, fileName)),
 		Body:                 body,
-		ServerSideEncryption: s.cfg[backup].ServerSideEncryption,
+		SSECustomerAlgorithm: s.cfg[backup].ServerSideEncryption,
+		SSECustomerKey:       s.cfg[backup].EncryptionKey,
 	}
+
 	_, err = uploader.Upload(&input)
 	if err != nil {
 		return &StorageError{
@@ -345,8 +347,10 @@ func (s *S3) downloadFile(backup int, path string, obj *s3.Object) (err error) {
 	})
 	_, err = downloader.Download(file,
 		&s3.GetObjectInput{
-			Bucket: aws.String(s.cfg[backup].BucketName),
-			Key:    aws.String(*obj.Key),
+			Bucket:               aws.String(s.cfg[backup].BucketName),
+			Key:                  aws.String(*obj.Key),
+			SSECustomerAlgorithm: s.cfg[backup].ServerSideEncryption,
+			SSECustomerKey:       s.cfg[backup].EncryptionKey,
 		})
 	return
 }
@@ -358,8 +362,10 @@ func (s *S3) downloadStream(backup int, w io.WriterAt, obj *s3.Object) (err erro
 	})
 	_, err = downloader.Download(w,
 		&s3.GetObjectInput{
-			Bucket: aws.String(s.cfg[backup].BucketName),
-			Key:    aws.String(*obj.Key),
+			Bucket:               aws.String(s.cfg[backup].BucketName),
+			Key:                  aws.String(*obj.Key),
+			SSECustomerAlgorithm: s.cfg[backup].ServerSideEncryption,
+			SSECustomerKey:       s.cfg[backup].EncryptionKey,
 		})
 	return
 }
