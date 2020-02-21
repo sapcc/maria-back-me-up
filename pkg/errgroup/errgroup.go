@@ -3,6 +3,8 @@ package errgroup
 import (
 	"context"
 	"sync"
+
+	multierror "github.com/hashicorp/go-multierror"
 )
 
 // A Group is a collection of goroutines working on subtasks that are part of
@@ -14,7 +16,7 @@ type Group struct {
 
 	wg sync.WaitGroup
 
-	errs []error
+	errs error
 }
 
 // WithContext returns a new Group and an associated Context derived from ctx.
@@ -26,7 +28,6 @@ func WithContext(ctx context.Context) (*Group, context.Context) {
 	ctx, cancel := context.WithCancel(ctx)
 	return &Group{
 		cancel: cancel,
-		errs:   make([]error, 0),
 	}, ctx
 }
 
@@ -38,13 +39,12 @@ func WithContext(ctx context.Context) (*Group, context.Context) {
 func WithOutContext(ctx context.Context) (*Group, context.Context) {
 	return &Group{
 		cancel: nil,
-		errs:   make([]error, 0),
 	}, ctx
 }
 
 // Wait blocks until all function calls from the Go method have returned, then
 // returns the first non-nil error (if any) from them.
-func (g *Group) Wait() []error {
+func (g *Group) Wait() error {
 	g.wg.Wait()
 	if g.cancel != nil {
 		g.cancel()
@@ -62,7 +62,7 @@ func (g *Group) Go(f func() error) {
 	go func() {
 		defer g.wg.Done()
 		if err := f(); err != nil {
-			g.errs = append(g.errs, err)
+			g.errs = multierror.Append(g.errs, err)
 			if g.cancel != nil {
 				g.cancel()
 			}

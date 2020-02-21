@@ -24,17 +24,16 @@ import (
 )
 
 type Config struct {
-	Version                            string  `yaml:"version"`
-	MariaDB                            MariaDB `yaml:"maria_db"`
-	S3                                 []S3    `yaml:"s3"`
-	OAuth                              OAuth   `yaml:"oauth"`
-	BackupDir                          string  `yaml:"backup_dir"`
-	AutomaticRecovery                  bool    `yaml:"automatic_recovery"`
-	ServiceName                        string  `yaml:"service_name"`
-	Namespace                          string  `yaml:"namespace"`
-	FullBackupIntervalInHours          int     `yaml:"full_backup_interval_in_hours"`
-	IncrementalBackupIntervalInMinutes int     `yaml:"incremental_backup_interval_in_minutes"`
-	EnableInitRestore                  bool    `yaml:"enable_init_restore"`
+	Version                            string         `yaml:"version"`
+	MariaDB                            MariaDB        `yaml:"maria_db"`
+	StorageServices                    StorageService `yaml:"storage_services"`
+	OAuth                              OAuth          `yaml:"oauth"`
+	BackupDir                          string         `yaml:"backup_dir"`
+	ServiceName                        string         `yaml:"service_name"`
+	Namespace                          string         `yaml:"namespace"`
+	FullBackupIntervalInHours          int            `yaml:"full_backup_interval_in_hours"`
+	IncrementalBackupIntervalInMinutes int            `yaml:"incremental_backup_interval_in_minutes"`
+	EnableInitRestore                  bool           `yaml:"enable_init_restore"`
 }
 
 type MariaDB struct {
@@ -50,16 +49,35 @@ type MariaDB struct {
 	VerifyTables []string `yaml:"verify_tables"`
 }
 
+type StorageService struct {
+	DefaultStorage string  `yaml:"default_storage"`
+	S3             []S3    `yaml:"s3"`
+	Swift          []Swift `yaml:"swift"`
+}
+
 type S3 struct {
 	Name                 string  `yaml:"name"`
 	AwsAccessKeyID       string  `yaml:"aws_access_key_id"`
 	AwsSecretAccessKey   string  `yaml:"aws_secret_access_key"`
 	AwsEndpoint          string  `yaml:"aws_endpoint"`
-	ServerSideEncryption *string `yaml:"server_side_encryption"`
+	SSECustomerAlgorithm *string `yaml:"sse_customer_algorithm"`
 	S3ForcePathStyle     *bool   `yaml:"s3_force_path_style"`
-	EncryptionKey        *string `yaml:"encryption_key"`
+	SSECustomerKey       *string `yaml:"sse_customer_key"`
 	Region               string  `yaml:"region"`
 	BucketName           string  `yaml:"bucket_name"`
+}
+
+type Swift struct {
+	Name              string `yaml:"name"`
+	AuthVersion       int    `yaml:"auth_version"`
+	AuthUrl           string `yaml:"auth_url"`
+	UserName          string `yaml:"user_name"`
+	UserDomainName    string `yaml:"user_domain_name"`
+	ProjectName       string `yaml:"project_name"`
+	ProjectDomainName string `yaml:"project_domain_name"`
+	Password          string `yaml:"password"`
+	Region            string `yaml:"region"`
+	ContainerName     string `yaml:"container_name"`
 }
 
 type OAuth struct {

@@ -21,17 +21,18 @@ require (
 	github.com/gorilla/websocket v1.4.1 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.1.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.11.3 // indirect
+	github.com/hashicorp/go-multierror v1.0.0
 	github.com/labstack/echo v3.3.10+incompatible
 	github.com/labstack/gommon v0.3.0 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/namsral/flag v1.7.4-pre
+	github.com/ncw/swift v1.0.50
 	github.com/opencontainers/go-digest v1.0.0-rc1 // indirect
 	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/pingcap/errors v0.11.0
 	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
 	github.com/prometheus/client_golang v1.0.0
 	github.com/prometheus/common v0.7.0 // indirect
-	github.com/siddontang/go-log v0.0.0-20180807004314-8d05993dda07
 	github.com/siddontang/go-mysql v0.0.0-20190913034749-818e04340bba
 	github.com/sirupsen/logrus v1.4.2
 	github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5 // indirect
@@ -42,7 +43,7 @@ require (
 	gopkg.in/yaml.v2 v2.2.8
 	k8s.io/api v0.17.3
 	k8s.io/apimachinery v0.17.3
-	k8s.io/apiserver v0.17.3
+	k8s.io/apiserver v0.17.3 // indirect
 	k8s.io/client-go v12.0.0+incompatible
 )
 

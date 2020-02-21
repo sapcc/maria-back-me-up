@@ -55,7 +55,7 @@ type (
 		backup          *Backup
 		maria           *k8s.Maria
 		restore         *Restore
-		Storage         storage.Storage
+		Storage         *storage.Manager
 		updateSts       *updateStatus
 		Health          *Health
 		lastBackupTime  string
@@ -69,16 +69,16 @@ func init() {
 }
 
 func NewManager(c config.Config) (m *Manager, err error) {
-	s3, err := storage.NewS3(c, c.ServiceName)
+	s := storage.NewManager(c, c.ServiceName)
 	us := updateStatus{
 		fullBackup: make(map[string]int, 0),
 		incBackup:  make(map[string]int, 0),
 	}
-	for _, v := range s3.GetRemoteStorageServices() {
+	for _, v := range s.GetStorageServices() {
 		us.incBackup[v] = 0
 		us.fullBackup[v] = 0
 	}
-	b, err := NewBackup(c, s3, &us)
+	b, err := NewBackup(c, s, &us)
 	if err != nil {
 		return
 	}
@@ -95,7 +95,7 @@ func NewManager(c config.Config) (m *Manager, err error) {
 		backup:          b,
 		maria:           mr,
 		restore:         NewRestore(c),
-		Storage:         s3,
+		Storage:         s,
 		updateSts:       &us,
 		Health:          &Health{Ready: true},
 		backupCheckSums: make(map[string]int64),
@@ -153,7 +153,7 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 		go func() {
 			if err = eg.Wait(); err != nil {
 				m.updateSts.Lock()
-				for _, v := range m.Storage.GetRemoteStorageServices() {
+				for _, v := range m.Storage.GetStorageServices() {
 					m.updateSts.incBackup[v] = 0
 				}
 				m.updateSts.Unlock()
@@ -218,7 +218,7 @@ func (m *Manager) initRestore(err error) error {
 	var ed *DatabaseMissingError
 	if errors.As(err, &ed) && m.cfg.EnableInitRestore {
 		var eb *storage.NoBackupError
-		bf, err := m.Storage.DownloadLatestBackup(0)
+		bf, err := m.Storage.DownloadLatestBackup("")
 		if errors.As(err, &eb) {
 			logger.Info("Cannot restore. No backup available")
 			return nil

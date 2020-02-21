@@ -22,7 +22,6 @@ import (
 	"html/template"
 	"net/http"
 	"path"
-	"strconv"
 	"strings"
 	"time"
 
@@ -98,13 +97,12 @@ var funcMap = template.FuncMap{
 func GetBackup(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		s := c.QueryParam("storage")
-		i, err := strconv.Atoi(s)
 		if err != nil {
 			return fmt.Errorf("Error parsing storage key: %s", err.Error())
 		}
 		var tmpl = template.New("backup.html").Funcs(funcMap)
 		t, err := tmpl.ParseFiles(constants.BACKUP)
-		backups, err := m.Storage.ListFullBackups(i)
+		backups, err := m.Storage.ListFullBackups(s)
 		if err != nil {
 			return fmt.Errorf("Error fetching backup list: %s", err.Error())
 		}
@@ -120,7 +118,7 @@ func GetRoot(m *backup.Manager) echo.HandlerFunc {
 		if err != nil {
 			return fmt.Errorf("Error parsing index: %s", err.Error())
 		}
-		s := m.GetConfig().S3
+		s := m.Storage.GetStorageServices()
 		return t.Execute(c.Response(), s)
 	}
 }
@@ -129,16 +127,16 @@ func GetRestore(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		k := c.QueryParam("key")
 		s := c.QueryParam("storage")
-		i, err := strconv.Atoi(s)
 		if err != nil {
 			return fmt.Errorf("Error parsing storage key: %s", err.Error())
 		}
 		var tmpl = template.New("restore.html").Funcs(funcMap)
 		t, err := tmpl.ParseFiles(constants.RESTORE)
-		incBackups, err := m.Storage.ListIncBackupsFor(i, k)
+		incBackups, err := m.Storage.ListIncBackupsFor(s, k)
 		if err != nil {
 			return fmt.Errorf("Error fetching backup list: %s", err.Error())
 		}
+		fmt.Println("API", incBackups[0].IncList)
 		return t.Execute(c.Response(), incBackups)
 	}
 }
@@ -148,7 +146,7 @@ func PostLatestRestore(m *backup.Manager) echo.HandlerFunc {
 		c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		c.Response().WriteHeader(http.StatusOK)
 
-		p, err := m.Storage.DownloadLatestBackup(0)
+		p, err := m.Storage.DownloadLatestBackup("")
 		if err != nil {
 			return sendJSONResponse(c, "Restore Error", err.Error())
 		}
@@ -177,32 +175,31 @@ func PostRestore(m *backup.Manager) echo.HandlerFunc {
 		if len(params["storage"]) == 0 {
 			return sendJSONResponse(c, "No Storage selected", "")
 		}
+		if m.GetConfig().OAuth.Enabled {
+			session, err := store.Get(c.Request(), sessionCookieName)
+			if err != nil {
+				return sendJSONResponse(c, "Cannot read session cookie", err.Error())
+			}
 
-		session, err := store.Get(c.Request(), sessionCookieName)
-		if err != nil {
-			return sendJSONResponse(c, "Cannot read session cookie", err.Error())
+			if session.Values["user"] == nil {
+				return sendJSONResponse(c, "No session user provided", "")
+			}
+			user := session.Values["user"].(string)
+			if user == "" {
+				return sendJSONResponse(c, "Cannot read user info", "")
+			}
+			log.Info("RESTORE TRIGGERED BY USER: " + user)
 		}
-
-		if session.Values["user"] == nil {
-			return sendJSONResponse(c, "No session user provided", "")
-		}
-		user := session.Values["user"].(string)
-		if user == "" {
-			return sendJSONResponse(c, "Cannot read user info", "")
-		}
-		log.Info("RESTORE TRIGGERED BY USER: " + user)
-
 		p := params["backup"][0]
-		d, f := path.Split(p)
+		if p == "" {
+			return sendJSONResponse(c, "Error parsing backup param", err.Error())
+		}
+		path, binlog := path.Split(p)
 		st := params["storage"][0]
-		i, err := strconv.Atoi(st)
-		if err != nil {
-			return sendJSONResponse(c, "Error parsing storage number", err.Error())
+		if st == "" {
+			return sendJSONResponse(c, "Error parsing storage param", err.Error())
 		}
-		backupPath, err := m.Storage.DownloadBackupFrom(i, d, f)
-		if err != nil {
-			return sendJSONResponse(c, "Restore Error", err.Error())
-		}
+		backupPath, err := m.Storage.DownloadBackupFrom(st, path, binlog)
 
 		sendJSONResponse(c, "Stopping backup...", "")
 		m.Stop()
