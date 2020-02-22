@@ -13,7 +13,6 @@ type Manager struct {
 	cfg                         config.Config
 	serviceName                 string
 	storageServices             map[string]Storage
-	closer                      io.Closer
 	verifyLastBackupFromService string
 }
 

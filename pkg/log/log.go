@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/sirupsen/logrus"
 )
@@ -27,6 +28,7 @@ import (
 var logger = New()
 
 type Logger struct {
+	sync.RWMutex
 	entry *logrus.Entry
 	log   *logrus.Logger
 }
@@ -64,6 +66,8 @@ func SetFormatter(formatter logrus.Formatter) {
 //Debug logs a message at level Debug on the standard logger.
 func Debug(args ...interface{}) {
 	if logger.log.Level >= logrus.DebugLevel {
+		logger.Lock()
+		defer logger.Unlock()
 		logger.entry.Data["file"] = fileInfo(2)
 		logger.entry.Debug(args)
 	}
@@ -72,6 +76,8 @@ func Debug(args ...interface{}) {
 //Info logs a message at level Info on the standard logger.
 func Info(args ...interface{}) {
 	if logger.log.Level >= logrus.InfoLevel {
+		logger.Lock()
+		defer logger.Unlock()
 		logger.entry.Data["file"] = fileInfo(2)
 		logger.entry.Info(args...)
 	}
@@ -80,6 +86,8 @@ func Info(args ...interface{}) {
 //Warn logs a message at level Warn on the standard logger.
 func Warn(args ...interface{}) {
 	if logger.log.Level >= logrus.WarnLevel {
+		logger.Lock()
+		defer logger.Unlock()
 		logger.entry.Data["file"] = fileInfo(2)
 		logger.entry.Warn(args...)
 	}
@@ -88,6 +96,8 @@ func Warn(args ...interface{}) {
 //Error logs a message at level Error on the standard logger.
 func Error(args ...interface{}) {
 	if logger.log.Level >= logrus.ErrorLevel {
+		logger.Lock()
+		defer logger.Unlock()
 		logger.entry.Data["file"] = fileInfo(2)
 		logger.entry.Error(args...)
 	}
@@ -96,6 +106,8 @@ func Error(args ...interface{}) {
 // Fatal logs a message at level Fatal on the standard logger.
 func Fatal(args ...interface{}) {
 	if logger.log.Level >= logrus.FatalLevel {
+		logger.Lock()
+		defer logger.Unlock()
 		logger.entry.Data["file"] = fileInfo(2)
 		logger.entry.Fatal(args...)
 	}
@@ -104,6 +116,8 @@ func Fatal(args ...interface{}) {
 //Panic logs a message at level Panic on the standard logger.
 func Panic(args ...interface{}) {
 	if logger.log.Level >= logrus.PanicLevel {
+		logger.Lock()
+		defer logger.Unlock()
 		logger.entry.Data["file"] = fileInfo(2)
 		logger.entry.Panic(args...)
 	}

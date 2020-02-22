@@ -78,7 +78,7 @@ func (s *Swift) GetBackupByTimestamp(t time.Time) (path string, err error) {
 	return
 }
 func (s *Swift) DownloadLatestBackup() (path string, err error) {
-	var newestBackup *swift.Object
+	var newestBackup swift.Object
 	var newestTime int64 = 0
 	objs, err := s.connection.ObjectsAll(s.cfg.ContainerName, &swift.ObjectsOpts{Prefix: s.serviceName + "/", Delimiter: 'y'})
 	for _, o := range objs {
@@ -86,16 +86,16 @@ func (s *Swift) DownloadLatestBackup() (path string, err error) {
 			currTime := o.LastModified.Unix()
 			if currTime > newestTime {
 				newestTime = currTime
-				newestBackup = &o
+				newestBackup = o
 			}
 		}
 	}
-	if newestBackup == nil {
+	if newestBackup.Name == "" {
 		return path, &NoBackupError{}
 	}
 	objs, err = s.connection.ObjectsAll(s.cfg.ContainerName, &swift.ObjectsOpts{Prefix: strings.Replace(newestBackup.Name, "dump.tar", "", -1)})
 	for _, o := range objs {
-		if !strings.HasSuffix(o.Name, "/") {
+		if !strings.HasSuffix(o.Name, "/") && !strings.Contains(o.Name, "verify") {
 			s.downloadFile(constants.RESTOREFOLDER, &o)
 		}
 	}
@@ -182,7 +182,7 @@ func (s *Swift) downloadFile(path string, obj *swift.Object) (err error) {
 
 	defer file.Close()
 	// Create a downloader with the session and custom options
-	s.connection.ObjectGet(s.cfg.ContainerName, obj.Name, file, false, nil)
+	_, err = s.connection.ObjectGet(s.cfg.ContainerName, obj.Name, file, false, nil)
 	return
 }
 
