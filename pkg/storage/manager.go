@@ -13,7 +13,6 @@ import (
 
 type Manager struct {
 	cfg                         config.StorageService
-	serviceName                 string
 	storageServices             map[string]Storage
 	verifyLastBackupFromService string
 }
@@ -35,7 +34,6 @@ func NewManager(c config.StorageService, sn string) (m *Manager) {
 
 	return &Manager{
 		cfg:             c,
-		serviceName:     sn,
 		storageServices: stsvc,
 	}
 }
@@ -103,6 +101,18 @@ func (m *Manager) ListFullBackups(storageService string) (bl []Backup, err error
 		storageService = m.cfg.DefaultStorage
 	}
 	return m.storageServices[storageService].ListFullBackups()
+}
+
+func (m *Manager) ListServices() (s map[string][]string, err error) {
+	s = make(map[string][]string, 0)
+	for n, svc := range m.storageServices {
+		ls, err := svc.ListServices()
+		if err != nil {
+			return s, err
+		}
+		s[n] = ls
+	}
+	return
 }
 
 func (m *Manager) ListIncBackupsFor(storageService, key string) (bl []Backup, err error) {

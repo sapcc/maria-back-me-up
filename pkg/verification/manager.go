@@ -7,6 +7,7 @@ import (
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/k8s"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
+	"github.com/sapcc/maria-back-me-up/pkg/storage"
 	"github.com/sirupsen/logrus"
 )
 
@@ -31,14 +32,17 @@ func NewManager(c config.Config) (m *Manager, err error) {
 		return
 	}
 	logger.Debugf("Starting verification service %s", c.VerificationService)
-	for _, vs := range c.VerificationService {
-		v, err := NewVerification(c.StorageService, vs, c.BackupService, k8sm, c.Namespace)
+	sm := storage.NewManager(c.StorageService, "")
+	svc := sm.GetStorageServices()
+	for _, stg := range svc {
+		v, err := NewVerification(c.ServiceName, stg, c.StorageService, c.VerificationService, c.BackupService.MariaDB, k8sm)
 		if err != nil {
 			return m, err
 		}
 		verifications = append(verifications, v)
 		sts = append(sts, v.status)
 	}
+
 	prometheus.MustRegister(NewMetricsCollector(sts))
 	return &Manager{
 		cfg:           c,

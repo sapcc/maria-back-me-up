@@ -24,10 +24,11 @@ import (
 )
 
 type Config struct {
-	Namespace           string                `yaml:"namespace"`
-	StorageService      StorageService        `yaml:"storage_services"`
-	BackupService       BackupService         `yaml:"backup_service"`
-	VerificationService []VerificationService `yaml:"verificatoin_services"`
+	ServiceName         string              `yaml:"service_name"`
+	Namespace           string              `yaml:"namespace"`
+	StorageService      StorageService      `yaml:"storage_services"`
+	BackupService       BackupService       `yaml:"backup_service"`
+	VerificationService VerificationService `yaml:"verificatoin_services"`
 }
 
 type BackupService struct {
@@ -35,7 +36,6 @@ type BackupService struct {
 	MariaDB                            MariaDB `yaml:"maria_db"`
 	OAuth                              OAuth   `yaml:"oauth"`
 	BackupDir                          string  `yaml:"backup_dir"`
-	ServiceName                        string  `yaml:"service_name"`
 	FullBackupIntervalInHours          int     `yaml:"full_backup_interval_in_hours"`
 	IncrementalBackupIntervalInMinutes int     `yaml:"incremental_backup_interval_in_minutes"`
 	EnableInitRestore                  bool    `yaml:"enable_init_restore"`
@@ -92,10 +92,8 @@ type OAuth struct {
 }
 
 type VerificationService struct {
-	ServiceName       string   `yaml:"service_name"`
-	VerifyTables      []string `yaml:"verify_tables"`
-	IntervalInMinutes int      `yaml:"interval_in_minutes"`
-	StorageService    string   `yaml:"storage_service"`
+	IntervalInMinutes int `yaml:"interval_in_minutes"`
+	MariaDBVersion    string
 }
 
 func GetConfig(opts Options) (cfg Config, err error) {

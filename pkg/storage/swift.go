@@ -109,6 +109,7 @@ func (s *Swift) DownloadLatestBackup() (path string, err error) {
 	path = filepath.Dir(path)
 	return
 }
+
 func (s *Swift) ListFullBackups() (b []Backup, err error) {
 	b = make([]Backup, 0)
 	objs, err := s.connection.ObjectsAll(s.cfg.ContainerName, &swift.ObjectsOpts{Prefix: s.serviceName + "/", Delimiter: 'y'})
@@ -125,6 +126,19 @@ func (s *Swift) ListFullBackups() (b []Backup, err error) {
 	}
 	return
 }
+
+func (s *Swift) ListServices() (services []string, err error) {
+	services = make([]string, 0)
+	objs, err := s.connection.ObjectsAll(s.cfg.ContainerName, &swift.ObjectsOpts{Prefix: "", Delimiter: '/'})
+	for _, o := range objs {
+		if len(o.Name) > 1 {
+			fmt.Println(o.Name)
+			services = append(services, strings.ReplaceAll(o.Name, "/", ""))
+		}
+	}
+	return
+}
+
 func (s *Swift) ListIncBackupsFor(key string) (bl []Backup, err error) {
 	b := Backup{
 		Storage: s.cfg.Name,

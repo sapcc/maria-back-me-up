@@ -222,6 +222,19 @@ func (s *S3) ListFullBackups() (bl []Backup, err error) {
 	return
 }
 
+func (s *S3) ListServices() (services []string, err error) {
+	services = make([]string, 0)
+	svc := s3.New(s.session)
+	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Delimiter: aws.String("/")})
+	if err != nil {
+		return
+	}
+	for _, pr := range listRes.CommonPrefixes {
+		services = append(services, strings.ReplaceAll(*pr.Prefix, "/", ""))
+	}
+	return
+}
+
 func (s *S3) DownloadBackup(fullBackup Backup) (path string, err error) {
 	svc := s3.New(s.session)
 	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.Replace(fullBackup.Key, "dump.tar", "", -1))})

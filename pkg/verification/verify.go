@@ -38,30 +38,32 @@ import (
 const podName = "mariadb"
 
 type Verification struct {
-	storage     *storage.Manager
-	maria       *k8s.Maria
-	serviceName string
-	cfgV        config.VerificationService
-	cfgB        config.BackupService
-	lastBackup  storage.Backup
-	status      *Status
-	logger      *logrus.Entry
+	storage            *storage.Manager
+	maria              *k8s.Maria
+	serviceName        string
+	lastBackup         storage.Backup
+	storageServiceName string
+	cfg                config.VerificationService
+	cfgMariaDB         config.MariaDB
+	status             *Status
+	logger             *logrus.Entry
 }
 
-func NewVerification(cs config.StorageService, cv config.VerificationService, cb config.BackupService, m *k8s.Maria, ns string) (*Verification, error) {
+func NewVerification(serviceName, storageServiceName string, cs config.StorageService, cv config.VerificationService, cm config.MariaDB, m *k8s.Maria) (*Verification, error) {
 	return &Verification{
-		serviceName: cv.ServiceName,
-		storage:     storage.NewManager(cs, cv.ServiceName),
-		cfgV:        cv,
-		cfgB:        cb,
-		maria:       m,
-		status:      NewStatus(cv.ServiceName, cv.StorageService),
-		logger:      logger.WithField("service", cv.ServiceName),
+		serviceName:        serviceName,
+		storage:            storage.NewManager(cs, serviceName),
+		maria:              m,
+		cfg:                cv,
+		cfgMariaDB:         cm,
+		storageServiceName: storageServiceName,
+		status:             NewStatus(serviceName, storageServiceName),
+		logger:             logger.WithField("service", serviceName),
 	}, nil
 }
 
 func (v *Verification) Start(ctx context.Context) (err error) {
-	for c := time.Tick(time.Duration(v.cfgV.IntervalInMinutes) * time.Minute); ; {
+	for c := time.Tick(time.Duration(v.cfg.IntervalInMinutes) * time.Minute); ; {
 		v.verifyLatestBackup()
 		select {
 		case <-c:
@@ -75,7 +77,7 @@ func (v *Verification) Start(ctx context.Context) (err error) {
 func (v *Verification) verifyLatestBackup() (err error) {
 	v.status.Reset()
 	var restoreFolder string
-	bs, err := v.storage.ListFullBackups(v.cfgV.StorageService)
+	bs, err := v.storage.ListFullBackups(v.storageServiceName)
 	if err != nil {
 
 	}
@@ -83,7 +85,7 @@ func (v *Verification) verifyLatestBackup() (err error) {
 
 	if v.lastBackup.Time.Unix() < 0 {
 		//first run!
-		restoreFolder, err = v.storage.DownloadLatestBackup(v.cfgV.StorageService)
+		restoreFolder, err = v.storage.DownloadLatestBackup(v.storageServiceName)
 		if err != nil {
 			var e *storage.NoBackupError
 			if errors.As(err, &e) {
@@ -98,7 +100,7 @@ func (v *Verification) verifyLatestBackup() (err error) {
 
 	} else if v.lastBackup.Time.Unix() < backups[len(backups)-1].Time.Unix() {
 		//Found new full backup
-		restoreFolder, err = v.storage.DownloadBackup(v.cfgV.StorageService, v.lastBackup)
+		restoreFolder, err = v.storage.DownloadBackup(v.storageServiceName, v.lastBackup)
 		if err != nil {
 			return
 		}
@@ -124,13 +126,11 @@ func (v *Verification) verifyBackup(restoreFolder string) {
 
 	cfg := config.BackupService{
 		MariaDB: config.MariaDB{
-			Host:      fmt.Sprintf("%s-%s-%s-verify", v.cfgV.StorageService, v.cfgV.ServiceName, podName),
-			Port:      3306,
-			User:      "root",
-			Password:  "verify_passw0rd",
-			Version:   v.cfgB.MariaDB.Version,
-			Databases: v.cfgB.MariaDB.Databases,
-			LogBin:    v.cfgB.MariaDB.LogBin,
+			Host:     fmt.Sprintf("%s-%s-%s-verify", v.storageServiceName, v.serviceName, podName),
+			Port:     3306,
+			User:     "root",
+			Password: "verify_passw0rd",
+			Version:  v.cfgMariaDB.Version,
 		},
 	}
 
@@ -152,13 +152,13 @@ func (v *Verification) verifyBackup(restoreFolder string) {
 		v.status.SetVerifyRestore(0, fmt.Errorf("error restoring backup: %s", err.Error()))
 		return
 	}
-	if out, err := maria.RunMysqlDiff(v.cfgB.MariaDB, cfg.MariaDB); err != nil {
+	if out, err := maria.RunMysqlDiff(v.cfgMariaDB, cfg.MariaDB); err != nil {
 		//This is very bad. 1 or more tables are different or missing
 		v.status.SetVerifyDiff(0, fmt.Errorf("error mysqldiff: %s", string(out)))
 		return
 	}
 	v.status.SetVerifyDiff(1, nil)
-	if len(v.cfgV.VerifyTables) > 0 {
+	if len(v.cfgMariaDB.VerifyTables) > 0 {
 		if err = v.verifyChecksums(cfg.MariaDB, restoreFolder); err != nil {
 			v.status.SetVerifyChecksum(0, fmt.Errorf("error table checksum: %s", err.Error()))
 		} else {
@@ -177,7 +177,7 @@ func (v *Verification) verifyChecksums(cfg config.MariaDB, restorePath string) (
 		return fmt.Errorf("no checksums found")
 	}
 
-	rs, err := maria.GetCheckSumForTable(cfg, v.cfgV.VerifyTables)
+	rs, err := maria.GetCheckSumForTable(cfg, v.cfgMariaDB.VerifyTables)
 	if err != nil {
 		return fmt.Errorf("error verifying backup: %s", err.Error())
 	}
@@ -194,7 +194,6 @@ func (v *Verification) loadChecksums(restorePath string) (cs maria.Checksum, err
 		return
 	}
 	for _, f := range files {
-		fmt.Println(f.Name())
 		if strings.Contains(f.Name(), "tablesChecksum") {
 			by, err := ioutil.ReadFile(path.Join(restorePath, f.Name()))
 			if err != nil {

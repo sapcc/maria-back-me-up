@@ -76,7 +76,7 @@ func init() {
 }
 
 func NewManager(c config.Config) (m *Manager, err error) {
-	s := storage.NewManager(c.StorageService, c.BackupService.ServiceName)
+	s := storage.NewManager(c.StorageService, c.ServiceName)
 	us := updateStatus{
 		fullBackup: make(map[string]int, 0),
 		incBackup:  make(map[string]int, 0),

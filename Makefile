@@ -2,7 +2,7 @@ IMAGE   ?= hub.global.cloud.sap/monsoon/maria-back-me-up
 VERSION = $(shell git rev-parse --verify HEAD | head -c 8)
 
 GOOS    ?= $(shell go env | grep GOOS | cut -d'"' -f2)
-BINARY  := maria-back-me-up
+BINARIES := backup verification
 
 LDFLAGS := -X github.com/sapcc/maria-back-me-up/pkg/maria-back-me-up.VERSION=$(VERSION)
 GOFLAGS := -ldflags "$(LDFLAGS)"
@@ -13,10 +13,10 @@ GOFILES  := $(addsuffix /*.go,$(PACKAGES))
 GOFILES  := $(wildcard $(GOFILES))
 
 
-all: bin/$(GOOS)/$(BINARY)
+all: $(BINARIES:%=bin/$(GOOS)/%)
 
-bin/%/$(BINARY): $(GOFILES) Makefile
-	GOOS=$* GOARCH=amd64 go build $(GOFLAGS) -v -i -o bin/$*/$(BINARY) ./cmd
+bin/%: $(GOFILES) Makefile
+	GOOS=$(*D) GOARCH=amd64 go build $(GOFLAGS) -v -i -o $(@D)/$(@F) ./cmd/$(basename $(@F))
 
 build: 
 	docker build -t $(IMAGE):$(VERSION) .
