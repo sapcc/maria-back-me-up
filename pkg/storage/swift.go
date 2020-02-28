@@ -14,16 +14,17 @@ import (
 
 	"github.com/ncw/swift"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
-	"github.com/sapcc/maria-back-me-up/pkg/constants"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
+	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 )
 
 type Swift struct {
-	cfg            config.Swift
-	connection     *swift.Connection
-	serviceName    string
-	storageService string
+	cfg           config.Swift
+	connection    *swift.Connection
+	serviceName   string
+	restoreFolder string
+	logger        *logrus.Entry `yaml:"-"`
 }
 
 func NewSwift(c config.Swift, sn string) (s *Swift, err error) {
@@ -42,7 +43,13 @@ func NewSwift(c config.Swift, sn string) (s *Swift, err error) {
 		return
 	}
 
-	return &Swift{cfg: c, connection: conn, storageService: c.Name, serviceName: sn}, err
+	return &Swift{
+		cfg:           c,
+		connection:    conn,
+		serviceName:   sn,
+		restoreFolder: path.Join("/restore", c.Name),
+		logger:        logger.WithField("service", sn),
+	}, err
 }
 
 func (s *Swift) GetStorageServiceName() (storages string) {
@@ -70,13 +77,12 @@ func (s *Swift) WriteStream(name, mimeType string, body io.Reader) (err error) {
 		return
 	}
 	return
-	//return s.connection.ObjectPutBytes(s.cfg.ContainerName, path.Join(s.serviceName, name), buf.Bytes(), swift.Headers{"X-Delete-At": strconv.FormatInt(time.Now().AddDate(0, 0, 7).Unix(), 10)})
-	//_, err = s.connection.ObjectPut(s.cfg.ContainerName, path.Join(s.serviceName, name), body, false, "", "", swift.Headers{"X-Delete-At": strconv.FormatInt(time.Now().AddDate(0, 0, 7).Unix(), 10)})
-	//return
 }
+
 func (s *Swift) GetBackupByTimestamp(t time.Time) (path string, err error) {
 	return
 }
+
 func (s *Swift) DownloadLatestBackup() (path string, err error) {
 	var newestBackup swift.Object
 	var newestTime int64 = 0
@@ -96,10 +102,10 @@ func (s *Swift) DownloadLatestBackup() (path string, err error) {
 	objs, err = s.connection.ObjectsAll(s.cfg.ContainerName, &swift.ObjectsOpts{Prefix: strings.Replace(newestBackup.Name, "dump.tar", "", -1)})
 	for _, o := range objs {
 		if !strings.HasSuffix(o.Name, "/") && !strings.Contains(o.Name, "verify") {
-			s.downloadFile(constants.RESTOREFOLDER, &o)
+			s.downloadFile(s.restoreFolder, &o)
 		}
 	}
-	path = filepath.Join(constants.RESTOREFOLDER, newestBackup.Name)
+	path = filepath.Join(s.restoreFolder, newestBackup.Name)
 	path = filepath.Dir(path)
 	return
 }
@@ -109,7 +115,7 @@ func (s *Swift) ListFullBackups() (b []Backup, err error) {
 	for _, o := range objs {
 		if strings.Contains(o.Name, "dump.tar") {
 			b = append(b, Backup{
-				Storage: s.storageService,
+				Storage: s.cfg.Name,
 				Time:    o.LastModified,
 				Key:     o.Name,
 				IncList: make([]IncBackup, 0),
@@ -121,7 +127,7 @@ func (s *Swift) ListFullBackups() (b []Backup, err error) {
 }
 func (s *Swift) ListIncBackupsFor(key string) (bl []Backup, err error) {
 	b := Backup{
-		Storage: s.storageService,
+		Storage: s.cfg.Name,
 		IncList: make([]IncBackup, 0),
 		Verify:  make([]Verify, 0),
 		Key:     key,
@@ -157,16 +163,28 @@ func (s *Swift) DownloadBackupFrom(fullBackupPath string, binlog string) (path s
 	}
 	for _, o := range objs {
 		if strings.Contains(o.Name, "dump.tar") {
-			s.downloadFile(constants.RESTOREFOLDER, &o)
+			s.downloadFile(s.restoreFolder, &o)
 			continue
 		}
 		_, file := filepath.Split(o.Name)
 		nbr := strings.Split(file, ".")
 		if nbr[1] <= until[1] {
-			s.downloadFile(constants.RESTOREFOLDER, &o)
+			s.downloadFile(s.restoreFolder, &o)
 		}
 	}
-	path = filepath.Join(constants.RESTOREFOLDER, fullBackupPath)
+	path = filepath.Join(s.restoreFolder, fullBackupPath)
+	return
+}
+
+func (s *Swift) DownloadBackup(fullBackup Backup) (path string, err error) {
+	objs, err := s.connection.ObjectsAll(s.cfg.ContainerName, &swift.ObjectsOpts{Prefix: strings.Replace(fullBackup.Key, "dump.tar", "", -1)})
+	for _, o := range objs {
+		if !strings.HasSuffix(o.Name, "/") && !strings.Contains(o.Name, "verify") {
+			s.downloadFile(s.restoreFolder, &o)
+		}
+	}
+	path = filepath.Join(s.restoreFolder, fullBackup.Key)
+	path = filepath.Dir(path)
 	return
 }
 

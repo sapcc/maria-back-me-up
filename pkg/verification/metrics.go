@@ -14,67 +14,62 @@
  * limitations under the License.
  */
 
-package backup
+package verification
 
 import (
-	"fmt"
-	"sync"
-
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sapcc/maria-back-me-up/pkg/config"
 )
 
 type (
-	updateStatus struct {
-		sync.RWMutex `yaml:"-"`
-		incBackup    map[string]int
-		fullBackup   map[string]int
-	}
-
 	MetricsCollector struct {
-		backup    *prometheus.Desc
-		verify    *prometheus.Desc
-		cfg       config.MariaDB
-		updateSts *updateStatus
+		verify *prometheus.Desc
+		status []*Status
 	}
 )
 
 func (c *MetricsCollector) Describe(ch chan<- *prometheus.Desc) {
-	ch <- c.backup
+	ch <- c.verify
 }
 
 func (c *MetricsCollector) Collect(ch chan<- prometheus.Metric) {
-	c.updateSts.RLock()
-	defer c.updateSts.RUnlock()
-	for storage, up := range c.updateSts.fullBackup {
+	for _, s := range c.status {
+		s.RLock()
+		defer s.RUnlock()
 		ch <- prometheus.MustNewConstMetric(
-			c.backup,
+			c.verify,
 			prometheus.GaugeValue,
-			float64(up),
-			"full_backup",
-			storage,
+			float64(s.VerifyRestore),
+			"verify_restore",
+			s.BackupService,
+			s.StorageService,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			c.verify,
+			prometheus.GaugeValue,
+			float64(s.VerifyDiff),
+			"verify_diff",
+			s.BackupService,
+			s.StorageService,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			c.verify,
+			prometheus.GaugeValue,
+			float64(s.VerifyChecksum),
+			"verify_checksum",
+			s.BackupService,
+			s.StorageService,
 		)
 	}
-	for storage, up := range c.updateSts.incBackup {
-		ch <- prometheus.MustNewConstMetric(
-			c.backup,
-			prometheus.GaugeValue,
-			float64(up),
-			"inc_backup",
-			storage,
-		)
-	}
+
 }
 
-func NewMetricsCollector(c config.MariaDB, u *updateStatus) *MetricsCollector {
-	fmt.Println(c, u)
+func NewMetricsCollector(s []*Status) *MetricsCollector {
 	m := MetricsCollector{
-		updateSts: u,
-		cfg:       c,
-		backup: prometheus.NewDesc(
-			"maria_backup_status",
-			"backup status of mariadb",
-			[]string{"kind", "storage"},
+		status: s,
+		verify: prometheus.NewDesc(
+			"maria_backup_verify_status",
+			"verify status of mariadb",
+			[]string{"kind", "service", "storage"},
 			prometheus.Labels{}),
 	}
 

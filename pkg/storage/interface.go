@@ -15,6 +15,7 @@ type Storage interface {
 	ListFullBackups() (bl []Backup, err error)
 	ListIncBackupsFor(key string) (bl []Backup, err error)
 	DownloadBackupFrom(fullBackupPath string, binlog string) (path string, err error)
+	DownloadBackup(fullBackup Backup) (path string, err error)
 	GetStorageServiceName() (name string)
 }
 

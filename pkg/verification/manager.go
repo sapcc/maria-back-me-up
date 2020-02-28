@@ -1,0 +1,58 @@
+package verification
+
+import (
+	"context"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sapcc/maria-back-me-up/pkg/config"
+	"github.com/sapcc/maria-back-me-up/pkg/k8s"
+	"github.com/sapcc/maria-back-me-up/pkg/log"
+	"github.com/sirupsen/logrus"
+)
+
+var (
+	logger *logrus.Entry
+)
+
+type Manager struct {
+	cfg           config.Config
+	verifications []*Verification
+}
+
+func init() {
+	logger = log.WithFields(logrus.Fields{"component": "verification"})
+}
+
+func NewManager(c config.Config) (m *Manager, err error) {
+	verifications := make([]*Verification, 0)
+	sts := make([]*Status, 0)
+	k8sm, err := k8s.NewMaria(c.Namespace)
+	if err != nil {
+		return
+	}
+	logger.Debugf("Starting verification service %s", c.VerificationService)
+	for _, vs := range c.VerificationService {
+		v, err := NewVerification(c.StorageService, vs, c.BackupService, k8sm, c.Namespace)
+		if err != nil {
+			return m, err
+		}
+		verifications = append(verifications, v)
+		sts = append(sts, v.status)
+	}
+	prometheus.MustRegister(NewMetricsCollector(sts))
+	return &Manager{
+		cfg:           c,
+		verifications: verifications,
+	}, err
+}
+
+func (m *Manager) Start(ctx context.Context) {
+	for _, v := range m.verifications {
+		logger.Debugf("Starting verification service %s", v.serviceName)
+		go v.Start(ctx)
+	}
+}
+
+func (m *Manager) Stop() {
+
+}

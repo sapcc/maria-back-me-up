@@ -27,25 +27,24 @@ import (
 	"strings"
 	"time"
 
-	"github.com/coreos/etcd/client"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
+	"github.com/sapcc/maria-back-me-up/pkg/maria"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 type Restore struct {
-	cfg    config.Config
-	docker *client.Client
+	cfg    config.BackupService
 	backup *Backup
 }
 
-func NewRestore(c config.Config) (r *Restore) {
+func NewRestore(c config.BackupService) (r *Restore) {
 	return &Restore{
 		cfg: c,
 	}
 }
 
-func (r *Restore) verifyRestore(backupPath string) (err error) {
+func (r *Restore) VerifyRestore(backupPath string) (err error) {
 	if err = r.waitMariaDbUp(5 * time.Minute); err != nil {
 		return fmt.Errorf("Timed out waiting for verfiy mariadb to boot. Cant perform verification")
 	}
@@ -85,7 +84,7 @@ func (r *Restore) restore(backupPath string) (err error) {
 		return
 	}
 
-	if sts, err := HealthCheck(r.cfg.MariaDB); err != nil || !sts.Ok {
+	if sts, err := maria.HealthCheck(r.cfg.MariaDB); err != nil || !sts.Ok {
 		return fmt.Errorf("Mariadb health check failed after restore. Tables corrupted: %s", sts.Details)
 	}
 	return
@@ -215,7 +214,7 @@ func (r *Restore) restartMariaDB() (err error) {
 
 func (r *Restore) waitMariaDBHealthy(timeout time.Duration) (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
-		s, err := HealthCheck(r.cfg.MariaDB)
+		s, err := maria.HealthCheck(r.cfg.MariaDB)
 		if err != nil {
 			return false, nil
 		} else if !s.Ok {
@@ -228,7 +227,7 @@ func (r *Restore) waitMariaDBHealthy(timeout time.Duration) (err error) {
 
 func (r *Restore) waitMariaDbUp(timeout time.Duration) (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
-		err := PingMariaDB(r.cfg.MariaDB)
+		err := maria.PingMariaDB(r.cfg.MariaDB)
 		if err != nil {
 			log.Error("Error Pinging mariadb. error: ", err.Error())
 			return false, nil

@@ -24,16 +24,21 @@ import (
 )
 
 type Config struct {
-	Version                            string         `yaml:"version"`
-	MariaDB                            MariaDB        `yaml:"maria_db"`
-	StorageServices                    StorageService `yaml:"storage_services"`
-	OAuth                              OAuth          `yaml:"oauth"`
-	BackupDir                          string         `yaml:"backup_dir"`
-	ServiceName                        string         `yaml:"service_name"`
-	Namespace                          string         `yaml:"namespace"`
-	FullBackupIntervalInHours          int            `yaml:"full_backup_interval_in_hours"`
-	IncrementalBackupIntervalInMinutes int            `yaml:"incremental_backup_interval_in_minutes"`
-	EnableInitRestore                  bool           `yaml:"enable_init_restore"`
+	Namespace           string                `yaml:"namespace"`
+	StorageService      StorageService        `yaml:"storage_services"`
+	BackupService       BackupService         `yaml:"backup_service"`
+	VerificationService []VerificationService `yaml:"verificatoin_services"`
+}
+
+type BackupService struct {
+	Version                            string  `yaml:"version"`
+	MariaDB                            MariaDB `yaml:"maria_db"`
+	OAuth                              OAuth   `yaml:"oauth"`
+	BackupDir                          string  `yaml:"backup_dir"`
+	ServiceName                        string  `yaml:"service_name"`
+	FullBackupIntervalInHours          int     `yaml:"full_backup_interval_in_hours"`
+	IncrementalBackupIntervalInMinutes int     `yaml:"incremental_backup_interval_in_minutes"`
+	EnableInitRestore                  bool    `yaml:"enable_init_restore"`
 }
 
 type MariaDB struct {
@@ -84,6 +89,13 @@ type OAuth struct {
 	Enabled     bool   `yaml:"enabled"`
 	ProviderURL string `yaml:"provider_url"`
 	RedirectURL string `yaml:"redirect_url"`
+}
+
+type VerificationService struct {
+	ServiceName       string   `yaml:"service_name"`
+	VerifyTables      []string `yaml:"verify_tables"`
+	IntervalInMinutes int      `yaml:"interval_in_minutes"`
+	StorageService    string   `yaml:"storage_service"`
 }
 
 func GetConfig(opts Options) (cfg Config, err error) {

@@ -38,6 +38,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -117,6 +118,7 @@ func (m *Maria) createDeployment(p string, cfg interface{}) (deploy *v1beta1.Dep
 	if err = m.unmarshalYamlFile(p, deploy, cfg); err != nil {
 		return
 	}
+	fmt.Println("===============================", m.ns)
 	return m.client.AppsV1beta1().Deployments(m.ns).Create(deploy)
 }
 

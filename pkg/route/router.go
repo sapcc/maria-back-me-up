@@ -54,3 +54,9 @@ func InitMetrics(m *backup.Manager) *echo.Echo {
 	gh.GET("/readiness", api.GetReadiness(m))
 	return e
 }
+
+func InitVerificationMetrics() *echo.Echo {
+	e := echo.New()
+	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
+	return e
+}

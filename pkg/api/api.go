@@ -29,6 +29,7 @@ import (
 	"github.com/sapcc/maria-back-me-up/pkg/backup"
 	"github.com/sapcc/maria-back-me-up/pkg/constants"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
+	"github.com/sapcc/maria-back-me-up/pkg/maria"
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
 )
 
@@ -60,22 +61,22 @@ func getVerifyBackupState(v []storage.Verify, t time.Time, err bool) string {
 	for _, k := range v {
 		if t.Before(k.Time) {
 			if k.Time.Sub(t) < duration {
-				if k.Backup == 1 {
+				if k.VerifyRestore == 1 && k.VerifyDiff == 1 {
 					verifyState = "#ffc107" // orange
-					if k.Error != "" {
-						verifyError = k.Error
+					if k.VerifyError != "" {
+						verifyError = k.VerifyError
 					} else {
-						verifyError = "Table checksum was not executed."
+						verifyError = "Restor + MySQL Diff successful! Table checksum was not executed."
 					}
 				}
-				if k.Tables == 1 {
+				if k.VerifyChecksum == 1 {
 					verifyState = "#28a745" // green
-					verifyError = "All is well"
+					verifyError = "MySQL Checksum successful"
 				}
-				if k.Backup == 0 {
+				if k.VerifyRestore == 0 {
 					verifyState = "#dc3545" // red
-					if k.Error != "" {
-						verifyError = k.Error
+					if k.VerifyError != "" {
+						verifyError = k.VerifyError
 					}
 				}
 			}
@@ -205,7 +206,7 @@ func PostRestore(m *backup.Manager) echo.HandlerFunc {
 		m.Stop()
 		time.Sleep(time.Duration(1 * time.Second))
 
-		s, err := backup.HealthCheck(m.GetConfig().MariaDB)
+		s, err := maria.HealthCheck(m.GetConfig().MariaDB)
 		if err != nil || !s.Ok {
 			sendJSONResponse(c, "Database not healthy. Trying to restore!", "")
 		}

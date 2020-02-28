@@ -10,11 +10,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/docker/docker/client"
 	multierror "github.com/hashicorp/go-multierror"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/errgroup"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
+	"github.com/sapcc/maria-back-me-up/pkg/maria"
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
@@ -28,7 +28,6 @@ const (
 type (
 	Backup struct {
 		cfg        config.Config
-		docker     *client.Client
 		storage    *storage.Manager
 		flushTimer *time.Timer
 		updateSts  *updateStatus
@@ -44,14 +43,12 @@ type (
 )
 
 func NewBackup(c config.Config, sm *storage.Manager, us *updateStatus) (m *Backup, err error) {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return
 	}
 
 	m = &Backup{
 		cfg:       c,
-		docker:    cli,
 		storage:   sm,
 		updateSts: us,
 	}
@@ -65,10 +62,10 @@ func (b *Backup) createMysqlDump(toPath string) (err error) {
 	}
 	mydumperCmd := exec.Command(
 		"mydumper",
-		"--port="+strconv.Itoa(b.cfg.MariaDB.Port),
-		"--host="+b.cfg.MariaDB.Host,
-		"--user="+b.cfg.MariaDB.User,
-		"--password="+b.cfg.MariaDB.Password,
+		"--port="+strconv.Itoa(b.cfg.BackupService.MariaDB.Port),
+		"--host="+b.cfg.BackupService.MariaDB.Host,
+		"--user="+b.cfg.BackupService.MariaDB.User,
+		"--password="+b.cfg.BackupService.MariaDB.Password,
 		"--outputdir="+toPath,
 		//"--regex='^(?!(mysql))'",
 		"--compress",
@@ -103,10 +100,10 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 	cfg := replication.BinlogSyncerConfig{
 		ServerID: 999,
 		Flavor:   "mariadb",
-		Host:     b.cfg.MariaDB.Host,
-		Port:     uint16(b.cfg.MariaDB.Port),
-		User:     b.cfg.MariaDB.User,
-		Password: b.cfg.MariaDB.Password,
+		Host:     b.cfg.BackupService.MariaDB.Host,
+		Port:     uint16(b.cfg.BackupService.MariaDB.Port),
+		User:     b.cfg.BackupService.MariaDB.User,
+		Password: b.cfg.BackupService.MariaDB.Password,
 	}
 	syncer := replication.NewBinlogSyncer(cfg)
 	binlogReader, binlogWriter := io.Pipe()
@@ -129,7 +126,7 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 	if err != nil {
 		return fmt.Errorf("Cannot start binlog stream: %w", err)
 	}
-	b.flushTimer = time.AfterFunc(time.Duration(b.cfg.IncrementalBackupIntervalInMinutes)*time.Minute, func() { b.flushLogs("") })
+	b.flushTimer = time.AfterFunc(time.Duration(b.cfg.BackupService.IncrementalBackupIntervalInMinutes)*time.Minute, func() { b.flushLogs("") })
 	for {
 		ev, inerr := streamer.GetEvent(ctx)
 		if inerr != nil {
@@ -173,11 +170,11 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 		switch ev.Event.(type) {
 		case *replication.RowsEvent:
 			if b.flushTimer == nil {
-				b.flushTimer = time.AfterFunc(time.Duration(b.cfg.IncrementalBackupIntervalInMinutes)*time.Minute, func() { b.flushLogs(binlogFile) })
+				b.flushTimer = time.AfterFunc(time.Duration(b.cfg.BackupService.IncrementalBackupIntervalInMinutes)*time.Minute, func() { b.flushLogs(binlogFile) })
 			}
 		case *replication.QueryEvent:
 			if b.flushTimer == nil {
-				b.flushTimer = time.AfterFunc(time.Duration(b.cfg.IncrementalBackupIntervalInMinutes)*time.Minute, func() { b.flushLogs(binlogFile) })
+				b.flushTimer = time.AfterFunc(time.Duration(b.cfg.BackupService.IncrementalBackupIntervalInMinutes)*time.Minute, func() { b.flushLogs(binlogFile) })
 			}
 		}
 
@@ -233,10 +230,10 @@ func (b *Backup) flushLogs(binlogFile string) (err error) {
 	flushLogs := exec.Command(
 		"mysqladmin",
 		"flush-logs",
-		"--port="+strconv.Itoa(b.cfg.MariaDB.Port),
-		"--host="+b.cfg.MariaDB.Host,
-		"--user="+b.cfg.MariaDB.User,
-		"--password="+b.cfg.MariaDB.Password,
+		"--port="+strconv.Itoa(b.cfg.BackupService.MariaDB.Port),
+		"--host="+b.cfg.BackupService.MariaDB.Host,
+		"--user="+b.cfg.BackupService.MariaDB.User,
+		"--password="+b.cfg.BackupService.MariaDB.Password,
 	)
 	_, err = flushLogs.CombinedOutput()
 	if err != nil {
@@ -245,15 +242,15 @@ func (b *Backup) flushLogs(binlogFile string) (err error) {
 	}
 
 	if binlogFile != "" {
-		return purgeBinlogsTo(b.cfg.MariaDB, binlogFile)
+		return maria.PurgeBinlogsTo(b.cfg.BackupService.MariaDB, binlogFile)
 	}
 	return
 }
 
 func (b *Backup) checkBackupDirExistsAndCreate() (p string, err error) {
-	if _, err := os.Stat(b.cfg.BackupDir); os.IsNotExist(err) {
-		err = os.MkdirAll(b.cfg.BackupDir, os.ModePerm)
-		return b.cfg.BackupDir, err
+	if _, err := os.Stat(b.cfg.BackupService.BackupDir); os.IsNotExist(err) {
+		err = os.MkdirAll(b.cfg.BackupService.BackupDir, os.ModePerm)
+		return b.cfg.BackupService.BackupDir, err
 	}
 	return
 }

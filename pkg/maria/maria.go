@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package backup
+package maria
 
 import (
 	"fmt"
@@ -37,9 +37,8 @@ type (
 		message string
 	}
 
-	checksum struct {
-		Table string `yaml:"table"`
-		Sum   int64  `yaml:"sum"`
+	Checksum struct {
+		TablesChecksum map[string]int64 `yaml:"tables_checksum"`
 	}
 )
 
@@ -92,13 +91,10 @@ func PingMariaDB(c config.MariaDB) (err error) {
 	).CombinedOutput(); err != nil {
 		return fmt.Errorf("mysqladmin status error: %s", string(out))
 	}
-	logger.Debugf("Pinging Mariadb %s successful: %s", c.Host, string(out))
 	return
 }
 
-//PURGE BINARY LOGS TO 'mysqld-bin.020855'
-
-func purgeBinlogsTo(c config.MariaDB, log string) (err error) {
+func PurgeBinlogsTo(c config.MariaDB, log string) (err error) {
 	conn, err := client.Connect(fmt.Sprintf("%s:%s", c.Host, strconv.Itoa(c.Port)), c.User, c.Password, "")
 	if err = conn.Ping(); err != nil {
 		return
@@ -111,8 +107,8 @@ func purgeBinlogsTo(c config.MariaDB, log string) (err error) {
 	return
 }
 
-func getCheckSumForTable(c config.MariaDB) (cs map[string]int64, err error) {
-	cs = make(map[string]int64)
+func GetCheckSumForTable(c config.MariaDB, verifyTables []string) (cs Checksum, err error) {
+	cs.TablesChecksum = make(map[string]int64)
 	cf := wait.ConditionFunc(func() (bool, error) {
 		err = PingMariaDB(c)
 		if err != nil {
@@ -134,7 +130,7 @@ func getCheckSumForTable(c config.MariaDB) (cs map[string]int64, err error) {
 
 	defer conn.Close()
 
-	rs, err := conn.Execute(fmt.Sprintf("CHECKSUM TABLE %s", strings.Join(c.VerifyTables, ", ")))
+	rs, err := conn.Execute(fmt.Sprintf("CHECKSUM TABLE %s", strings.Join(verifyTables, ", ")))
 	if err != nil {
 		return
 	}
@@ -147,13 +143,13 @@ func getCheckSumForTable(c config.MariaDB) (cs map[string]int64, err error) {
 		if err != nil {
 			return
 		}
-		cs[tn] = s
+		cs.TablesChecksum[tn] = s
 	}
 
 	return
 }
 
-func runMysqlDiff(c1, c2 config.MariaDB) (out []byte, err error) {
+func RunMysqlDiff(c1, c2 config.MariaDB) (out []byte, err error) {
 	//mysqldiff --server1=root:pw@localhost:3306 --server2=root:pw@db_backup:3306 test:test
 	s1 := fmt.Sprintf("%s:%s@%s:%s", c1.User, c1.Password, c1.Host, strconv.Itoa(c1.Port))
 	s2 := fmt.Sprintf("%s:%s@%s:%s", c2.User, c2.Password, c2.Host, strconv.Itoa(c2.Port))

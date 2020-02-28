@@ -17,6 +17,7 @@
 package backup
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -29,10 +30,12 @@ import (
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/k8s"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
+	"github.com/sapcc/maria-back-me-up/pkg/maria"
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
+	"gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -50,8 +53,12 @@ type (
 		sync.Mutex
 		Ready bool
 	}
+	ChecksumStatus struct {
+		timestamp int64            `yaml:"timestamp"`
+		Checksums map[string]int64 `yaml:"checksums"`
+	}
 	Manager struct {
-		cfg             config.Config
+		cfg             config.BackupService
 		backup          *Backup
 		maria           *k8s.Maria
 		restore         *Restore
@@ -69,7 +76,7 @@ func init() {
 }
 
 func NewManager(c config.Config) (m *Manager, err error) {
-	s := storage.NewManager(c, c.ServiceName)
+	s := storage.NewManager(c.StorageService, c.BackupService.ServiceName)
 	us := updateStatus{
 		fullBackup: make(map[string]int, 0),
 		incBackup:  make(map[string]int, 0),
@@ -88,13 +95,13 @@ func NewManager(c config.Config) (m *Manager, err error) {
 		return
 	}
 
-	prometheus.MustRegister(NewMetricsCollector(c.MariaDB, &us))
+	prometheus.MustRegister(NewMetricsCollector(c.BackupService.MariaDB, &us))
 
 	return &Manager{
-		cfg:             c,
+		cfg:             c.BackupService,
 		backup:          b,
 		maria:           mr,
-		restore:         NewRestore(c),
+		restore:         NewRestore(c.BackupService),
 		Storage:         s,
 		updateSts:       &us,
 		Health:          &Health{Ready: true},
@@ -119,10 +126,8 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 	if err != nil {
 		return
 	}
-	for c := time.Tick(time.Duration(m.cfg.FullBackupIntervalInHours) * time.Hour); ; {
+	for c := time.Tick(time.Duration(m.cfg.FullBackupIntervalInHours) * time.Minute); ; {
 		logger.Debug("Start backup cycle")
-		//verify last full backup cycle
-		m.verifyLatestBackup(false, false)
 
 		// Stop binlog
 		if binlogCancel != nil {
@@ -163,6 +168,7 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 
 		select {
 		case <-c:
+			m.createTableChecksum()
 			m.lastBackupTime = ""
 			continue
 		case <-ctx.Done():
@@ -184,9 +190,9 @@ func (m *Manager) createMysqlDump(bpath string) (mp mysql.Position, err error) {
 	logger.Debug("Starting full backup")
 	defer os.RemoveAll(bpath)
 	cf := wait.ConditionFunc(func() (bool, error) {
-		s, err := HealthCheck(m.cfg.MariaDB)
+		s, err := maria.HealthCheck(m.cfg.MariaDB)
 		if err != nil {
-			_, ok := err.(*DatabaseMissingError)
+			_, ok := err.(*maria.DatabaseMissingError)
 			if ok {
 				return false, err
 			}
@@ -200,6 +206,8 @@ func (m *Manager) createMysqlDump(bpath string) (mp mysql.Position, err error) {
 	if err = wait.Poll(10*time.Second, 1*time.Minute, cf); err != nil {
 		return mp, fmt.Errorf("Cannot do backup: %w", err)
 	}
+
+	//GetCheckSumForTable()
 
 	if err = m.backup.createMysqlDump(bpath); err != nil {
 		return mp, fmt.Errorf("Error creating mysqlDump: %w", err)
@@ -215,7 +223,7 @@ func (m *Manager) createMysqlDump(bpath string) (mp mysql.Position, err error) {
 }
 
 func (m *Manager) initRestore(err error) error {
-	var ed *DatabaseMissingError
+	var ed *maria.DatabaseMissingError
 	if errors.As(err, &ed) && m.cfg.EnableInitRestore {
 		var eb *storage.NoBackupError
 		bf, err := m.Storage.DownloadLatestBackup("")
@@ -242,7 +250,7 @@ func (m *Manager) onBinlogRotation(c chan error) {
 		}
 		if m.verifyTimer == nil {
 			m.verifyTimer = time.AfterFunc(time.Duration(15)*time.Minute, func() {
-				m.verifyLatestBackup(true, true)
+				//m.verifyLatestBackup(true, true)
 			})
 		}
 	}
@@ -252,8 +260,25 @@ func (m *Manager) Stop() {
 	backupCancel()
 }
 
-func (m *Manager) GetConfig() config.Config {
+func (m *Manager) GetConfig() config.BackupService {
 	return m.cfg
+}
+
+func (m *Manager) createTableChecksum() (err error) {
+	cs, err := maria.GetCheckSumForTable(m.cfg.MariaDB, m.cfg.MariaDB.VerifyTables)
+	if err != nil {
+		return
+	}
+	out, err := yaml.Marshal(cs)
+	if err != nil {
+		return
+	}
+	err = m.Storage.WriteStream(m.lastBackupTime+"/tablesChecksum.yaml", "", bytes.NewReader(out))
+	if err != nil {
+		logger.Error(fmt.Errorf("cannot upload verify status: %s", err.Error()))
+		return
+	}
+	return
 }
 
 func (m *Manager) Restore(p string) (err error) {

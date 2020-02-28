@@ -32,7 +32,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
-	"github.com/sapcc/maria-back-me-up/pkg/constants"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
@@ -42,23 +41,20 @@ var logger *logrus.Entry
 
 type (
 	S3 struct {
-		cfg             config.S3
-		session         *session.Session
-		serviceName     string
-		StorageServices map[int]string
-		Name            string
+		cfg           config.S3
+		session       *session.Session
+		serviceName   string
+		restoreFolder string
+		logger        *logrus.Entry `yaml:"-"`
 	}
 	Verify struct {
-		Backup int    `yaml:"verify_backup"`
-		Tables int    `yaml:"verify_tables"`
-		Error  string `yaml:"verify_error"`
-		Time   time.Time
+		VerifyRestore  int    `yaml:"verify_backup"`
+		VerifyChecksum int    `yaml:"verify_checksum"`
+		VerifyDiff     int    `yaml:"verify_diff"`
+		VerifyError    string `yaml:"verify_error"`
+		Time           time.Time
 	}
 )
-
-func init() {
-	logger = log.WithFields(logrus.Fields{"component": "s3"})
-}
 
 func NewS3(c config.S3, sn string) (s3 *S3, err error) {
 	s, err := session.NewSession(&aws.Config{
@@ -72,14 +68,16 @@ func NewS3(c config.S3, sn string) (s3 *S3, err error) {
 	}
 
 	return &S3{
-		cfg:         c,
-		session:     s,
-		serviceName: sn,
+		cfg:           c,
+		session:       s,
+		serviceName:   sn,
+		restoreFolder: path.Join("/restore", c.Name),
+		logger:        logger.WithField("service", sn),
 	}, err
 }
 
 func (s *S3) GetStorageServiceName() (name string) {
-	return "s.StorageServices"
+	return s.cfg.Name
 }
 
 /*
@@ -152,23 +150,23 @@ func (s *S3) DownloadBackupFrom(fullBackupPath, binlog string) (path string, err
 			continue
 		}
 		if strings.Contains(*listObj.Key, "dump.tar") {
-			s.downloadFile(constants.RESTOREFOLDER, listObj)
+			s.downloadFile(s.restoreFolder, listObj)
 			continue
 		}
 		_, file := filepath.Split(*listObj.Key)
 		nbr := strings.Split(file, ".")
 		if nbr[1] <= until[1] {
-			s.downloadFile(constants.RESTOREFOLDER, listObj)
+			s.downloadFile(s.restoreFolder, listObj)
 		}
 	}
-	path = filepath.Join(constants.RESTOREFOLDER, fullBackupPath)
+	path = filepath.Join(s.restoreFolder, fullBackupPath)
 	return
 }
 
 func (s *S3) ListIncBackupsFor(key string) (bl []Backup, err error) {
 	svc := s3.New(s.session)
 	b := Backup{
-		Storage: s.Name,
+		Storage: s.cfg.Name,
 		IncList: make([]IncBackup, 0),
 		Verify:  make([]Verify, 0),
 		Key:     key,
@@ -212,7 +210,7 @@ func (s *S3) ListFullBackups() (bl []Backup, err error) {
 
 		if strings.Contains(*fullObj.Key, "dump.tar") {
 			b := Backup{
-				Storage: s.Name,
+				Storage: s.cfg.Name,
 				Time:    *fullObj.LastModified,
 				Key:     *fullObj.Key,
 				IncList: make([]IncBackup, 0),
@@ -221,6 +219,23 @@ func (s *S3) ListFullBackups() (bl []Backup, err error) {
 			bl = append(bl, b)
 		}
 	}
+	return
+}
+
+func (s *S3) DownloadBackup(fullBackup Backup) (path string, err error) {
+	svc := s3.New(s.session)
+	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.Replace(fullBackup.Key, "dump.tar", "", -1))})
+	if err != nil {
+		return
+	}
+
+	for _, listObj := range listRes.Contents {
+		if !strings.HasSuffix(*listObj.Key, "/") {
+			s.downloadFile(s.restoreFolder, listObj)
+		}
+	}
+	path = filepath.Join(s.restoreFolder, fullBackup.Key)
+	path = filepath.Dir(path)
 	return
 }
 
@@ -257,10 +272,10 @@ func (s *S3) DownloadLatestBackup() (path string, err error) {
 
 	for _, listObj := range listRes.Contents {
 		if !strings.HasSuffix(*listObj.Key, "/") {
-			s.downloadFile(constants.RESTOREFOLDER, listObj)
+			s.downloadFile(s.restoreFolder, listObj)
 		}
 	}
-	path = filepath.Join(constants.RESTOREFOLDER, *newestBackup.Key)
+	path = filepath.Join(s.restoreFolder, *newestBackup.Key)
 	path = filepath.Dir(path)
 	return
 }
@@ -304,11 +319,11 @@ func (s *S3) GetBackupByTimestamp(t time.Time) (path string, err error) {
 	for _, listObj := range listRes.Contents {
 		if !strings.HasSuffix(*listObj.Key, "/") {
 			if listObj.LastModified.Before(t) {
-				s.downloadFile(constants.RESTOREFOLDER, listObj)
+				s.downloadFile(s.restoreFolder, listObj)
 			}
 		}
 	}
-	path = filepath.Join(constants.RESTOREFOLDER, *s3Backup.Key)
+	path = filepath.Join(s.restoreFolder, *s3Backup.Key)
 	path = filepath.Dir(path)
 	return
 }
