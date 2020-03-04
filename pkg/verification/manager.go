@@ -32,7 +32,10 @@ func NewManager(c config.Config) (m *Manager, err error) {
 		return
 	}
 	logger.Debugf("Starting verification service %s", c.VerificationService)
-	sm := storage.NewManager(c.StorageService, "")
+	sm, err := storage.NewManager(c.StorageService, "", c.BackupService.MariaDB.LogBin)
+	if err != nil {
+		return
+	}
 	svc := sm.GetStorageServices()
 	for _, stg := range svc {
 		v, err := NewVerification(c.ServiceName, stg, c.StorageService, c.VerificationService, c.BackupService.MariaDB, k8sm)

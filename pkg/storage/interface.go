@@ -18,6 +18,8 @@ type Storage interface {
 	DownloadBackupFrom(fullBackupPath string, binlog string) (path string, err error)
 	DownloadBackup(fullBackup Backup) (path string, err error)
 	GetStorageServiceName() (name string)
+	GetStatusError() map[string]string
+	GetStatusErrorByKey(backupKey string) string
 }
 
 type Backup struct {

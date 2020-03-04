@@ -1,8 +1,12 @@
 package storage
 
 import (
+	"bytes"
+	"fmt"
 	"io"
+	"path"
 	"reflect"
+	"time"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
@@ -10,6 +14,8 @@ import (
 	"github.com/sapcc/maria-back-me-up/pkg/log"
 	"github.com/sirupsen/logrus"
 )
+
+const backupIcomplete = "backup_incomplete"
 
 type Manager struct {
 	cfg                         config.StorageService
@@ -21,21 +27,28 @@ func init() {
 	logger = log.WithFields(logrus.Fields{"component": "storage"})
 }
 
-func NewManager(c config.StorageService, sn string) (m *Manager) {
+func NewManager(c config.StorageService, serviceName, binLog string) (m *Manager, err error) {
 	stsvc := make(map[string]Storage, 0)
 	for _, cfg := range c.Swift {
-		swift, _ := NewSwift(cfg, sn)
+		swift, err := NewSwift(cfg, serviceName, binLog)
+		if err != nil {
+			return m, err
+		}
 		stsvc[cfg.Name] = swift
 	}
 	for _, cfg := range c.S3 {
-		s3, _ := NewS3(cfg, sn)
+		s3, err := NewS3(cfg, serviceName, binLog)
+		if err != nil {
+			return m, err
+		}
 		stsvc[cfg.Name] = s3
 	}
-
-	return &Manager{
+	m = &Manager{
 		cfg:             c,
 		storageServices: stsvc,
 	}
+	m.updateErroStatus()
+	return
 }
 
 func (m *Manager) GetStorageServices() (svc []string) {
@@ -47,7 +60,7 @@ func (m *Manager) GetStorageServices() (svc []string) {
 	return
 }
 
-func (m *Manager) WriteStream(name, mimeType string, body io.Reader) (errs error) {
+func (m *Manager) WriteStreamAll(name, mimeType string, body io.Reader) (errs error) {
 	var eg errgroup.Group
 	readers, writer, closer := m.createIOReaders(len(m.storageServices))
 	i := 0
@@ -68,11 +81,15 @@ func (m *Manager) WriteStream(name, mimeType string, body io.Reader) (errs error
 	return eg.Wait()
 }
 
-func (m *Manager) WriteFile(storageService, name, mimeType string, body io.Reader) (errs error) {
-	return m.storageServices[storageService].WriteStream(name, mimeType, body)
+func (m *Manager) WriteStream(storageService, name, mimeType string, body io.Reader) (errs error) {
+	s, ok := m.storageServices[storageService]
+	if !ok {
+		return fmt.Errorf("unknown storage service")
+	}
+	return s.WriteStream(name, mimeType, body)
 }
 
-func (m *Manager) WriteFolder(path string) (errs error) {
+func (m *Manager) WriteFolderAll(path string) (errs error) {
 	for k, s := range m.storageServices {
 		if err := s.WriteFolder(path); err != nil {
 			errs = multierror.Append(errs, &StorageError{message: err.Error(), Storage: k})
@@ -83,24 +100,27 @@ func (m *Manager) WriteFolder(path string) (errs error) {
 }
 
 func (m *Manager) DownloadLatestBackup(storageService string) (path string, err error) {
-	if storageService == "" {
-		storageService = m.cfg.DefaultStorage
+	s, ok := m.storageServices[storageService]
+	if !ok {
+		return path, fmt.Errorf("unknown storage service")
 	}
-	return m.storageServices[storageService].DownloadLatestBackup()
+	return s.DownloadLatestBackup()
 }
 
 func (m *Manager) DownloadBackup(storageService string, fullBackup Backup) (path string, err error) {
-	if storageService == "" {
-		storageService = m.cfg.DefaultStorage
+	s, ok := m.storageServices[storageService]
+	if !ok {
+		return path, fmt.Errorf("unknown storage service")
 	}
-	return m.storageServices[storageService].DownloadBackup(fullBackup)
+	return s.DownloadBackup(fullBackup)
 }
 
 func (m *Manager) ListFullBackups(storageService string) (bl []Backup, err error) {
-	if storageService == "" {
-		storageService = m.cfg.DefaultStorage
+	s, ok := m.storageServices[storageService]
+	if !ok {
+		return bl, fmt.Errorf("unknown storage service")
 	}
-	return m.storageServices[storageService].ListFullBackups()
+	return s.ListFullBackups()
 }
 
 func (m *Manager) ListServices() (s map[string][]string, err error) {
@@ -116,17 +136,23 @@ func (m *Manager) ListServices() (s map[string][]string, err error) {
 }
 
 func (m *Manager) ListIncBackupsFor(storageService, key string) (bl []Backup, err error) {
-	if storageService == "" {
-		storageService = m.cfg.DefaultStorage
+	s, ok := m.storageServices[storageService]
+	if !ok {
+		return bl, fmt.Errorf("unknown storage service")
 	}
-	return m.storageServices[storageService].ListIncBackupsFor(key)
+	if st := s.GetStatusErrorByKey(key); st != "" {
+		return bl, fmt.Errorf("backup is incomplete, due to: %s", st)
+	}
+
+	return s.ListIncBackupsFor(key)
 }
 
 func (m *Manager) DownloadBackupFrom(storageService, fullBackupPath string, binlog string) (path string, err error) {
-	if storageService == "" {
-		storageService = m.cfg.DefaultStorage
+	s, ok := m.storageServices[storageService]
+	if !ok {
+		return path, fmt.Errorf("unknown storage service")
 	}
-	return m.storageServices[storageService].DownloadBackupFrom(fullBackupPath, binlog)
+	return s.DownloadBackupFrom(fullBackupPath, binlog)
 }
 
 func (m *Manager) createIOReaders(count int) ([]io.Reader, io.Writer, io.Closer) {
@@ -142,6 +168,26 @@ func (m *Manager) createIOReaders(count int) ([]io.Reader, io.Writer, io.Closer)
 	}
 
 	return readers, io.MultiWriter(pipeWriters...), NewIOClosers(pipeClosers)
+}
+
+func (m *Manager) updateErroStatus() {
+	ticker := time.NewTicker(30 * time.Second)
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				for svc, s := range m.storageServices {
+					for k := range s.GetStatusError() {
+						fp := path.Join(k, backupIcomplete)
+						logger.Infof("Trying to save error status", k)
+						if err := m.WriteStream(svc, fp, "", bytes.NewReader([]byte("ERROR"))); err == nil {
+							delete(s.GetStatusError(), k)
+						}
+					}
+				}
+			}
+		}
+	}()
 }
 
 type IOClosers struct {

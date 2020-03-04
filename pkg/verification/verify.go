@@ -50,16 +50,17 @@ type Verification struct {
 }
 
 func NewVerification(serviceName, storageServiceName string, cs config.StorageService, cv config.VerificationService, cm config.MariaDB, m *k8s.Maria) (*Verification, error) {
+	s, err := storage.NewManager(cs, serviceName, cm.LogBin)
 	return &Verification{
 		serviceName:        serviceName,
-		storage:            storage.NewManager(cs, serviceName),
+		storage:            s,
 		maria:              m,
 		cfg:                cv,
 		cfgMariaDB:         cm,
 		storageServiceName: storageServiceName,
 		status:             NewStatus(serviceName, storageServiceName),
 		logger:             logger.WithField("service", serviceName),
-	}, nil
+	}, err
 }
 
 func (v *Verification) Start(ctx context.Context) (err error) {

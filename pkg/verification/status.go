@@ -83,13 +83,12 @@ func (s *Status) UploadStatus(restoreFolder string, storage *storage.Manager) {
 	out, err := yaml.Marshal(s)
 	s.RUnlock()
 	if err != nil {
-		//logger.Error(fmt.Errorf("cannot marshal verify status: %s", err.Error()))
 		return
 	}
 	u := strconv.FormatInt(time.Now().Unix(), 10)
 	_, file := path.Split(restoreFolder)
 	s.logger.Debug("Uploading verify status to: ", file+"/verify_"+u+".yaml")
-	err = storage.WriteFile(s.StorageService, file+"/verify_"+u+".yaml", "", bytes.NewReader(out))
+	err = storage.WriteStream(s.StorageService, file+"/verify_"+u+".yaml", "", bytes.NewReader(out))
 	if err != nil {
 		s.logger.Error(fmt.Errorf("cannot upload verify status: %s", err.Error()))
 	}

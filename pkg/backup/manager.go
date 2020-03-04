@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	multierror "github.com/hashicorp/go-multierror"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/k8s"
@@ -38,8 +39,6 @@ import (
 	"gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
-
-const podName = "mariadb"
 
 var (
 	binlogCancel context.CancelFunc
@@ -67,7 +66,7 @@ type (
 		Health          *Health
 		lastBackupTime  string
 		backupCheckSums map[string]int64
-		verifyTimer     *time.Timer
+		errCh           chan error
 	}
 )
 
@@ -76,7 +75,10 @@ func init() {
 }
 
 func NewManager(c config.Config) (m *Manager, err error) {
-	s := storage.NewManager(c.StorageService, c.ServiceName)
+	s, err := storage.NewManager(c.StorageService, c.ServiceName, c.BackupService.MariaDB.LogBin)
+	if err != nil {
+		return
+	}
 	us := updateStatus{
 		fullBackup: make(map[string]int, 0),
 		incBackup:  make(map[string]int, 0),
@@ -85,7 +87,7 @@ func NewManager(c config.Config) (m *Manager, err error) {
 		us.incBackup[v] = 0
 		us.fullBackup[v] = 0
 	}
-	b, err := NewBackup(c, s, &us)
+	b, err := NewBackup(c, s)
 	if err != nil {
 		return
 	}
@@ -106,6 +108,7 @@ func NewManager(c config.Config) (m *Manager, err error) {
 		updateSts:       &us,
 		Health:          &Health{Ready: true},
 		backupCheckSums: make(map[string]int64),
+		errCh:           make(chan error, 1),
 	}, err
 }
 
@@ -126,9 +129,9 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 	if err != nil {
 		return
 	}
-	for c := time.Tick(time.Duration(m.cfg.FullBackupIntervalInHours) * time.Minute); ; {
-		logger.Debug("Start backup cycle")
 
+	for c := time.Tick(time.Duration(m.cfg.FullBackupIntervalInHours) * time.Hour); ; {
+		logger.Debug("starting backup cycle")
 		// Stop binlog
 		if binlogCancel != nil {
 			binlogCancel()
@@ -141,13 +144,13 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 		mp, err := m.createMysqlDump(bpath)
 		if err != nil {
 			logger.Error(fmt.Sprintf("error creating mysqldump: %s", err.Error()))
-			if err = m.initRestore(err); err != nil {
+			if err = m.handleMysqlDumpError(err); err != nil {
 				time.Sleep(time.Duration(2) * time.Minute)
 				continue
 			}
-			time.Sleep(time.Duration(1) * time.Minute)
 			continue
 		}
+		m.setUpdateStatus(m.updateSts.fullBackup, m.Storage.GetStorageServices(), true)
 		ctxBin := context.Background()
 		ctxBin, binlogCancel = context.WithCancel(ctxBin)
 		go m.onBinlogRotation(ch)
@@ -157,12 +160,11 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 		})
 		go func() {
 			if err = eg.Wait(); err != nil {
-				m.updateSts.Lock()
-				for _, v := range m.Storage.GetStorageServices() {
-					m.updateSts.incBackup[v] = 0
+				m.setUpdateStatus(m.updateSts.incBackup, m.Storage.GetStorageServices(), false)
+				logger.Error(fmt.Errorf("error saving log files: %s", err.Error()))
+				if ctx.Err() == nil {
+					m.errCh <- err
 				}
-				m.updateSts.Unlock()
-				logger.Error(fmt.Errorf("Error saving log files %s", err.Error()))
 			}
 		}()
 
@@ -171,15 +173,13 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 			m.createTableChecksum()
 			m.lastBackupTime = ""
 			continue
+		case <-m.errCh:
+			continue
 		case <-ctx.Done():
 			logger.Info("stop backup")
 			// Stop binlog
 			if binlogCancel != nil {
 				binlogCancel()
-			}
-			if m.verifyTimer != nil {
-				m.verifyTimer.Stop()
-				m.verifyTimer = nil
 			}
 			return nil
 		}
@@ -187,7 +187,7 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 }
 
 func (m *Manager) createMysqlDump(bpath string) (mp mysql.Position, err error) {
-	logger.Debug("Starting full backup")
+	logger.Info("starting full backup")
 	defer os.RemoveAll(bpath)
 	cf := wait.ConditionFunc(func() (bool, error) {
 		s, err := maria.HealthCheck(m.cfg.MariaDB)
@@ -198,60 +198,135 @@ func (m *Manager) createMysqlDump(bpath string) (mp mysql.Position, err error) {
 			}
 			return false, nil
 		} else if !s.Ok {
-			return false, fmt.Errorf("Tables corrupt: %s", s.Details)
+			return false, fmt.Errorf("tables corrupt: %s", s.Details)
 		}
 		return true, nil
 	})
 	//Only do backups if db is healthy
-	if err = wait.Poll(10*time.Second, 1*time.Minute, cf); err != nil {
-		return mp, fmt.Errorf("Cannot do backup: %w", err)
+	if err = wait.Poll(5*time.Second, 5*time.Minute, cf); err != nil {
+		_, err := maria.HealthCheck(m.cfg.MariaDB)
+		connErr, ok := err.(*maria.DatabaseConnectionError)
+		if ok {
+			return mp, fmt.Errorf("cannot start backup: %w", connErr)
+		}
+		return mp, fmt.Errorf("cannot start backup: %w", err)
 	}
 
-	//GetCheckSumForTable()
-
 	if err = m.backup.createMysqlDump(bpath); err != nil {
-		return mp, fmt.Errorf("Error creating mysqlDump: %w", err)
+		return mp, fmt.Errorf("error creating mysqlDump: %w", err)
 	}
 
 	mp, err = readMetadata(bpath)
 	if err != nil {
-		return mp, fmt.Errorf("Error cannot read binlog metadata: %s", err.Error())
+		return mp, fmt.Errorf("error cannot read binlog metadata: %s", err.Error())
 	}
 
-	logger.Debug("Finished full backup")
+	logger.Debug("finished full backup")
 	return
 }
 
-func (m *Manager) initRestore(err error) error {
-	var ed *maria.DatabaseMissingError
-	if errors.As(err, &ed) && m.cfg.EnableInitRestore {
+func (m *Manager) handleMysqlDumpError(err error) error {
+	var missingErr *maria.DatabaseMissingError
+	var connErr *maria.DatabaseConnectionError
+	stsError := make([]string, 0)
+	svc := m.Storage.GetStorageServices()
+	if errors.As(err, &missingErr) && m.cfg.EnableInitRestore || errors.As(err, &connErr) && m.cfg.EnableRestoreOnDBFailure {
+		m.setUpdateStatus(m.updateSts.fullBackup, stsError, false)
 		var eb *storage.NoBackupError
-		bf, err := m.Storage.DownloadLatestBackup("")
-		if errors.As(err, &eb) {
-			logger.Info("Cannot restore. No backup available")
+		bf, errb := m.Storage.DownloadLatestBackup("")
+		if errors.As(errb, &eb) {
+			logger.Info("cannot restore. no backup available")
 			return nil
 		}
-		if err != nil {
-			logger.Error(err.Error())
+		if errb != nil {
 			return err
 		}
-		logger.Info("Starting init restore")
+		logger.Infof("starting restore due to %s ", err.Error())
 		return m.restore.restore(bf)
 	}
+
+	merr, ok := err.(*multierror.Error)
+	if !ok {
+		return fmt.Errorf("unknown error: %s", err.Error())
+	}
+
+	if len(svc) == len(merr.Errors) {
+		m.setUpdateStatus(m.updateSts.fullBackup, stsError, false)
+		return fmt.Errorf("cannot write to any storage: %s", err.Error())
+	}
+	for _, e := range merr.Errors {
+		err, ok := e.(*storage.StorageError)
+		if !ok {
+			return fmt.Errorf("unknown error: %s", err.Error())
+		}
+		stsError = append(stsError, err.Storage)
+	}
+	m.setUpdateStatus(m.updateSts.fullBackup, stsError, false)
+
 	return nil
+}
+
+func (m *Manager) setUpdateStatus(field map[string]int, storages []string, up bool) {
+	find := func(i string) bool {
+		for _, v := range storages {
+			if v == i {
+				return true
+			}
+		}
+		return false
+	}
+	m.updateSts.Lock()
+	defer m.updateSts.Unlock()
+
+	upFnc := func(b bool) int {
+		if b {
+			return 1
+		}
+		return 0
+	}
+	for _, s := range m.Storage.GetStorageServices() {
+		if find(s) {
+			field[s] = upFnc(up)
+		} else {
+			field[s] = upFnc(!up)
+		}
+	}
 }
 
 func (m *Manager) onBinlogRotation(c chan error) {
 	for {
-		_, ok := <-c
+		err, ok := <-c
 		if !ok {
-			logger.Error("Binlog Rotation channel closed")
+			logger.Debug("binlog rotation channel closed")
 			break
 		}
-		if m.verifyTimer == nil {
-			m.verifyTimer = time.AfterFunc(time.Duration(15)*time.Minute, func() {
-				//m.verifyLatestBackup(true, true)
-			})
+		if err == nil {
+			m.setUpdateStatus(m.updateSts.incBackup, m.Storage.GetStorageServices(), true)
+			continue
+		}
+		stsError := make([]string, 0)
+		merr, ok := err.(*multierror.Error)
+		if merr != nil {
+			if !ok {
+				m.setUpdateStatus(m.updateSts.incBackup, m.Storage.GetStorageServices(), false)
+				logger.Errorf("unknown error: %s", merr.Error())
+			}
+			if len(merr.Errors) > 0 {
+				for i := 0; i < len(merr.Errors); i++ {
+					switch e := merr.Errors[i].(type) {
+					case *storage.StorageError:
+						stsError = append(stsError, e.Storage)
+						logger.Errorf("error writing log to storage %s. error: ", e.Storage, merr.Error())
+					default:
+						log.Error(merr.Errors[i])
+					}
+					// means all storage services returned an error.
+					if i == len(m.Storage.GetStorageServices())-1 {
+						m.errCh <- err
+					}
+				}
+			}
+			m.setUpdateStatus(m.updateSts.incBackup, stsError, false)
 		}
 	}
 }
@@ -273,7 +348,7 @@ func (m *Manager) createTableChecksum() (err error) {
 	if err != nil {
 		return
 	}
-	err = m.Storage.WriteStream(m.lastBackupTime+"/tablesChecksum.yaml", "", bytes.NewReader(out))
+	err = m.Storage.WriteStreamAll(m.lastBackupTime+"/tablesChecksum.yaml", "", bytes.NewReader(out))
 	if err != nil {
 		logger.Error(fmt.Errorf("cannot upload verify status: %s", err.Error()))
 		return

@@ -99,13 +99,13 @@ func GetBackup(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		s := c.QueryParam("storage")
 		if err != nil {
-			return fmt.Errorf("Error parsing storage key: %s", err.Error())
+			return sendJSONResponse(c, "Error parsing storage key", err.Error())
 		}
 		var tmpl = template.New("backup.html").Funcs(funcMap)
 		t, err := tmpl.ParseFiles(constants.BACKUP)
 		backups, err := m.Storage.ListFullBackups(s)
 		if err != nil {
-			return fmt.Errorf("Error fetching backup list: %s", err.Error())
+			return sendJSONResponse(c, "Error fetching backup list", err.Error())
 		}
 
 		return t.Execute(c.Response(), backups)
@@ -129,15 +129,14 @@ func GetRestore(m *backup.Manager) echo.HandlerFunc {
 		k := c.QueryParam("key")
 		s := c.QueryParam("storage")
 		if err != nil {
-			return fmt.Errorf("Error parsing storage key: %s", err.Error())
+			return sendJSONResponse(c, "Error parsing storage key", err.Error())
 		}
 		var tmpl = template.New("restore.html").Funcs(funcMap)
 		t, err := tmpl.ParseFiles(constants.RESTORE)
 		incBackups, err := m.Storage.ListIncBackupsFor(s, k)
 		if err != nil {
-			return fmt.Errorf("Error fetching backup list: %s", err.Error())
+			return sendJSONResponse(c, "Error fetching backup list", err.Error())
 		}
-		fmt.Println("API", incBackups[0].IncList)
 		return t.Execute(c.Response(), incBackups)
 	}
 }

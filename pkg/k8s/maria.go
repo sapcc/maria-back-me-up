@@ -119,7 +119,6 @@ func (m *Maria) createDeployment(p string, cfg interface{}) (deploy *v1beta1.Dep
 	if err = m.unmarshalYamlFile(p, deploy, cfg); err != nil {
 		return
 	}
-	fmt.Println("===============================", m.ns)
 	return m.client.AppsV1beta1().Deployments(m.ns).Create(deploy)
 }
 

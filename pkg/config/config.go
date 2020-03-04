@@ -39,6 +39,7 @@ type BackupService struct {
 	FullBackupIntervalInHours          int     `yaml:"full_backup_interval_in_hours"`
 	IncrementalBackupIntervalInMinutes int     `yaml:"incremental_backup_interval_in_minutes"`
 	EnableInitRestore                  bool    `yaml:"enable_init_restore"`
+	EnableRestoreOnDBFailure           bool    `yaml:"enable_restore_on_db_failure"`
 }
 
 type MariaDB struct {
@@ -55,9 +56,8 @@ type MariaDB struct {
 }
 
 type StorageService struct {
-	DefaultStorage string  `yaml:"default_storage"`
-	S3             []S3    `yaml:"s3"`
-	Swift          []Swift `yaml:"swift"`
+	S3    []S3    `yaml:"s3"`
+	Swift []Swift `yaml:"swift"`
 }
 
 type S3 struct {

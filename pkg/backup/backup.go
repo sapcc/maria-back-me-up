@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"time"
 
-	multierror "github.com/hashicorp/go-multierror"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/errgroup"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
@@ -20,17 +19,11 @@ import (
 	"github.com/siddontang/go-mysql/replication"
 )
 
-const (
-	fullBackup = 0
-	incBackup  = 2
-)
-
 type (
 	Backup struct {
 		cfg        config.Config
 		storage    *storage.Manager
 		flushTimer *time.Timer
-		updateSts  *updateStatus
 	}
 	metadata struct {
 		Status binlog `yaml:"SHOW MASTER STATUS"`
@@ -42,24 +35,20 @@ type (
 	}
 )
 
-func NewBackup(c config.Config, sm *storage.Manager, us *updateStatus) (m *Backup, err error) {
+func NewBackup(c config.Config, sm *storage.Manager) (m *Backup, err error) {
 	if err != nil {
 		return
 	}
 
 	m = &Backup{
-		cfg:       c,
-		storage:   sm,
-		updateSts: us,
+		cfg:     c,
+		storage: sm,
 	}
 
 	return
 }
 
 func (b *Backup) createMysqlDump(toPath string) (err error) {
-	for _, v := range b.storage.GetStorageServices() {
-		b.updateSts.fullBackup[v] = 0
-	}
 	mydumperCmd := exec.Command(
 		"mydumper",
 		"--port="+strconv.Itoa(b.cfg.BackupService.MariaDB.Port),
@@ -76,44 +65,25 @@ func (b *Backup) createMysqlDump(toPath string) (err error) {
 		return
 	}
 	log.Debug("Uploading full backup")
-	if err := b.storage.WriteFolder(toPath); err != nil {
-		err, ok := err.(*multierror.Error)
-		if !ok {
-			return fmt.Errorf("unknown error: %s", err.Error())
-		}
-		for _, e := range err.Errors {
-			err, ok := e.(*storage.StorageError)
-			if !ok {
-				return fmt.Errorf("unknown error: %s", err.Error())
-			}
-			b.updateSts.Lock()
-			b.updateSts.incBackup[err.Storage] = 1
-			b.updateSts.Unlock()
-		}
-	}
-	log.Debug("Done uploading full backup")
-	return
+	return b.storage.WriteFolderAll(toPath)
 }
 
 func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, ch chan error) (err error) {
 	var binlogFile string
 	cfg := replication.BinlogSyncerConfig{
-		ServerID: 999,
-		Flavor:   "mariadb",
-		Host:     b.cfg.BackupService.MariaDB.Host,
-		Port:     uint16(b.cfg.BackupService.MariaDB.Port),
-		User:     b.cfg.BackupService.MariaDB.User,
-		Password: b.cfg.BackupService.MariaDB.Password,
+		ServerID:             999,
+		Flavor:               "mariadb",
+		Host:                 b.cfg.BackupService.MariaDB.Host,
+		Port:                 uint16(b.cfg.BackupService.MariaDB.Port),
+		User:                 b.cfg.BackupService.MariaDB.User,
+		Password:             b.cfg.BackupService.MariaDB.Password,
+		MaxReconnectAttempts: 5,
 	}
 	syncer := replication.NewBinlogSyncer(cfg)
 	binlogReader, binlogWriter := io.Pipe()
-	//copyReader, copyWriter := io.Pipe()
-	//copy binlog writer for second storage
-	//copiedReader := io.TeeReader(binlogReader, copyWriter)
 	defer func() {
-		log.Debug("closing syncer")
+		log.Debug("closing binlog syncer")
 		binlogWriter.Close()
-		//copyWriter.Close()
 		syncer.Close()
 		if b.flushTimer != nil {
 			b.flushTimer.Stop()
@@ -133,7 +103,7 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 			if inerr == ctx.Err() {
 				return nil
 			}
-			return fmt.Errorf("Error reading binlog stream: %w", err)
+			return fmt.Errorf("Error reading binlog stream: %w", inerr)
 		}
 		offset := ev.Header.LogPos
 
@@ -148,19 +118,14 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 			// FormateDescriptionEvent is the first event in binlog, we will close old writer and create new ones
 			if binlogFile != "" {
 				binlogWriter.Close()
-				//copyWriter.Close()
 				time.Sleep(100 * time.Millisecond)
 			}
 			binlogReader, binlogWriter = io.Pipe()
-			//copyReader, copyWriter = io.Pipe()
-			//copiedReader = io.TeeReader(binlogReader, copyWriter)
 			var eg errgroup.Group
 			eg.Go(func() error {
-				return b.storage.WriteStream(path.Join(dir, binlogFile), "", binlogReader)
+				return b.storage.WriteStreamAll(path.Join(dir, binlogFile), "", binlogReader)
 			})
-			go func() error {
-				return b.handleWriteErrors(ctx, &eg, ch)
-			}()
+			go b.handleWriteErrors(ctx, &eg, ch)
 
 			binlogWriter.Write(replication.BinLogFileHeader)
 
@@ -187,40 +152,13 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 	}
 }
 
-func (b *Backup) handleWriteErrors(ctx context.Context, eg *errgroup.Group, ch chan error) (err error) {
-	err = eg.Wait()
-	b.updateSts.Lock()
-	defer b.updateSts.Unlock()
-	for _, i := range b.storage.GetStorageServices() {
-		b.updateSts.incBackup[i] = 1
-	}
-	merr, ok := err.(*multierror.Error)
-	if merr != nil {
-		if !ok {
-			return fmt.Errorf("unknown error: %s", merr.Error())
-		}
-		if len(merr.Errors) > 0 {
-			for i := 0; i < len(merr.Errors); i++ {
-				switch e := merr.Errors[i].(type) {
-				case *storage.StorageError:
-					b.updateSts.incBackup[e.Storage] = 0
-				default:
-					log.Error(merr.Errors[i])
-				}
-				// means all storage services returned an error.
-				if i == len(b.storage.GetStorageServices())-1 {
-					return err
-				}
-			}
-		}
-	}
-	if ctx.Err() == nil {
-		ch <- nil
-	} else {
-		ch <- nil
+func (b *Backup) handleWriteErrors(ctx context.Context, eg *errgroup.Group, ch chan error) {
+	err := eg.Wait()
+	if ctx.Err() != nil {
 		close(ch)
+		return
 	}
-	return nil
+	ch <- err
 }
 
 func (b *Backup) flushLogs(binlogFile string) (err error) {

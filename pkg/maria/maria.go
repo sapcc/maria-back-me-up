@@ -37,6 +37,10 @@ type (
 		message string
 	}
 
+	DatabaseConnectionError struct {
+		message string
+	}
+
 	Checksum struct {
 		TablesChecksum map[string]int64 `yaml:"tables_checksum"`
 	}
@@ -44,6 +48,10 @@ type (
 
 func (d *DatabaseMissingError) Error() string {
 	return "Database not available"
+}
+
+func (d *DatabaseConnectionError) Error() string {
+	return "cant connect to MariaDB"
 }
 
 func HealthCheck(c config.MariaDB) (status Status, err error) {
@@ -54,6 +62,7 @@ func HealthCheck(c config.MariaDB) (status Status, err error) {
 
 	dbs := strings.Join(c.Databases, " -B ")
 	args := strings.Split(fmt.Sprintf("-c -B %s -u%s -p%s -h%s -P%s", dbs, c.User, c.Password, c.Host, strconv.Itoa(c.Port)), " ")
+	args = append(args, "--skip-write-binlog")
 	cmd := exec.Command(
 		"mysqlcheck",
 		args...,
@@ -65,7 +74,11 @@ func HealthCheck(c config.MariaDB) (status Status, err error) {
 		if strings.Contains(string(out), "1049") {
 			return status, &DatabaseMissingError{}
 		}
-		return status, fmt.Errorf("mysqlcheck failed with %s", err)
+		if strings.Contains(string(out), "2002") {
+			return status, &DatabaseConnectionError{}
+		}
+
+		return status, fmt.Errorf("mysqlcheck failed with %s", string(out))
 	}
 	outa := strings.Fields(string(out))
 	for i := 0; i < len(outa)-1; i++ {
