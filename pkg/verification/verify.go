@@ -65,7 +65,9 @@ func NewVerification(serviceName, storageServiceName string, cs config.StorageSe
 
 func (v *Verification) Start(ctx context.Context) (err error) {
 	for c := time.Tick(time.Duration(v.cfg.IntervalInMinutes) * time.Minute); ; {
-		v.verifyLatestBackup()
+		if err := v.verifyLatestBackup(); err != nil {
+			logger.Error(err)
+		}
 		select {
 		case <-c:
 			continue
@@ -85,8 +87,9 @@ func (v *Verification) verifyLatestBackup() (err error) {
 	backups := sortBackupsByTime(bs)
 
 	if v.lastBackup.Time.Unix() < 0 {
+		logger.Debug("first run")
 		//first run!
-		restoreFolder, err = v.storage.DownloadLatestBackup(v.storageServiceName)
+		restoreFolder, err = v.storage.DownloadBackup(v.storageServiceName, backups[len(backups)-1])
 		if err != nil {
 			var e *storage.NoBackupError
 			if errors.As(err, &e) {
@@ -100,12 +103,12 @@ func (v *Verification) verifyLatestBackup() (err error) {
 		v.lastBackup = backups[len(backups)-1]
 
 	} else if v.lastBackup.Time.Unix() < backups[len(backups)-1].Time.Unix() {
+		logger.Debug("found new full backup")
 		//Found new full backup
 		restoreFolder, err = v.storage.DownloadBackup(v.storageServiceName, v.lastBackup)
 		if err != nil {
 			return
 		}
-		v.verifyBackup(restoreFolder)
 	}
 
 	v.verifyBackup(restoreFolder)
