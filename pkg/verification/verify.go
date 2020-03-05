@@ -86,33 +86,40 @@ func (v *Verification) verifyLatestBackup() (err error) {
 	}
 	backups := sortBackupsByTime(bs)
 
-	if v.lastBackup.Time.Unix() < 0 {
-		logger.Debug("first run")
-		//first run!
-		restoreFolder, err = v.storage.DownloadBackup(v.storageServiceName, backups[len(backups)-1])
+	if v.lastBackup.Time.Unix() < backups[len(backups)-1].Time.Unix() {
+		v.logger.Debug("found new full backup")
+		//Found new full backup
+		restoreFolder, err = v.downloadBackup(v.lastBackup)
 		if err != nil {
-			var e *storage.NoBackupError
-			if errors.As(err, &e) {
-				v.logger.Info(e.Error())
-				return
-			}
-			v.status.SetVerifyRestore(0, fmt.Errorf("error loading backup for verifying: %s", err.Error()))
 			return
 		}
-
-		v.lastBackup = backups[len(backups)-1]
-
-	} else if v.lastBackup.Time.Unix() < backups[len(backups)-1].Time.Unix() {
-		logger.Debug("found new full backup")
-		//Found new full backup
-		restoreFolder, err = v.storage.DownloadBackup(v.storageServiceName, v.lastBackup)
+	} else {
+		restoreFolder, err = v.downloadBackup(backups[len(backups)-1])
 		if err != nil {
 			return
 		}
 	}
 
+	if restoreFolder == "" {
+		return
+	}
+
 	v.verifyBackup(restoreFolder)
 	v.lastBackup = backups[len(backups)-1]
+	return
+}
+
+func (v *Verification) downloadBackup(b storage.Backup) (restoreFolder string, err error) {
+	restoreFolder, err = v.storage.DownloadBackup(v.storageServiceName, b)
+	if err != nil {
+		var e *storage.NoBackupError
+		if errors.As(err, &e) {
+			v.logger.Info(e.Error())
+			return restoreFolder, nil
+		}
+		v.status.SetVerifyRestore(0, fmt.Errorf("error loading backup for verifying: %s", err.Error()))
+		return
+	}
 	return
 }
 
