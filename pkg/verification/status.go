@@ -32,7 +32,7 @@ func NewStatus(backupService, storageService string) *Status {
 		VerifyError:    "",
 		BackupService:  backupService,
 		StorageService: storageService,
-		logger:         logger.WithField("service", backupService),
+		logger:         logger.WithFields(logrus.Fields{"service": backupService, "storage": storageService}),
 	}
 }
 

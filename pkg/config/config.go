@@ -28,7 +28,7 @@ type Config struct {
 	Namespace           string              `yaml:"namespace"`
 	StorageService      StorageService      `yaml:"storage_services"`
 	BackupService       BackupService       `yaml:"backup_service"`
-	VerificationService VerificationService `yaml:"verificatoin_services"`
+	VerificationService VerificationService `yaml:"verification_services"`
 }
 
 type BackupService struct {

@@ -59,7 +59,3 @@ func (m *Manager) Start(ctx context.Context) {
 		go v.Start(ctx)
 	}
 }
-
-func (m *Manager) Stop() {
-
-}
