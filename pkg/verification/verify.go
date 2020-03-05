@@ -127,11 +127,14 @@ func (v *Verification) verifyBackup(restoreFolder string) {
 
 	cfg := config.BackupService{
 		MariaDB: config.MariaDB{
-			Host:     fmt.Sprintf("%s-%s-%s-verify", v.storageServiceName, v.serviceName, podName),
-			Port:     3306,
-			User:     "root",
-			Password: "verify_passw0rd",
-			Version:  v.cfgMariaDB.Version,
+			Host:         fmt.Sprintf("%s-%s-%s-verify", v.storageServiceName, v.serviceName, podName),
+			Port:         3306,
+			User:         "root",
+			Password:     "verify_passw0rd",
+			Version:      v.cfgMariaDB.Version,
+			LogBin:       v.cfgMariaDB.LogBin,
+			Databases:    v.cfgMariaDB.Databases,
+			VerifyTables: v.cfgMariaDB.VerifyTables,
 		},
 	}
 
