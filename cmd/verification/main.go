@@ -63,7 +63,6 @@ func main() {
 	select {
 	case <-c:
 		s.Stop(ctx)
-		v.Stop()
 		cancel()
 	case <-ctx.Done():
 	}
