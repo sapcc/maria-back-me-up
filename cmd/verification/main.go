@@ -35,7 +35,7 @@ func init() {
 func main() {
 	cfg, err := config.GetConfig(opts)
 	if err != nil {
-		log.Fatal("cannot load config file")
+		log.Fatal("cannot load config file", err.Error())
 	}
 
 	ctx := context.Background()
