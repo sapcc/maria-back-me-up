@@ -59,7 +59,7 @@ func NewVerification(serviceName, storageServiceName string, cs config.StorageSe
 		cfgMariaDB:         cm,
 		storageServiceName: storageServiceName,
 		status:             NewStatus(serviceName, storageServiceName),
-		logger:             logger.WithField("service", serviceName),
+		logger:             logger.WithFields(logrus.Fields{"service": serviceName, "storage": storageServiceName}),
 	}, err
 }
 
@@ -86,7 +86,7 @@ func (v *Verification) verifyLatestBackup() (err error) {
 	}
 	backups := sortBackupsByTime(bs)
 
-	if v.lastBackup.Time.Unix() < backups[len(backups)-1].Time.Unix() {
+	if v.lastBackup.Time.Unix() > 0 && v.lastBackup.Time.Unix() < backups[len(backups)-1].Time.Unix() {
 		v.logger.Debug("found new full backup")
 		//Found new full backup
 		restoreFolder, err = v.downloadBackup(v.lastBackup)
