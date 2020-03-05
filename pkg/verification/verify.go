@@ -156,6 +156,7 @@ func (v *Verification) verifyBackup(restoreFolder string) {
 		v.status.SetVerifyRestore(0, fmt.Errorf("error restoring backup: %s", err.Error()))
 		return
 	}
+	v.status.SetVerifyRestore(1, nil)
 	if out, err := maria.RunMysqlDiff(v.cfgMariaDB, cfg.MariaDB); err != nil {
 		//This is very bad. 1 or more tables are different or missing
 		v.status.SetVerifyDiff(0, fmt.Errorf("error mysqldiff: %s", string(out)))
