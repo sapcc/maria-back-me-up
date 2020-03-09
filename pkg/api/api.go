@@ -73,7 +73,7 @@ func getVerifyBackupState(v []storage.Verify, t time.Time, err bool) string {
 					verifyState = "#28a745" // green
 					verifyError = "MySQL Checksum successful"
 				}
-				if k.VerifyRestore == 0 {
+				if k.VerifyRestore == 0 || k.VerifyDiff == 0 {
 					verifyState = "#dc3545" // red
 					if k.VerifyError != "" {
 						verifyError = k.VerifyError
