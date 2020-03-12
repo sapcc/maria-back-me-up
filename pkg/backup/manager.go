@@ -187,7 +187,7 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 	}
 }
 
-func (m *Manager) createMysqlDump(bpath string) (mp mysql.Position, err error) {
+func (m *Manager) createMysqlDump(bpath string) (bp mysql.Position, err error) {
 	logger.Info("starting full backup")
 	defer os.RemoveAll(bpath)
 	cf := wait.ConditionFunc(func() (bool, error) {
@@ -208,18 +208,24 @@ func (m *Manager) createMysqlDump(bpath string) (mp mysql.Position, err error) {
 		_, err := maria.HealthCheck(m.cfg.MariaDB)
 		connErr, ok := err.(*maria.DatabaseConnectionError)
 		if ok {
-			return mp, fmt.Errorf("cannot start backup: %w", connErr)
+			return bp, fmt.Errorf("cannot start backup: %w", connErr)
 		}
-		return mp, fmt.Errorf("cannot start backup: %w", err)
+		return bp, fmt.Errorf("cannot start backup: %w", err)
+	}
+	if m.GetConfig().DumpTool == nil || *m.GetConfig().DumpTool == "mysqldump" {
+		bp, err = m.backup.createMysqlDump(bpath)
+		if err != nil {
+			return bp, fmt.Errorf("error creating mysqlDump: %w", err)
+		}
+	} else {
+		bp, err = m.backup.createMyDump(bpath)
+		if err != nil {
+			return bp, fmt.Errorf("error creating mysqlDump: %w", err)
+		}
 	}
 
-	if err = m.backup.createMysqlDump(bpath); err != nil {
-		return mp, fmt.Errorf("error creating mysqlDump: %w", err)
-	}
-
-	mp, err = readMetadata(bpath)
 	if err != nil {
-		return mp, fmt.Errorf("error cannot read binlog metadata: %s", err.Error())
+		return bp, fmt.Errorf("error cannot read binlog metadata: %s", err.Error())
 	}
 
 	logger.Debug("finished full backup")
@@ -367,9 +373,8 @@ func (m *Manager) Restore(p string) (err error) {
 		m.Health.Ready = true
 		m.Health.Unlock()
 	}()
-	err = m.maria.CheckPodNotReady()
-	if err != nil {
-		return fmt.Errorf("cannot set pod to status: NotReady. Reason: %s", err.Error())
+	if err = m.maria.CheckPodNotReady(); err != nil {
+		return fmt.Errorf("cannot set pod to status: NotReady. reason: %s", err.Error())
 	}
 	if err = m.restore.restore(p); err != nil {
 		return

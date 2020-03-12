@@ -57,7 +57,7 @@ func getVerifyBackupState(v []storage.Verify, t time.Time, err bool) string {
 	var duration time.Duration
 	duration = time.Duration(1000 * time.Hour)
 	verifyState := "#6c757d" // grey
-	verifyError := "Verfication not completed..."
+	verifyError := "Verification not completed..."
 	for _, k := range v {
 		if t.Before(k.Time) {
 			if k.Time.Sub(t) < duration {
@@ -200,7 +200,9 @@ func PostRestore(m *backup.Manager) echo.HandlerFunc {
 			return sendJSONResponse(c, "Error parsing storage param", err.Error())
 		}
 		backupPath, err := m.Storage.DownloadBackupFrom(st, path, binlog)
-
+		if err != nil {
+			return sendJSONResponse(c, "Error downloading backup", err.Error())
+		}
 		sendJSONResponse(c, "Stopping backup...", "")
 		m.Stop()
 		time.Sleep(time.Duration(1 * time.Second))

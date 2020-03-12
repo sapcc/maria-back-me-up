@@ -1,13 +1,16 @@
 package backup
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/sapcc/maria-back-me-up/pkg/config"
@@ -48,7 +51,8 @@ func NewBackup(c config.Config, sm *storage.Manager) (m *Backup, err error) {
 	return
 }
 
-func (b *Backup) createMysqlDump(toPath string) (err error) {
+func (b *Backup) createMyDump(toPath string) (bp mysql.Position, err error) {
+	log.Debug("running mydumper...")
 	mydumperCmd := exec.Command(
 		"mydumper",
 		"--port="+strconv.Itoa(b.cfg.BackupService.MariaDB.Port),
@@ -56,7 +60,7 @@ func (b *Backup) createMysqlDump(toPath string) (err error) {
 		"--user="+b.cfg.BackupService.MariaDB.User,
 		"--password="+b.cfg.BackupService.MariaDB.Password,
 		"--outputdir="+toPath,
-		//"--regex='^(?!(mysql))'",
+		//`--regex=^(?!(mysql\.))`,
 		"--compress",
 	)
 
@@ -64,8 +68,44 @@ func (b *Backup) createMysqlDump(toPath string) (err error) {
 	if err != nil {
 		return
 	}
+	bp, err = getMyDumpBinlog(toPath)
+	if err != nil {
+		return
+	}
 	log.Debug("Uploading full backup")
-	return b.storage.WriteFolderAll(toPath)
+	return bp, b.storage.WriteFolderAll(toPath)
+}
+
+func (b *Backup) createMysqlDump(toPath string) (bp mysql.Position, err error) {
+	log.Debug("running mysqldump...")
+	err = os.MkdirAll(toPath, os.ModePerm)
+	outfile, err := os.Create(filepath.Join(toPath, "dump.sql"))
+	defer outfile.Close()
+	cmd := exec.Command(
+		"mysqldump",
+		"--port="+strconv.Itoa(b.cfg.BackupService.MariaDB.Port),
+		"--host="+b.cfg.BackupService.MariaDB.Host,
+		"--user="+b.cfg.BackupService.MariaDB.User,
+		"--password="+b.cfg.BackupService.MariaDB.Password,
+		"--all-databases",
+		"--master-data=1",
+	)
+	cmd.Stdout = outfile
+	cmd.Run()
+	dump, err := os.Open(filepath.Join(toPath, "dump.sql"))
+	defer dump.Close()
+	scanner := bufio.NewScanner(dump)
+	for scanner.Scan() {
+		if strings.Contains(scanner.Text(), "MASTER_LOG_FILE") {
+			s := strings.ReplaceAll(scanner.Text(), "'", "")
+			bp, err = getMysqlDumpBinlog(s)
+			if err != nil {
+				return
+			}
+		}
+	}
+	log.Debug("Uploading full backup")
+	return bp, b.storage.WriteFolderAll(toPath)
 }
 
 func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, ch chan error) (err error) {

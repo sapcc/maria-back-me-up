@@ -104,19 +104,35 @@ func (r *Restore) restoreDump(backupPath string) (err error) {
 	).Run(); err != nil {
 		return
 	}
-
-	b, err := exec.Command(
-		"myloader",
-		"--port="+strconv.Itoa(r.cfg.MariaDB.Port),
-		"--host="+r.cfg.MariaDB.Host,
-		"--user="+r.cfg.MariaDB.User,
-		"--password="+r.cfg.MariaDB.Password,
-		"--directory="+path.Join(backupPath, "dump"),
-		"--overwrite-tables",
-	).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("myloader error: %s", string(b))
+	if r.cfg.DumpTool == nil || *r.cfg.DumpTool == "mysqldump" {
+		dump, err := os.Open(path.Join(backupPath, "dump", "dump.sql"))
+		cmd := exec.Command(
+			"mysql",
+			"--port="+strconv.Itoa(r.cfg.MariaDB.Port),
+			"--host="+r.cfg.MariaDB.Host,
+			"--user="+r.cfg.MariaDB.User,
+			"--password="+r.cfg.MariaDB.Password,
+		)
+		cmd.Stdin = dump
+		b, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("myloader error: %s", string(b))
+		}
+	} else {
+		b, err := exec.Command(
+			"myloader",
+			"--port="+strconv.Itoa(r.cfg.MariaDB.Port),
+			"--host="+r.cfg.MariaDB.Host,
+			"--user="+r.cfg.MariaDB.User,
+			"--password="+r.cfg.MariaDB.Password,
+			"--directory="+path.Join(backupPath, "dump"),
+			"--overwrite-tables",
+		).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("myloader error: %s", string(b))
+		}
 	}
+
 	log.Debug("myloader restore finished")
 	return
 }
