@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"math"
 	"net/http"
 	"path"
 	"strings"
@@ -55,37 +56,27 @@ func getServiceName(key string) string {
 
 func getVerifyBackupState(v []storage.Verify, t time.Time, err bool) string {
 	var duration time.Duration
+	var latestVerify storage.Verify
+	var closestVerify storage.Verify
+	var verifyState = verifyNotCompleteState
 	duration = time.Duration(1000 * time.Hour)
-	verifyState := "#6c757d" // grey
-	verifyError := "Verification not completed..."
 	for _, k := range v {
+		if k.Time.After(latestVerify.Time) {
+			latestVerify = k
+		}
 		if t.Before(k.Time) {
 			if k.Time.Sub(t) < duration {
-				if k.VerifyRestore == 1 && k.VerifyDiff == 1 {
-					verifyState = "#ffc107" // orange
-					if k.VerifyError != "" {
-						verifyError = k.VerifyError
-					} else {
-						verifyError = "Restor + MySQL Diff successful! Table checksum was not executed."
-					}
-				}
-				if k.VerifyChecksum == 1 {
-					verifyState = "#28a745" // green
-					verifyError = "MySQL Checksum successful"
-				}
-				if k.VerifyRestore == 0 || k.VerifyDiff == 0 {
-					verifyState = "#dc3545" // red
-					if k.VerifyError != "" {
-						verifyError = k.VerifyError
-					}
-				}
+				verifyState = calcVerifyState(k, err)
+				closestVerify = k
 			}
 			duration = k.Time.Sub(t)
 		}
 	}
-	if err {
-		return verifyError
+	// check if the latest verify status sub is equal or smaller than the closest verify status
+	if math.Round(latestVerify.Time.Sub(closestVerify.Time).Minutes()) <= constants.VERIFYINTERFAL {
+		return calcVerifyState(latestVerify, err)
 	}
+
 	return verifyState
 }
 

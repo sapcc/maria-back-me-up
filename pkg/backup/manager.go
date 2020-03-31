@@ -116,13 +116,7 @@ func NewManager(c config.Config) (m *Manager, err error) {
 func (m *Manager) Start() (err error) {
 	ctx := context.Background()
 	ctx, backupCancel = context.WithCancel(ctx)
-	done := make(chan error, 1)
-	go func() {
-		err := m.startBackup(ctx)
-		done <- err
-	}()
-	err = <-done
-	return err
+	return m.startBackup(ctx)
 }
 
 func (m *Manager) startBackup(ctx context.Context) (err error) {
