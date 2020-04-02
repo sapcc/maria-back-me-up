@@ -3,12 +3,12 @@ Mariadb backup tool
 
 ## Features
 List of features currently available:
-- Full dump via mydumper (invertal can be configured)
+- Full dump via mydumper or mysqldump (invertal can be configured)
 - Incremental backups via binlog (invertal can be configured)
 - Supported backup storage
     - S3
     - Swift
-- Automatic verification of existing backups
+- Automatic verification of existing backups (can be run as separte service)
 - UI to see and select an available backup to restore to
 - UI shows status of backup verfication
 - UI/API can be secured via OAuth openID
@@ -58,42 +58,42 @@ With STATEMENT only the update statement will be recorded in the binlog.
 `service_name:` Name of your mariadb (also used as the s3 folder name)\
 `namespace:` k8s namespace name\
 `backup_service:`\
-  `full_backup_interval_in_hours:` Interval for full mariadb dumps in hours\
-  `incremental_backup_interval_in_minutes:` Interval for saving incremental backups\
-  `enable_init_restore:` Enables a automatic restore if one of the databases (in mariadb.databases) are missing.\
-  `enable_restore_on_db_failure`: Enables automatic restoe if the db is unhealthy.\
-  `outh:`\
-    `enabled:` enables oauth to access the API (openID)\
-    `provider_url:` Url of the openID provider (e.g. Dex)
-    `redirect_url:` oauth redirect url (this is the url of your mariabackup service)
-  `maria_db:` mariadb config\
-    `user:` user with admin rights (to drop and restart mariabd)\
-    `version:` mariadb version e.g.: "10.4.0"\
-    `password:` user password\
-    `host:` host of the mariabd instance. If running as a sidecar within the mariadb pod: 127.0.0.1\
-    `port:` mariadb port number\
-    `data_dir:` data directory of the mariadb instance\
-    `databases:` list of databases (used for healthy checks and restores)\
-      - database_name\
-      - ...\
-    `verify_tables:` list of tables for the backup verification check. If none are provided the checksum verficiation is skipped!\
-      - database_name.table_name\
-      - ...\
+ &ensp;`full_backup_interval_in_hours:` Interval for full mariadb dumps in hours\
+ &ensp;`incremental_backup_interval_in_minutes:` Interval for saving incremental backups\
+ &ensp;`enable_init_restore:` Enables a automatic restore if one of the databases (in mariadb.databases) are missing.\
+ &ensp;`enable_restore_on_db_failure`: Enables automatic restoe if the db is unhealthy.\
+ &ensp;`outh:`\
+    &emsp;`enabled:` enables oauth to access the API (openID)\
+    &emsp;`provider_url:` Url of the openID provider (e.g. Dex)\
+    &emsp;`redirect_url:` oauth redirect url (this is the url of your mariabackup service)\
+ &ensp;`maria_db:` mariadb config\
+    &emsp;`user:` user with admin rights (to drop and restart mariabd)\
+    &emsp;`version:` mariadb version e.g.: "10.4.0"\
+    &emsp;`password:` user password\
+    &emsp;`host:` host of the mariabd instance. If running as a sidecar within the mariadb pod: 127.0.0.1\
+    &emsp;`port:` mariadb port number\
+    &emsp;`data_dir:` data directory of the mariadb instance\
+    &emsp;`databases:` list of databases (used for healthy checks and restores)\
+       &ensp;&emsp;- database_name\
+       &ensp;&emsp;- ... \
+     &emsp;`verify_tables:` list of tables for the backup verification check. If none are provided the checksum verficiation is skipped!\
+       &ensp;&emsp;- database_name.table_name\
+       &ensp;&emsp;- ... \
 `storage_services:`\
-  `s3:`\
-    - `name:` name of the storage
-      `aws_access_key_id:` s3 acces key\
-      `aws_secret_access_key:` s3 secret access key\
-      `region:` s3 region\
-      `bucket_name:` bucket name to save the backup to\
-  `swift:`\
-    - `name:` name of the storage\
-      `auth_version:` openstack auth version\
-      `auth_url:` openstack auth url (keystone url)\
-      `user_name:` os user name\
-      `user_domain_name:` os user domain name\
-      `project_name:` os project name\
-      `project_domain_name:` os project domain name\
-      `password:` os password\
-      `region:` region name\
-      `container_name:` name of the container the backups should be store in\
+  &ensp;`s3:`\
+    &emsp;- `name:` name of the storage\
+    &emsp;`aws_access_key_id:` s3 acces key\
+    &emsp;`aws_secret_access_key:` s3 secret access key\
+    &emsp;`region:` s3 region\
+    &emsp;`bucket_name:` bucket name to save the backup to\
+  &ensp;`swift:`\
+    &emsp;- `name:` name of the storage\
+    &emsp;`auth_version:` openstack auth version\
+    &emsp;`auth_url:` openstack auth url (keystone url)\
+    &emsp;`user_name:` os user name\
+    &emsp;`user_domain_name:` os user domain name\
+    &emsp;`project_name:` os project name\
+    &emsp;`project_domain_name:` os project domain name\
+    &emsp;`password:` os password\
+    &emsp;`region:` region name\
+    &emsp;`container_name:` name of the container the backups should be store in\
