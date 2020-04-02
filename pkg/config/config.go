@@ -40,7 +40,7 @@ type BackupService struct {
 	IncrementalBackupIntervalInMinutes int     `yaml:"incremental_backup_interval_in_minutes"`
 	EnableInitRestore                  bool    `yaml:"enable_init_restore"`
 	EnableRestoreOnDBFailure           bool    `yaml:"enable_restore_on_db_failure"`
-	DumpTool                           *string `yaml:"dump_tool"`
+	DumpTool                           *string `yaml:"full_dump_tool"`
 }
 
 type MariaDB struct {

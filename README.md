@@ -7,10 +7,12 @@ List of features currently available:
 - Incremental backups via binlog (invertal can be configured)
 - Supported backup storage
     - S3
+    - Swift
 - Automatic verification of existing backups
 - UI to see and select an available backup to restore to
 - UI shows status of backup verfication
 - UI/API can be secured via OAuth openID
+
 
 ## UI
 The UI is available via localhost:8081/
@@ -23,11 +25,18 @@ The color of an incremental backups shows the state of the backup verfication:\
 + backup verfication successful. A restore is save to perform!
 ```
 
+## Full logical backups
+Are done either via the mysql_dump **(default)** or the [mydumper tool](https://github.com/maxbube/mydumper).
+Mydumper can use multiple threads to dump and restore tables, makes it therefore suitable for databases with a huge number of tables.
+```
+full_dump_tool=mysqldump/mydumper
+```
+
 ## Incremental backups via binlogs
 This backup tool uses binlogs to make incremental backups.\ 
 Therefore the binlog needs to be enabled in the mariadb config
 ```
-og-bin=bin.log      # Binlog folder and name
+log-bin=bin.log      # Binlog folder and name
 binlog_format=MIXED  # Formant, described below
 expire_logs_days=3   # After x days binlog files get purged. Important! Otherwise volume could be filling up fast
 server_id=1          # Unique server id. Used for replication
@@ -46,30 +55,45 @@ With STATEMENT only the update statement will be recorded in the binlog.
 
 
 ## Config
-`full_backup_interval_in_hours:` Interval for full mariadb dumps in hours\
-`incremental_backup_interval_in_minutes:` Interval for saving incremental backups\
 `service_name:` Name of your mariadb (also used as the s3 folder name)\
 `namespace:` k8s namespace name\
-`enable_init_restore:` Enables init restore if one of the databases (in mariadb.databases) are missing.\
-`maria_db:` mariadb config\
-  `user:` user with admin rights (to drop and restart mariabd)\
-  `version:` mariadb version e.g.: "10.4.0"\
-  `password:` user password\
-  `host:` host of the mariabd instance. If running as a sidecar within the mariadb pod: 127.0.0.1\
-  `port:` mariadb port number\
-  `data_dir:` data directory of the mariadb instance\
-  `databases:` list of databases (used for healthy checks and restores)\
-    - database_name\
-    - ...\
-  `verify_tables:` list of tables for the backup verification check. If none are provided the checksum verficiation is skipped!\
-    - database_name.table_name\
-    - ...\
-`s3:`\
-  `aws_access_key_id:` s3 acces key\
-  `aws_secret_access_key:` s3 secret access key\
-  `region:` s3 region\
-  `bucket_name:` bucket name to save the backup to\
-`outh:`\
-  `enabled:` enables oauth to access the API (openID)\
-  `provider_url:` Url of the openID provider (e.g. Dex)
-  `redirect_url:` oauth redirect url (this is the url of your mariabackup service)
+`backup_service:`\
+  `full_backup_interval_in_hours:` Interval for full mariadb dumps in hours\
+  `incremental_backup_interval_in_minutes:` Interval for saving incremental backups\
+  `enable_init_restore:` Enables a automatic restore if one of the databases (in mariadb.databases) are missing.\
+  `enable_restore_on_db_failure`: Enables automatic restoe if the db is unhealthy.\
+  `outh:`\
+    `enabled:` enables oauth to access the API (openID)\
+    `provider_url:` Url of the openID provider (e.g. Dex)
+    `redirect_url:` oauth redirect url (this is the url of your mariabackup service)
+  `maria_db:` mariadb config\
+    `user:` user with admin rights (to drop and restart mariabd)\
+    `version:` mariadb version e.g.: "10.4.0"\
+    `password:` user password\
+    `host:` host of the mariabd instance. If running as a sidecar within the mariadb pod: 127.0.0.1\
+    `port:` mariadb port number\
+    `data_dir:` data directory of the mariadb instance\
+    `databases:` list of databases (used for healthy checks and restores)\
+      - database_name\
+      - ...\
+    `verify_tables:` list of tables for the backup verification check. If none are provided the checksum verficiation is skipped!\
+      - database_name.table_name\
+      - ...\
+`storage_services:`\
+  `s3:`\
+    - `name:` name of the storage
+      `aws_access_key_id:` s3 acces key\
+      `aws_secret_access_key:` s3 secret access key\
+      `region:` s3 region\
+      `bucket_name:` bucket name to save the backup to\
+  `swift:`\
+    - `name:` name of the storage\
+      `auth_version:` openstack auth version\
+      `auth_url:` openstack auth url (keystone url)\
+      `user_name:` os user name\
+      `user_domain_name:` os user domain name\
+      `project_name:` os project name\
+      `project_domain_name:` os project domain name\
+      `password:` os password\
+      `region:` region name\
+      `container_name:` name of the container the backups should be store in\

@@ -1,9 +1,7 @@
 version: '3.5'
 services:
   db_prod:
-    image: mariadb:10.4.7
-    networks:
-      - backend
+    image: mariadb:10.4.12
     restart: on-failure
     environment:
       MYSQL_ROOT_PASSWORD: pw
@@ -14,9 +12,7 @@ services:
       - ./db_prod:/var/lib/mysql
 
   db_backup:
-    image: mariadb:10.4.7
-    networks:
-      - backend
+    image: mariadb:10.4.12
     restart: on-failure
     environment:
       MYSQL_ROOT_PASSWORD: pw
@@ -25,6 +21,3 @@ services:
       - "3009:3306"
     volumes:
       - ./db_backup:/var/lib/mysql
-
-networks:
-  backend:
