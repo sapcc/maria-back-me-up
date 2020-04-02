@@ -38,6 +38,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -89,6 +90,7 @@ func (m *Maria) CreateMariaDeployment(c config.MariaDB) (deploy *v1beta1.Deploym
 			}); err != nil {
 				return
 			}
+			time.Sleep(10 * time.Second)
 			return m.CreateMariaDeployment(c)
 		}
 		return

@@ -20,6 +20,7 @@ RUN apk --no-cache add \
     && \
     git clone https://github.com/maxbube/mydumper.git $BUILD_PATH && \
     cd $BUILD_PATH && \
+    git checkout 2cdd78599ea7e13f36c6e8a09051814f6bd1564a && \
     cmake . && \
     make && \
     mv ./mydumper /usr/bin/. && \
@@ -39,7 +40,7 @@ WORKDIR /
 RUN curl -Lo /bin/dumb-init https://github.com/Yelp/dumb-init/releases/download/v1.2.2/dumb-init_1.2.2_amd64 \
 	&& chmod +x /bin/dumb-init \
 	&& dumb-init -V
-COPY --from=builder /go/src/github.com/sapcc/maria-back-me-up/bin/linux/maria-back-me-up /usr/local/bin/
+COPY --from=builder /go/src/github.com/sapcc/maria-back-me-up/bin/linux/backup /go/src/github.com/sapcc/maria-back-me-up/bin/linux/verification /usr/local/bin/
 COPY templates /templates/
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["maria-back-me-up"]
+CMD ["backup"]

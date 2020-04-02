@@ -19,6 +19,15 @@ package api
 import (
 	"fmt"
 	"io/ioutil"
+
+	"github.com/sapcc/maria-back-me-up/pkg/storage"
+)
+
+const (
+	verifyOkState          = "#ffc107" // orange
+	verifyErrorState       = "#dc3545" // red
+	verifyNotCompleteState = "#6c757d" // grey
+	verifyCompleteState    = "#28a745" // green
 )
 
 func ReadFile(path string) (d string, err error) {
@@ -28,4 +37,31 @@ func ReadFile(path string) (d string, err error) {
 	}
 
 	return string(fBytes), nil
+}
+
+func calcVerifyState(v storage.Verify, showError bool) string {
+	verifyState := verifyNotCompleteState
+	verifyError := "Verification not completed..."
+	if v.VerifyRestore == 1 && v.VerifyDiff == 1 {
+		verifyState = verifyOkState
+		if v.VerifyError != "" {
+			verifyError = v.VerifyError
+		} else {
+			verifyError = "Restore + MySQL Diff successful! Table checksum was not executed."
+		}
+	}
+	if v.VerifyChecksum == 1 {
+		verifyState = verifyCompleteState
+		verifyError = "MySQL Checksum successful"
+	}
+	if v.VerifyRestore == 0 || v.VerifyDiff == 0 {
+		verifyState = verifyErrorState
+		if v.VerifyError != "" {
+			verifyError = v.VerifyError
+		}
+	}
+	if showError {
+		return verifyError
+	}
+	return verifyState
 }

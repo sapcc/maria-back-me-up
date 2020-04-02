@@ -22,6 +22,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/siddontang/go-mysql/mysql"
@@ -36,7 +37,7 @@ func checkBackupDirExistsAndCreate(d string) (p string, err error) {
 	return
 }
 
-func readMetadata(p string) (mp mysql.Position, err error) {
+func getMyDumpBinlog(p string) (mp mysql.Position, err error) {
 	meta := metadata{}
 	yamlBytes, err := ioutil.ReadFile(path.Join(p, "/metadata"))
 	if err != nil {
@@ -52,6 +53,21 @@ func readMetadata(p string) (mp mysql.Position, err error) {
 	mp.Name = meta.Status.Log
 	mp.Pos = meta.Status.Pos
 
+	return
+}
+
+func getMysqlDumpBinlog(s string) (mp mysql.Position, err error) {
+	var rex = regexp.MustCompile("(\\w+)=([^;,]*)")
+	data := rex.FindAllStringSubmatch(s, -1)
+	res := make(map[string]string)
+	for _, kv := range data {
+		k := kv[1]
+		v := kv[2]
+		res[k] = v
+	}
+	pos, err := strconv.ParseInt(res["MASTER_LOG_POS"], 10, 32)
+	mp.Name = res["MASTER_LOG_FILE"]
+	mp.Pos = uint32(pos)
 	return
 }
 

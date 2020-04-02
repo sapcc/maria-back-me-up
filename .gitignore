@@ -13,3 +13,6 @@
 
 /vendor/
 /etc/
+
+/db_prod/
+/db_backup/

@@ -27,25 +27,24 @@ import (
 	"strings"
 	"time"
 
-	"github.com/coreos/etcd/client"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
+	"github.com/sapcc/maria-back-me-up/pkg/maria"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 type Restore struct {
-	cfg    config.Config
-	docker *client.Client
+	cfg    config.BackupService
 	backup *Backup
 }
 
-func NewRestore(c config.Config) (r *Restore) {
+func NewRestore(c config.BackupService) (r *Restore) {
 	return &Restore{
 		cfg: c,
 	}
 }
 
-func (r *Restore) verifyRestore(backupPath string) (err error) {
+func (r *Restore) VerifyRestore(backupPath string) (err error) {
 	if err = r.waitMariaDbUp(5 * time.Minute); err != nil {
 		return fmt.Errorf("Timed out waiting for verfiy mariadb to boot. Cant perform verification")
 	}
@@ -63,7 +62,7 @@ func (r *Restore) verifyRestore(backupPath string) (err error) {
 func (r *Restore) restore(backupPath string) (err error) {
 	if err = r.restartMariaDB(); err != nil {
 		//Cant shutdown database. Lets try restore anyway
-		log.Error(fmt.Errorf("Timed out trying to shutdown database"))
+		log.Error(fmt.Errorf("Timed out trying to shutdown database, %s", err.Error()))
 	}
 	err = r.waitMariaDbUp(5 * time.Minute)
 	if err != nil {
@@ -85,7 +84,7 @@ func (r *Restore) restore(backupPath string) (err error) {
 		return
 	}
 
-	if sts, err := HealthCheck(r.cfg.MariaDB); err != nil || !sts.Ok {
+	if sts, err := maria.HealthCheck(r.cfg.MariaDB); err != nil || !sts.Ok {
 		return fmt.Errorf("Mariadb health check failed after restore. Tables corrupted: %s", sts.Details)
 	}
 	return
@@ -105,19 +104,35 @@ func (r *Restore) restoreDump(backupPath string) (err error) {
 	).Run(); err != nil {
 		return
 	}
-
-	b, err := exec.Command(
-		"myloader",
-		"--port="+strconv.Itoa(r.cfg.MariaDB.Port),
-		"--host="+r.cfg.MariaDB.Host,
-		"--user="+r.cfg.MariaDB.User,
-		"--password="+r.cfg.MariaDB.Password,
-		"--directory="+path.Join(backupPath, "dump"),
-		"--overwrite-tables",
-	).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("myloader error: %s", string(b))
+	if r.cfg.DumpTool == nil || *r.cfg.DumpTool == "mysqldump" {
+		dump, err := os.Open(path.Join(backupPath, "dump", "dump.sql"))
+		cmd := exec.Command(
+			"mysql",
+			"--port="+strconv.Itoa(r.cfg.MariaDB.Port),
+			"--host="+r.cfg.MariaDB.Host,
+			"--user="+r.cfg.MariaDB.User,
+			"--password="+r.cfg.MariaDB.Password,
+		)
+		cmd.Stdin = dump
+		b, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("myloader error: %s", string(b))
+		}
+	} else {
+		b, err := exec.Command(
+			"myloader",
+			"--port="+strconv.Itoa(r.cfg.MariaDB.Port),
+			"--host="+r.cfg.MariaDB.Host,
+			"--user="+r.cfg.MariaDB.User,
+			"--password="+r.cfg.MariaDB.Password,
+			"--directory="+path.Join(backupPath, "dump"),
+			"--overwrite-tables",
+		).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("myloader error: %s", string(b))
+		}
 	}
+
 	log.Debug("myloader restore finished")
 	return
 }
@@ -215,7 +230,7 @@ func (r *Restore) restartMariaDB() (err error) {
 
 func (r *Restore) waitMariaDBHealthy(timeout time.Duration) (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
-		s, err := HealthCheck(r.cfg.MariaDB)
+		s, err := maria.HealthCheck(r.cfg.MariaDB)
 		if err != nil {
 			return false, nil
 		} else if !s.Ok {
@@ -228,7 +243,7 @@ func (r *Restore) waitMariaDBHealthy(timeout time.Duration) (err error) {
 
 func (r *Restore) waitMariaDbUp(timeout time.Duration) (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
-		err := PingMariaDB(r.cfg.MariaDB)
+		err := maria.PingMariaDB(r.cfg.MariaDB)
 		if err != nil {
 			log.Error("Error Pinging mariadb. error: ", err.Error())
 			return false, nil

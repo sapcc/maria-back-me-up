@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"math"
 	"net/http"
 	"path"
 	"strings"
@@ -29,6 +30,7 @@ import (
 	"github.com/sapcc/maria-back-me-up/pkg/backup"
 	"github.com/sapcc/maria-back-me-up/pkg/constants"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
+	"github.com/sapcc/maria-back-me-up/pkg/maria"
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
 )
 
@@ -54,37 +56,27 @@ func getServiceName(key string) string {
 
 func getVerifyBackupState(v []storage.Verify, t time.Time, err bool) string {
 	var duration time.Duration
+	var latestVerify storage.Verify
+	var closestVerify storage.Verify
+	var verifyState = verifyNotCompleteState
 	duration = time.Duration(1000 * time.Hour)
-	verifyState := "#6c757d" // grey
-	verifyError := "Verfication not completed..."
 	for _, k := range v {
+		if k.Time.After(latestVerify.Time) {
+			latestVerify = k
+		}
 		if t.Before(k.Time) {
 			if k.Time.Sub(t) < duration {
-				if k.Backup == 1 {
-					verifyState = "#ffc107" // orange
-					if k.Error != "" {
-						verifyError = k.Error
-					} else {
-						verifyError = "Table checksum was not executed."
-					}
-				}
-				if k.Tables == 1 {
-					verifyState = "#28a745" // green
-					verifyError = "All is well"
-				}
-				if k.Backup == 0 {
-					verifyState = "#dc3545" // red
-					if k.Error != "" {
-						verifyError = k.Error
-					}
-				}
+				verifyState = calcVerifyState(k, err)
+				closestVerify = k
 			}
 			duration = k.Time.Sub(t)
 		}
 	}
-	if err {
-		return verifyError
+	// check if the latest verify status sub is equal or smaller than the closest verify status
+	if math.Round(latestVerify.Time.Sub(closestVerify.Time).Minutes()) <= constants.VERIFYINTERFAL {
+		return calcVerifyState(latestVerify, err)
 	}
+
 	return verifyState
 }
 
@@ -98,13 +90,13 @@ func GetBackup(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		s := c.QueryParam("storage")
 		if err != nil {
-			return fmt.Errorf("Error parsing storage key: %s", err.Error())
+			return sendJSONResponse(c, "Error parsing storage key", err.Error())
 		}
 		var tmpl = template.New("backup.html").Funcs(funcMap)
 		t, err := tmpl.ParseFiles(constants.BACKUP)
 		backups, err := m.Storage.ListFullBackups(s)
 		if err != nil {
-			return fmt.Errorf("Error fetching backup list: %s", err.Error())
+			return sendJSONResponse(c, "Error fetching backup list", err.Error())
 		}
 
 		return t.Execute(c.Response(), backups)
@@ -128,15 +120,14 @@ func GetRestore(m *backup.Manager) echo.HandlerFunc {
 		k := c.QueryParam("key")
 		s := c.QueryParam("storage")
 		if err != nil {
-			return fmt.Errorf("Error parsing storage key: %s", err.Error())
+			return sendJSONResponse(c, "Error parsing storage key", err.Error())
 		}
 		var tmpl = template.New("restore.html").Funcs(funcMap)
 		t, err := tmpl.ParseFiles(constants.RESTORE)
 		incBackups, err := m.Storage.ListIncBackupsFor(s, k)
 		if err != nil {
-			return fmt.Errorf("Error fetching backup list: %s", err.Error())
+			return sendJSONResponse(c, "Error fetching backup list", err.Error())
 		}
-		fmt.Println("API", incBackups[0].IncList)
 		return t.Execute(c.Response(), incBackups)
 	}
 }
@@ -200,12 +191,14 @@ func PostRestore(m *backup.Manager) echo.HandlerFunc {
 			return sendJSONResponse(c, "Error parsing storage param", err.Error())
 		}
 		backupPath, err := m.Storage.DownloadBackupFrom(st, path, binlog)
-
+		if err != nil {
+			return sendJSONResponse(c, "Error downloading backup", err.Error())
+		}
 		sendJSONResponse(c, "Stopping backup...", "")
 		m.Stop()
 		time.Sleep(time.Duration(1 * time.Second))
 
-		s, err := backup.HealthCheck(m.GetConfig().MariaDB)
+		s, err := maria.HealthCheck(m.GetConfig().MariaDB)
 		if err != nil || !s.Ok {
 			sendJSONResponse(c, "Database not healthy. Trying to restore!", "")
 		}

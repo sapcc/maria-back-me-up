@@ -13,9 +13,13 @@ type Storage interface {
 	GetBackupByTimestamp(t time.Time) (path string, err error)
 	DownloadLatestBackup() (path string, err error)
 	ListFullBackups() (bl []Backup, err error)
+	ListServices() (services []string, err error)
 	ListIncBackupsFor(key string) (bl []Backup, err error)
 	DownloadBackupFrom(fullBackupPath string, binlog string) (path string, err error)
+	DownloadBackup(fullBackup Backup) (path string, err error)
 	GetStorageServiceName() (name string)
+	GetStatusError() map[string]string
+	GetStatusErrorByKey(backupKey string) string
 }
 
 type Backup struct {

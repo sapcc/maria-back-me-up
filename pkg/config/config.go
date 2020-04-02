@@ -24,16 +24,23 @@ import (
 )
 
 type Config struct {
-	Version                            string         `yaml:"version"`
-	MariaDB                            MariaDB        `yaml:"maria_db"`
-	StorageServices                    StorageService `yaml:"storage_services"`
-	OAuth                              OAuth          `yaml:"oauth"`
-	BackupDir                          string         `yaml:"backup_dir"`
-	ServiceName                        string         `yaml:"service_name"`
-	Namespace                          string         `yaml:"namespace"`
-	FullBackupIntervalInHours          int            `yaml:"full_backup_interval_in_hours"`
-	IncrementalBackupIntervalInMinutes int            `yaml:"incremental_backup_interval_in_minutes"`
-	EnableInitRestore                  bool           `yaml:"enable_init_restore"`
+	ServiceName         string              `yaml:"service_name"`
+	Namespace           string              `yaml:"namespace"`
+	StorageService      StorageService      `yaml:"storage_services"`
+	BackupService       BackupService       `yaml:"backup_service"`
+	VerificationService VerificationService `yaml:"verification_services"`
+}
+
+type BackupService struct {
+	Version                            string  `yaml:"version"`
+	MariaDB                            MariaDB `yaml:"maria_db"`
+	OAuth                              OAuth   `yaml:"oauth"`
+	BackupDir                          string  `yaml:"backup_dir"`
+	FullBackupIntervalInHours          int     `yaml:"full_backup_interval_in_hours"`
+	IncrementalBackupIntervalInMinutes int     `yaml:"incremental_backup_interval_in_minutes"`
+	EnableInitRestore                  bool    `yaml:"enable_init_restore"`
+	EnableRestoreOnDBFailure           bool    `yaml:"enable_restore_on_db_failure"`
+	DumpTool                           *string `yaml:"full_dump_tool"`
 }
 
 type MariaDB struct {
@@ -50,9 +57,8 @@ type MariaDB struct {
 }
 
 type StorageService struct {
-	DefaultStorage string  `yaml:"default_storage"`
-	S3             []S3    `yaml:"s3"`
-	Swift          []Swift `yaml:"swift"`
+	S3    []S3    `yaml:"s3"`
+	Swift []Swift `yaml:"swift"`
 }
 
 type S3 struct {
@@ -84,6 +90,11 @@ type OAuth struct {
 	Enabled     bool   `yaml:"enabled"`
 	ProviderURL string `yaml:"provider_url"`
 	RedirectURL string `yaml:"redirect_url"`
+}
+
+type VerificationService struct {
+	IntervalInMinutes int `yaml:"interval_in_minutes"`
+	MariaDBVersion    string
 }
 
 func GetConfig(opts Options) (cfg Config, err error) {
