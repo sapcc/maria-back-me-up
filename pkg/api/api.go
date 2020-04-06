@@ -73,7 +73,7 @@ func getVerifyBackupState(v []storage.Verify, t time.Time, err bool) string {
 		}
 	}
 	// check if the latest verify status sub is equal or smaller than the closest verify status
-	if math.Round(latestVerify.Time.Sub(closestVerify.Time).Minutes()) <= constants.VERIFYINTERFAL {
+	if !latestVerify.Time.IsZero() && math.Round(latestVerify.Time.Sub(closestVerify.Time).Minutes()) <= constants.VERIFYINTERFAL {
 		return calcVerifyState(latestVerify, err)
 	}
 

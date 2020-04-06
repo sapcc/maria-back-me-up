@@ -136,7 +136,7 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 	if err != nil {
 		return fmt.Errorf("Cannot start binlog stream: %w", err)
 	}
-	b.flushTimer = time.AfterFunc(time.Duration(b.cfg.BackupService.IncrementalBackupIntervalInMinutes)*time.Minute, func() { b.flushLogs("") })
+	b.flushTimer = time.AfterFunc(time.Duration(b.cfg.BackupService.IncrementalBackupInMinutes)*time.Minute, func() { b.flushLogs("") })
 	for {
 		ev, inerr := streamer.GetEvent(ctx)
 		if inerr != nil {
@@ -175,11 +175,11 @@ func (b *Backup) runBinlog(ctx context.Context, mp mysql.Position, dir string, c
 		switch ev.Event.(type) {
 		case *replication.RowsEvent:
 			if b.flushTimer == nil {
-				b.flushTimer = time.AfterFunc(time.Duration(b.cfg.BackupService.IncrementalBackupIntervalInMinutes)*time.Minute, func() { b.flushLogs(binlogFile) })
+				b.flushTimer = time.AfterFunc(time.Duration(b.cfg.BackupService.IncrementalBackupInMinutes)*time.Minute, func() { b.flushLogs(binlogFile) })
 			}
 		case *replication.QueryEvent:
 			if b.flushTimer == nil {
-				b.flushTimer = time.AfterFunc(time.Duration(b.cfg.BackupService.IncrementalBackupIntervalInMinutes)*time.Minute, func() { b.flushLogs(binlogFile) })
+				b.flushTimer = time.AfterFunc(time.Duration(b.cfg.BackupService.IncrementalBackupInMinutes)*time.Minute, func() { b.flushLogs(binlogFile) })
 			}
 		}
 

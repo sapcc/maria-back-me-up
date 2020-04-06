@@ -28,6 +28,7 @@ import (
 
 	multierror "github.com/hashicorp/go-multierror"
 	"github.com/prometheus/client_golang/prometheus"
+	cron "github.com/robfig/cron/v3"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/k8s"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
@@ -41,10 +42,11 @@ import (
 )
 
 var (
-	binlogCancel context.CancelFunc
-	backupCancel context.CancelFunc
-	logUpdate    chan<- time.Time
-	logger       *logrus.Entry
+	binlogCancel  context.CancelFunc
+	backupCancel  context.CancelFunc
+	logUpdate     chan<- time.Time
+	logger        *logrus.Entry
+	scheduleTimer *time.Timer
 )
 
 type (
@@ -64,6 +66,7 @@ type (
 		Storage         *storage.Manager
 		updateSts       *updateStatus
 		Health          *Health
+		cronSch         cron.Schedule
 		lastBackupTime  string
 		backupCheckSums map[string]int64
 		errCh           chan error
@@ -97,6 +100,12 @@ func NewManager(c config.Config) (m *Manager, err error) {
 		return
 	}
 
+	p := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
+	cronSch, err := p.Parse(c.BackupService.FullBackupCronSchedule)
+	if err != nil {
+		return
+	}
+
 	prometheus.MustRegister(NewMetricsCollector(c.BackupService.MariaDB, &us))
 	bs := c.BackupService
 	bs.MariaDB.Host = "127.0.0.1"
@@ -110,6 +119,7 @@ func NewManager(c config.Config) (m *Manager, err error) {
 		Health:          &Health{Ready: true},
 		backupCheckSums: make(map[string]int64),
 		errCh:           make(chan error, 1),
+		cronSch:         cronSch,
 	}, err
 }
 
@@ -119,70 +129,67 @@ func (m *Manager) Start() (err error) {
 	return m.startBackup(ctx)
 }
 
+func (m *Manager) Stop() {
+	backupCancel()
+}
+
 func (m *Manager) startBackup(ctx context.Context) (err error) {
 	_, err = checkBackupDirExistsAndCreate(m.cfg.BackupDir)
 	if err != nil {
 		return
 	}
-
-	for c := time.Tick(time.Duration(m.cfg.FullBackupIntervalInHours) * time.Hour); ; {
-		logger.Debug("starting backup cycle")
-		// Stop binlog
-		if binlogCancel != nil {
-			binlogCancel()
-			time.Sleep(time.Duration(100) * time.Millisecond)
-		}
-
-		m.lastBackupTime = time.Now().Format(time.RFC3339)
-		bpath := path.Join(m.cfg.BackupDir, m.lastBackupTime)
-		ch := make(chan error)
-		mp, err := m.createMysqlDump(bpath)
-		if err != nil {
-			logger.Error(fmt.Sprintf("error creating mysqldump: %s", err.Error()))
-			if err = m.handleMysqlDumpError(err); err != nil {
-				time.Sleep(time.Duration(2) * time.Minute)
-				continue
-			}
-			continue
-		}
-		m.setUpdateStatus(m.updateSts.fullBackup, m.Storage.GetStorageServices(), true)
-		ctxBin := context.Background()
-		ctxBin, binlogCancel = context.WithCancel(ctxBin)
-		go m.onBinlogRotation(ch)
-		var eg errgroup.Group
-		eg.Go(func() error {
-			return m.backup.runBinlog(ctxBin, mp, m.lastBackupTime, ch)
-		})
-		go func() {
-			if err = eg.Wait(); err != nil {
-				m.setUpdateStatus(m.updateSts.incBackup, m.Storage.GetStorageServices(), false)
-				logger.Error(fmt.Errorf("error saving log files: %s", err.Error()))
-				if ctx.Err() == nil {
-					m.errCh <- err
-				}
-			}
-		}()
-
-		select {
-		case <-c:
-			m.createTableChecksum()
-			m.lastBackupTime = ""
-			continue
-		case <-m.errCh:
-			continue
-		case <-ctx.Done():
-			logger.Info("stop backup")
-			// Stop binlog
-			if binlogCancel != nil {
-				binlogCancel()
-			}
-			return nil
-		}
+	go m.scheduleBackup()
+	cronBackup := cron.New()
+	cronBackup.AddFunc(m.cfg.FullBackupCronSchedule, m.scheduleBackup)
+	cronBackup.Start()
+	select {
+	case <-ctx.Done():
+		cronBackup.Stop()
+		return
 	}
 }
 
+func (m *Manager) scheduleBackup() {
+	logger.Debug("starting full backup cycle")
+	m.createTableChecksum()
+	m.lastBackupTime = ""
+	// Stop binlog
+	if binlogCancel != nil {
+		binlogCancel()
+		time.Sleep(time.Duration(100) * time.Millisecond)
+	}
+
+	m.lastBackupTime = time.Now().Format(time.RFC3339)
+	bpath := path.Join(m.cfg.BackupDir, m.lastBackupTime)
+	ch := make(chan error)
+	mp, err := m.createMysqlDump(bpath)
+	if err != nil {
+		logger.Error(fmt.Sprintf("error creating mysqldump: %s", err.Error()))
+		if err = m.handleMysqlDumpError(err); err != nil {
+			time.Sleep(time.Duration(2) * time.Minute)
+			return
+		}
+		return
+	}
+	m.setUpdateStatus(m.updateSts.fullBackup, m.Storage.GetStorageServices(), true)
+	ctxBin := context.Background()
+	ctxBin, binlogCancel = context.WithCancel(ctxBin)
+	go m.onBinlogRotation(ch)
+	var eg errgroup.Group
+	eg.Go(func() error {
+		return m.backup.runBinlog(ctxBin, mp, m.lastBackupTime, ch)
+	})
+	go func() {
+		if err = eg.Wait(); err != nil {
+			m.setUpdateStatus(m.updateSts.incBackup, m.Storage.GetStorageServices(), false)
+			logger.Error(fmt.Errorf("error saving log files: %s", err.Error()))
+			m.errCh <- err
+		}
+	}()
+}
+
 func (m *Manager) createMysqlDump(bpath string) (bp mysql.Position, err error) {
-	logger.Info("starting full backup")
+	logger.Info("creating mysql dump")
 	defer os.RemoveAll(bpath)
 	cf := wait.ConditionFunc(func() (bool, error) {
 		s, err := maria.HealthCheck(m.cfg.MariaDB)
@@ -330,10 +337,6 @@ func (m *Manager) onBinlogRotation(c chan error) {
 			m.setUpdateStatus(m.updateSts.incBackup, stsError, false)
 		}
 	}
-}
-
-func (m *Manager) Stop() {
-	backupCancel()
 }
 
 func (m *Manager) GetConfig() config.BackupService {

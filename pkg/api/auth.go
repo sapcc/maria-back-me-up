@@ -30,6 +30,7 @@ import (
 	"github.com/labstack/echo"
 	"github.com/sapcc/maria-back-me-up/pkg/backup"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
+	"github.com/sapcc/maria-back-me-up/pkg/log"
 	"golang.org/x/oauth2"
 )
 
@@ -58,6 +59,9 @@ func InitAPI(m *backup.Manager, opts config.Options) {
 		return
 	}
 	idTokenVerifier = provider.Verifier(&oidc.Config{ClientID: opts.ClientID})
+	if idTokenVerifier == nil {
+		log.Fatal("cannot init IDTokenVerifier")
+	}
 
 	oauth2Config = oauth2.Config{
 		ClientID:     opts.ClientID,
