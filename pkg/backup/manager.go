@@ -79,6 +79,7 @@ func init() {
 
 func NewManager(c config.Config) (m *Manager, err error) {
 	s, err := storage.NewManager(c.StorageService, c.ServiceName, c.BackupService.MariaDB.LogBin)
+	c.BackupService.MariaDB.Host = "127.0.0.1"
 	if err != nil {
 		return
 	}
@@ -107,7 +108,6 @@ func NewManager(c config.Config) (m *Manager, err error) {
 	}
 
 	prometheus.MustRegister(NewMetricsCollector(c.BackupService.MariaDB, &us))
-	c.BackupService.MariaDB.Host = "127.0.0.1"
 	return &Manager{
 		cfg:             c.BackupService,
 		backup:          b,
