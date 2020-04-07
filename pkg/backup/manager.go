@@ -107,13 +107,12 @@ func NewManager(c config.Config) (m *Manager, err error) {
 	}
 
 	prometheus.MustRegister(NewMetricsCollector(c.BackupService.MariaDB, &us))
-	bs := c.BackupService
-	bs.MariaDB.Host = "127.0.0.1"
+	c.BackupService.MariaDB.Host = "127.0.0.1"
 	return &Manager{
 		cfg:             c.BackupService,
 		backup:          b,
 		maria:           mr,
-		restore:         NewRestore(bs),
+		restore:         NewRestore(c.BackupService),
 		Storage:         s,
 		updateSts:       &us,
 		Health:          &Health{Ready: true},
