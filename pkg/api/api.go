@@ -60,6 +60,9 @@ func getVerifyBackupState(v []storage.Verify, t time.Time, err bool) string {
 	var closestVerify storage.Verify
 	var verifyState = verifyNotCompleteState
 	duration = time.Duration(1000 * time.Hour)
+	if len(v) == 0 && err {
+		return "Verification not completed..."
+	}
 	for _, k := range v {
 		if k.Time.After(latestVerify.Time) {
 			latestVerify = k
@@ -73,7 +76,7 @@ func getVerifyBackupState(v []storage.Verify, t time.Time, err bool) string {
 		}
 	}
 	// check if the latest verify status sub is equal or smaller than the closest verify status
-	if math.Round(latestVerify.Time.Sub(closestVerify.Time).Minutes()) <= constants.VERIFYINTERFAL {
+	if !latestVerify.Time.IsZero() && math.Round(latestVerify.Time.Sub(closestVerify.Time).Minutes()) <= constants.VERIFYINTERFAL {
 		return calcVerifyState(latestVerify, err)
 	}
 

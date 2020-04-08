@@ -25,6 +25,7 @@ import (
 
 type Config struct {
 	ServiceName         string              `yaml:"service_name"`
+	SideCar             *bool               `yaml:"side_car"`
 	Namespace           string              `yaml:"namespace"`
 	StorageService      StorageService      `yaml:"storage_services"`
 	BackupService       BackupService       `yaml:"backup_service"`
@@ -32,15 +33,15 @@ type Config struct {
 }
 
 type BackupService struct {
-	Version                            string  `yaml:"version"`
-	MariaDB                            MariaDB `yaml:"maria_db"`
-	OAuth                              OAuth   `yaml:"oauth"`
-	BackupDir                          string  `yaml:"backup_dir"`
-	FullBackupIntervalInHours          int     `yaml:"full_backup_interval_in_hours"`
-	IncrementalBackupIntervalInMinutes int     `yaml:"incremental_backup_interval_in_minutes"`
-	EnableInitRestore                  bool    `yaml:"enable_init_restore"`
-	EnableRestoreOnDBFailure           bool    `yaml:"enable_restore_on_db_failure"`
-	DumpTool                           *string `yaml:"full_dump_tool"`
+	Version                    string  `yaml:"version"`
+	MariaDB                    MariaDB `yaml:"maria_db"`
+	OAuth                      OAuth   `yaml:"oauth"`
+	BackupDir                  string  `yaml:"backup_dir"`
+	FullBackupCronSchedule     string  `yaml:"full_backup_cron_schedule"`
+	IncrementalBackupInMinutes int     `yaml:"incremental_backup_in_minutes"`
+	EnableInitRestore          bool    `yaml:"enable_init_restore"`
+	EnableRestoreOnDBFailure   bool    `yaml:"enable_restore_on_db_failure"`
+	DumpTool                   *string `yaml:"full_dump_tool"`
 }
 
 type MariaDB struct {
