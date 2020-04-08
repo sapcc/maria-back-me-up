@@ -25,6 +25,7 @@ import (
 
 type Config struct {
 	ServiceName         string              `yaml:"service_name"`
+	SideCar             *bool               `yaml:"side_car"`
 	Namespace           string              `yaml:"namespace"`
 	StorageService      StorageService      `yaml:"storage_services"`
 	BackupService       BackupService       `yaml:"backup_service"`
