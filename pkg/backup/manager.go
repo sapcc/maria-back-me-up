@@ -79,13 +79,13 @@ func init() {
 
 func NewManager(c config.Config) (m *Manager, err error) {
 	s, err := storage.NewManager(c.StorageService, c.ServiceName, c.BackupService.MariaDB.LogBin)
+	if err != nil {
+		return
+	}
 	if c.SideCar == nil || *c.SideCar {
 		c.BackupService.MariaDB.Host = "127.0.0.1"
 	}
 
-	if err != nil {
-		return
-	}
 	us := updateStatus{
 		fullBackup: make(map[string]int, 0),
 		incBackup:  make(map[string]int, 0),

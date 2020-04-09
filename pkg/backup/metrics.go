@@ -17,7 +17,6 @@
 package backup
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -67,7 +66,6 @@ func (c *MetricsCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 func NewMetricsCollector(c config.MariaDB, u *updateStatus) *MetricsCollector {
-	fmt.Println(c, u)
 	m := MetricsCollector{
 		updateSts: u,
 		cfg:       c,

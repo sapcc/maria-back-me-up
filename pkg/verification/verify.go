@@ -82,7 +82,10 @@ func (v *Verification) verifyLatestBackup() (err error) {
 	var restoreFolder string
 	bs, err := v.storage.ListFullBackups(v.storageServiceName)
 	if err != nil {
-
+		return
+	}
+	if len(bs) == 0 {
+		return fmt.Errorf("no backup found")
 	}
 	backups := sortBackupsByTime(bs)
 
