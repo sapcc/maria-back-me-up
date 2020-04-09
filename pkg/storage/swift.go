@@ -3,7 +3,6 @@ package storage
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"io"
 	"os"
 	"path"
@@ -158,7 +157,6 @@ func (s *Swift) ListServices() (services []string, err error) {
 	}
 	for _, o := range objs {
 		if len(o.Name) > 1 {
-			fmt.Println(o.Name)
 			services = append(services, strings.ReplaceAll(o.Name, "/", ""))
 		}
 	}

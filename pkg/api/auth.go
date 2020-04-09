@@ -90,7 +90,6 @@ func Oauth(enabled bool, opts config.Options) echo.MiddlewareFunc {
 			hashedState := hashStatecode(state, opts.ClientSecret)
 			writeCookie(c.Response(), hashedState, 1)
 			if err := updateSessionStore(c.Response(), c.Request(), "", "claims.Email", c.Request().URL.String()); err != nil {
-				fmt.Println(err)
 				return echo.NewHTTPError(http.StatusUnauthorized, "Error OAuth", err)
 			}
 			return c.Redirect(http.StatusTemporaryRedirect, oauth2Config.AuthCodeURL(state, oauth2.AccessTypeOnline))

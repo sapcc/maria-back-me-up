@@ -31,7 +31,7 @@ func NewManager(c config.Config) (m *Manager, err error) {
 	if err != nil {
 		return
 	}
-	logger.Debugf("Starting verification service %s", c.VerificationService)
+
 	sm, err := storage.NewManager(c.StorageService, "", c.BackupService.MariaDB.LogBin)
 	if err != nil {
 		return
