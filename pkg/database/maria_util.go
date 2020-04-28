@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package maria
+package database
 
 import (
 	"fmt"
@@ -23,38 +23,12 @@ import (
 	"time"
 
 	"github.com/sapcc/maria-back-me-up/pkg/config"
+	dberror "github.com/sapcc/maria-back-me-up/pkg/error"
 	"github.com/siddontang/go-mysql/client"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
-type (
-	Status struct {
-		Ok      bool
-		Details map[string]string
-	}
-
-	DatabaseMissingError struct {
-		message string
-	}
-
-	DatabaseConnectionError struct {
-		message string
-	}
-
-	Checksum struct {
-		TablesChecksum map[string]int64 `yaml:"tables_checksum"`
-	}
-)
-
-func (d *DatabaseMissingError) Error() string {
-	return "Database not available"
-}
-
-func (d *DatabaseConnectionError) Error() string {
-	return "cant connect to MariaDB"
-}
-
-func HealthCheck(c config.MariaDB) (status Status, err error) {
+func mariaHealthCheck(c config.DatabaseConfig) (status Status, err error) {
 	status = Status{
 		Ok:      true,
 		Details: make(map[string]string, 0),
@@ -72,10 +46,10 @@ func HealthCheck(c config.MariaDB) (status Status, err error) {
 	if err != nil {
 		status.Ok = false
 		if strings.Contains(string(out), "1049") {
-			return status, &DatabaseMissingError{}
+			return status, &dberror.DatabaseMissingError{}
 		}
 		if strings.Contains(string(out), "2002") {
-			return status, &DatabaseConnectionError{}
+			return status, &dberror.DatabaseConnectionError{}
 		}
 
 		return status, fmt.Errorf("mysqlcheck failed with %s", string(out))
@@ -93,7 +67,7 @@ func HealthCheck(c config.MariaDB) (status Status, err error) {
 	return
 }
 
-func PingMariaDB(c config.MariaDB) (err error) {
+func pingMariaDB(c config.DatabaseConfig) (err error) {
 	var out []byte
 	if out, err = exec.Command("mysqladmin",
 		"status",
@@ -107,7 +81,7 @@ func PingMariaDB(c config.MariaDB) (err error) {
 	return
 }
 
-func PurgeBinlogsTo(c config.MariaDB, log string) (err error) {
+func purgeBinlogsTo(c config.DatabaseConfig, log string) (err error) {
 	conn, err := client.Connect(fmt.Sprintf("%s:%s", c.Host, strconv.Itoa(c.Port)), c.User, c.Password, "")
 	if err = conn.Ping(); err != nil {
 		return
@@ -120,10 +94,10 @@ func PurgeBinlogsTo(c config.MariaDB, log string) (err error) {
 	return
 }
 
-func GetCheckSumForTable(c config.MariaDB, verifyTables []string) (cs Checksum, err error) {
+func getMariaCheckSumForTable(c config.DatabaseConfig, verifyTables []string) (cs Checksum, err error) {
 	cs.TablesChecksum = make(map[string]int64)
 	cf := wait.ConditionFunc(func() (bool, error) {
-		err = PingMariaDB(c)
+		err = pingMariaDB(c)
 		if err != nil {
 			return false, nil
 		}
@@ -159,25 +133,5 @@ func GetCheckSumForTable(c config.MariaDB, verifyTables []string) (cs Checksum, 
 		cs.TablesChecksum[tn] = s
 	}
 
-	return
-}
-
-func RunMysqlDiff(c1, c2 config.MariaDB) (out []byte, err error) {
-	//mysqldiff --server1=root:pw@localhost:3306 --server2=root:pw@db_backup:3306 test:test
-	s1 := fmt.Sprintf("%s:%s@%s:%s", c1.User, c1.Password, c1.Host, strconv.Itoa(c1.Port))
-	s2 := fmt.Sprintf("%s:%s@%s:%s", c2.User, c2.Password, c2.Host, strconv.Itoa(c2.Port))
-	dbs := make([]string, 0)
-	for _, db := range c1.Databases {
-		dbs = append(dbs, fmt.Sprintf("%s:%s", db, db))
-	}
-	e := exec.Command("mysqldiff",
-		"--skip-table-options",
-		"--server1="+s1,
-		"--server2="+s2,
-		"--difftype=differ",
-	)
-	e.Args = append(e.Args, dbs...)
-
-	out, err = e.CombinedOutput()
 	return
 }

@@ -30,7 +30,6 @@ import (
 	"github.com/sapcc/maria-back-me-up/pkg/backup"
 	"github.com/sapcc/maria-back-me-up/pkg/constants"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
-	"github.com/sapcc/maria-back-me-up/pkg/maria"
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
 )
 
@@ -201,7 +200,7 @@ func PostRestore(m *backup.Manager) echo.HandlerFunc {
 		m.Stop()
 		time.Sleep(time.Duration(1 * time.Second))
 
-		s, err := maria.HealthCheck(m.GetConfig().MariaDB)
+		s, err := m.Db.HealthCheck()
 		if err != nil || !s.Ok {
 			sendJSONResponse(c, "Database not healthy. Trying to restore!", "")
 		}

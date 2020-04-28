@@ -20,7 +20,6 @@ import (
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sapcc/maria-back-me-up/pkg/config"
 )
 
 type (
@@ -33,7 +32,6 @@ type (
 	MetricsCollector struct {
 		backup    *prometheus.Desc
 		verify    *prometheus.Desc
-		cfg       config.MariaDB
 		updateSts *updateStatus
 	}
 )
@@ -65,10 +63,9 @@ func (c *MetricsCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 }
 
-func NewMetricsCollector(c config.MariaDB, u *updateStatus) *MetricsCollector {
+func NewMetricsCollector(u *updateStatus) *MetricsCollector {
 	m := MetricsCollector{
 		updateSts: u,
-		cfg:       c,
 		backup: prometheus.NewDesc(
 			"maria_backup_status",
 			"backup status of mariadb",

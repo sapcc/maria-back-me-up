@@ -2,9 +2,11 @@ package verification
 
 import (
 	"context"
+	"reflect"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
+	"github.com/sapcc/maria-back-me-up/pkg/database"
 	"github.com/sapcc/maria-back-me-up/pkg/k8s"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
@@ -27,18 +29,25 @@ func init() {
 func NewManager(c config.Config) (m *Manager, err error) {
 	verifications := make([]*Verification, 0)
 	sts := make([]*Status, 0)
-	k8sm, err := k8s.NewMaria(c.Namespace)
+	k8sm, err := k8s.New(c.Namespace)
 	if err != nil {
 		return
 	}
-
-	sm, err := storage.NewManager(c.StorageService, "", c.BackupService.MariaDB.LogBin)
+	db, err := database.NewDatabase(c, nil)
 	if err != nil {
 		return
 	}
-	svc := sm.GetStorageServices()
+	keys := reflect.ValueOf(c.Storages).MapKeys()
+	svc := make([]string, len(keys))
+	for i := 0; i < len(keys); i++ {
+		svc[i] = keys[i].String()
+	}
 	for _, stg := range svc {
-		v, err := NewVerification(c.ServiceName, stg, c.StorageService, c.VerificationService, c.BackupService.MariaDB, k8sm)
+		sm, err := storage.NewManager(c.Storages, stg, db.GetLogPosition().Format)
+		if err != nil {
+			return m, err
+		}
+		v := NewVerification(c.ServiceName, stg, sm, c.Verification, db, k8sm)
 		if err != nil {
 			return m, err
 		}
