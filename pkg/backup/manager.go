@@ -130,6 +130,7 @@ func (m *Manager) Start() (err error) {
 
 func (m *Manager) Stop() {
 	backupCancel()
+	binlogCancel()
 }
 
 func (m *Manager) startBackup(ctx context.Context) (err error) {
@@ -395,6 +396,10 @@ func sendReadinessRequest(jsonRdy []byte, h string) (err error) {
 	}
 	u.Path = path.Join(u.Path, "/pod/readiness")
 	req, err := http.NewRequest(http.MethodPatch, u.String(), bytes.NewBuffer(jsonRdy))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
 	_, err = client.Do(req)
 	if err != nil {
 		return
