@@ -329,8 +329,8 @@ func (m *Manager) onBinlogRotation(c chan error) {
 	}
 }
 
-func (m *Manager) GetConfig() config.BackupService {
-	return m.cfg.Backup
+func (m *Manager) GetConfig() config.Config {
+	return m.cfg
 }
 
 func (m *Manager) createTableChecksum() (err error) {
@@ -352,17 +352,16 @@ func (m *Manager) createTableChecksum() (err error) {
 
 func (m *Manager) Restore(p string) (err error) {
 	logger.Info("STARTING RESTORE")
-
-	if m.cfg.SideCar != nil || !*m.cfg.SideCar {
+	m.Health.Lock()
+	m.Health.Ready = false
+	m.Health.Unlock()
+	if m.cfg.SideCar != nil && !*m.cfg.SideCar {
 		if err = sendReadinessRequest([]byte(`{"ready":false}`), m.cfg.Database.Host); err != nil {
 			return
 		}
 	}
-	m.Health.Lock()
-	m.Health.Ready = false
-	m.Health.Unlock()
 	defer func() {
-		if m.cfg.SideCar != nil || !*m.cfg.SideCar {
+		if m.cfg.SideCar != nil && !*m.cfg.SideCar {
 			ip, err := m.k8sDB.GetPodIP(fmt.Sprintf("app=%s-mariadb", m.cfg.ServiceName))
 			if err != nil {
 				logger.Error("Cannot set pod databse to ready")
@@ -370,7 +369,6 @@ func (m *Manager) Restore(p string) (err error) {
 			if err = sendReadinessRequest([]byte(`{"ready":true}`), ip); err != nil {
 				logger.Error("Cannot set pod databse to ready")
 			}
-			return
 		}
 		m.Health.Lock()
 		m.Health.Ready = true

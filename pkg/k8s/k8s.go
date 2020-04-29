@@ -61,10 +61,19 @@ func New(ns string) (m *Database, err error) {
 	config, err = rest.InClusterConfig()
 	if err != nil {
 		// use the current context in kubeconfig
-		if home := homeDir(); home != "" {
+		flag.VisitAll(func(f *flag.Flag) {
+			if f.Name == "kubeconfig" {
+				v := f.Value.String()
+				kubeconfig = &v
+				fmt.Println(v)
+			}
+		})
+		if home := homeDir(); home != "" && kubeconfig == nil {
 			kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-		} else {
+		} else if &kubeconfig == nil {
 			kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+		} else {
+
 		}
 		flag.Parse()
 		config, err = clientcmd.BuildConfigFromFlags("", *kubeconfig)

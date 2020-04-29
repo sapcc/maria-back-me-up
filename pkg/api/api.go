@@ -156,7 +156,6 @@ func PostRestore(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		c.Response().WriteHeader(http.StatusOK)
-
 		params, err := c.FormParams()
 		if err != nil {
 			return
@@ -168,7 +167,7 @@ func PostRestore(m *backup.Manager) echo.HandlerFunc {
 		if len(params["storage"]) == 0 {
 			return sendJSONResponse(c, "No Storage selected", "")
 		}
-		if m.GetConfig().OAuth.Enabled {
+		if m.GetConfig().Backup.OAuth.Enabled {
 			session, err := store.Get(c.Request(), sessionCookieName)
 			if err != nil {
 				return sendJSONResponse(c, "Cannot read session cookie", err.Error())
@@ -233,9 +232,15 @@ func GetReadiness(m *backup.Manager) echo.HandlerFunc {
 			m.Health.Lock()
 			defer m.Health.Unlock()
 			if m.Health.Ready {
+				if m.GetConfig().SideCar != nil && !*m.GetConfig().SideCar {
+					return c.String(http.StatusOK, "Backup in progress")
+				}
 				return c.String(http.StatusOK, "READY")
 			}
-			return c.String(http.StatusInternalServerError, "RESTORE IN PROCESS")
+			if m.GetConfig().SideCar != nil && !*m.GetConfig().SideCar {
+				return c.String(http.StatusOK, "Restore in progress")
+			}
+			return c.String(http.StatusInternalServerError, "Restore in progress")
 		}
 		return
 	}

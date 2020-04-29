@@ -54,7 +54,7 @@ func InitAPI(m *backup.Manager, opts config.Options) {
 		//MaxAge:   60,
 		HttpOnly: true,
 	}
-	provider, err := oidc.NewProvider(ctx, m.GetConfig().OAuth.ProviderURL)
+	provider, err := oidc.NewProvider(ctx, m.GetConfig().Backup.OAuth.ProviderURL)
 	if err != nil {
 		return
 	}
@@ -67,7 +67,7 @@ func InitAPI(m *backup.Manager, opts config.Options) {
 		ClientID:     opts.ClientID,
 		ClientSecret: opts.ClientSecret,
 
-		RedirectURL: m.GetConfig().OAuth.RedirectURL + "/auth/callback",
+		RedirectURL: m.GetConfig().Backup.OAuth.RedirectURL + "/auth/callback",
 		Endpoint:    provider.Endpoint(),
 
 		Scopes: []string{oidc.ScopeOpenID, "groups", "email"},
@@ -93,6 +93,20 @@ func Oauth(enabled bool, opts config.Options) echo.MiddlewareFunc {
 				return echo.NewHTTPError(http.StatusUnauthorized, "Error OAuth", err)
 			}
 			return c.Redirect(http.StatusTemporaryRedirect, oauth2Config.AuthCodeURL(state, oauth2.AccessTypeOnline))
+		}
+	}
+}
+
+// Oauth middleware is used to start an OAuth2 flow with the dex server.
+func Restore(m *backup.Manager) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) (err error) {
+			m.Health.Lock()
+			defer m.Health.Unlock()
+			if !m.Health.Ready {
+				return c.String(http.StatusOK, "Restore in progress")
+			}
+			return next(c)
 		}
 	}
 }
