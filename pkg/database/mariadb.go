@@ -17,6 +17,7 @@ import (
 
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/errgroup"
+	"github.com/sapcc/maria-back-me-up/pkg/k8s"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
 	"github.com/siddontang/go-mysql/client"
@@ -30,6 +31,7 @@ type (
 	MariaDB struct {
 		cfg         config.Config
 		storage     *storage.Manager
+		kub         *k8s.Database
 		logPosition LogPosition
 		flushTimer  *time.Timer
 	}
@@ -44,9 +46,14 @@ type (
 )
 
 func NewMariaDB(c config.Config, sm *storage.Manager) (Database, error) {
+	k, err := k8s.New(c.Namespace)
+	if err != nil {
+		return nil, err
+	}
 	return &MariaDB{
 		cfg:     c,
 		storage: sm,
+		kub:     k,
 	}, nil
 }
 
@@ -74,6 +81,15 @@ func (m *MariaDB) GetConfig() config.DatabaseConfig {
 }
 
 func (m *MariaDB) Restore(path string) (err error) {
+	old := m.cfg.Database.Host
+	ip, err := m.kub.GetPodIP(fmt.Sprintf("app=%s-mariadb", m.cfg.ServiceName))
+	if err != nil {
+		return
+	}
+	m.cfg.Database.Host = ip
+	defer func() {
+		m.cfg.Database.Host = old
+	}()
 	if err = m.restartMariaDB(); err != nil {
 		//Cant shutdown database. Lets try restore anyway
 		log.Error(fmt.Errorf("Timed out trying to shutdown database, %s", err.Error()))
@@ -442,7 +458,12 @@ func (m *MariaDB) checkBackupDirExistsAndCreate() (p string, err error) {
 
 func (m *MariaDB) waitMariaDbUp(timeout time.Duration) (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
-		err := pingMariaDB(m.cfg.Database)
+		ip, err := m.kub.GetPodIP(fmt.Sprintf("app=%s-mariadb", m.cfg.ServiceName))
+		if err != nil {
+			return true, err
+		}
+		m.cfg.Database.Host = ip
+		err = pingMariaDB(m.cfg.Database)
 		if err != nil {
 			log.Error("Error Pinging mariadb. error: ", err.Error())
 			return false, nil
