@@ -188,7 +188,7 @@ func (m *Manager) scheduleBackup() {
 }
 
 func (m *Manager) createFullBackup(bpath string) (bp database.LogPosition, err error) {
-	logger.Info("creating mysql dump")
+	logger.Info("creating full backup dump")
 	defer os.RemoveAll(bpath)
 	cf := wait.ConditionFunc(func() (bool, error) {
 		s, err := m.Db.HealthCheck()
@@ -389,7 +389,7 @@ func (m *Manager) Restore(p string) (err error) {
 
 func sendReadinessRequest(jsonRdy []byte, h string) (err error) {
 	client := &http.Client{}
-	u, err := url.Parse(h)
+	u, err := url.Parse(fmt.Sprintf("http://%s:8080", h))
 	if err != nil {
 		return
 	}
