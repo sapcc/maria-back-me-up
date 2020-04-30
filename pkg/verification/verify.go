@@ -162,7 +162,13 @@ func (v *Verification) verifyBackup(restoreFolder string) {
 		return
 	}
 
-	if err = v.db.VerifyRestore(restoreFolder); err != nil {
+	db, err := database.NewDatabase(config.Config{Database: verifyDbcfg}, nil)
+	if err != nil {
+		v.status.SetVerifyRestore(0, fmt.Errorf("error restoring backup: %s", err.Error()))
+		return
+	}
+
+	if err = db.VerifyRestore(restoreFolder); err != nil {
 		v.status.SetVerifyRestore(0, fmt.Errorf("error restoring backup: %s", err.Error()))
 		return
 	}
