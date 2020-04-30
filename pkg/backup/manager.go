@@ -92,7 +92,7 @@ func NewManager(c config.Config) (m *Manager, err error) {
 		fullBackup: make(map[string]int, 0),
 		incBackup:  make(map[string]int, 0),
 	}
-	for _, v := range s.GetStorageServices() {
+	for _, v := range s.GetStorageServicesKeys() {
 		us.incBackup[v] = 0
 		us.fullBackup[v] = 0
 	}
@@ -171,7 +171,7 @@ func (m *Manager) scheduleBackup() {
 		}
 		return
 	}
-	m.setUpdateStatus(m.updateSts.fullBackup, m.Storage.GetStorageServices(), true)
+	m.setUpdateStatus(m.updateSts.fullBackup, m.Storage.GetStorageServicesKeys(), true)
 	ctxBin := context.Background()
 	ctxBin, binlogCancel = context.WithCancel(ctxBin)
 	go m.onBinlogRotation(ch)
@@ -181,7 +181,7 @@ func (m *Manager) scheduleBackup() {
 	})
 	go func() {
 		if err = eg.Wait(); err != nil {
-			m.setUpdateStatus(m.updateSts.incBackup, m.Storage.GetStorageServices(), false)
+			m.setUpdateStatus(m.updateSts.incBackup, m.Storage.GetStorageServicesKeys(), false)
 			logger.Error(fmt.Errorf("error saving log files: %s", err.Error()))
 			m.errCh <- err
 		}
@@ -227,7 +227,7 @@ func (m *Manager) handleFullBackupError(err error) error {
 	var missingErr *dberror.DatabaseMissingError
 	var connErr *dberror.DatabaseConnectionError
 	stsError := make([]string, 0)
-	svc := m.Storage.GetStorageServices()
+	svc := m.Storage.GetStorageServicesKeys()
 	if errors.As(err, &missingErr) && m.cfg.Backup.EnableInitRestore || errors.As(err, &connErr) && m.cfg.Backup.EnableRestoreOnDBFailure {
 		m.setUpdateStatus(m.updateSts.fullBackup, stsError, false)
 		var eb *storage.NoBackupError
@@ -282,7 +282,7 @@ func (m *Manager) setUpdateStatus(field map[string]int, storages []string, up bo
 		}
 		return 0
 	}
-	for _, s := range m.Storage.GetStorageServices() {
+	for _, s := range m.Storage.GetStorageServicesKeys() {
 		if find(s) {
 			field[s] = upFnc(up)
 		} else {
@@ -299,14 +299,14 @@ func (m *Manager) onBinlogRotation(c chan error) {
 			break
 		}
 		if err == nil {
-			m.setUpdateStatus(m.updateSts.incBackup, m.Storage.GetStorageServices(), true)
+			m.setUpdateStatus(m.updateSts.incBackup, m.Storage.GetStorageServicesKeys(), true)
 			continue
 		}
 		stsError := make([]string, 0)
 		merr, ok := err.(*multierror.Error)
 		if merr != nil {
 			if !ok {
-				m.setUpdateStatus(m.updateSts.incBackup, m.Storage.GetStorageServices(), false)
+				m.setUpdateStatus(m.updateSts.incBackup, m.Storage.GetStorageServicesKeys(), false)
 				logger.Errorf("unknown error: %s", merr.Error())
 			}
 			if len(merr.Errors) > 0 {
@@ -319,7 +319,7 @@ func (m *Manager) onBinlogRotation(c chan error) {
 						log.Error(merr.Errors[i])
 					}
 					// means all storage services returned an error.
-					if i == len(m.Storage.GetStorageServices())-1 {
+					if i == len(m.Storage.GetStorageServicesKeys())-1 {
 						m.errCh <- err
 					}
 				}

@@ -112,7 +112,7 @@ func GetRoot(m *backup.Manager) echo.HandlerFunc {
 		if err != nil {
 			return fmt.Errorf("Error parsing index: %s", err.Error())
 		}
-		s := m.Storage.GetStorageServices()
+		s := m.Storage.GetStorageServicesKeys()
 		return t.Execute(c.Response(), s)
 	}
 }

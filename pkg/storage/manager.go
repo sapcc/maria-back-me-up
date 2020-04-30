@@ -51,13 +51,17 @@ func NewManager(c config.StorageService, serviceName, binLog string) (m *Manager
 	return
 }
 
-func (m *Manager) GetStorageServices() (svc []string) {
+func (m *Manager) GetStorageServicesKeys() (svc []string) {
 	keys := reflect.ValueOf(m.storageServices).MapKeys()
 	svc = make([]string, len(keys))
 	for i := 0; i < len(keys); i++ {
 		svc[i] = keys[i].String()
 	}
 	return
+}
+
+func (m *Manager) GetStorageServices() map[string]Storage {
+	return m.storageServices
 }
 
 func (m *Manager) WriteStreamAll(name, mimeType string, body io.Reader) (errs error) {

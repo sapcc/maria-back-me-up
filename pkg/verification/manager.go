@@ -2,7 +2,6 @@ package verification
 
 import (
 	"context"
-	"reflect"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
@@ -37,17 +36,14 @@ func NewManager(c config.Config) (m *Manager, err error) {
 	if err != nil {
 		return
 	}
-	keys := reflect.ValueOf(c.Storages).MapKeys()
-	svc := make([]string, len(keys))
-	for i := 0; i < len(keys); i++ {
-		svc[i] = keys[i].String()
+
+	stgM, err := storage.NewManager(c.Storages, c.ServiceName, db.GetLogPosition().Format)
+	if err != nil {
+		return
 	}
-	for _, stg := range svc {
-		sm, err := storage.NewManager(c.Storages, stg, db.GetLogPosition().Format)
-		if err != nil {
-			return m, err
-		}
-		v := NewVerification(c.ServiceName, stg, sm, c.Verification, db, k8sm)
+
+	for _, st := range stgM.GetStorageServicesKeys() {
+		v := NewVerification(c.ServiceName, st, stgM, c.Verification, db, k8sm)
 		if err != nil {
 			return m, err
 		}
