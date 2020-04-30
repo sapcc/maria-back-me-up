@@ -162,7 +162,7 @@ func (v *Verification) verifyBackup(restoreFolder string) {
 		return
 	}
 
-	db, err := database.NewDatabase(config.Config{Database: verifyDbcfg}, nil)
+	db, err := database.NewDatabase(config.Config{Database: verifyDbcfg, SideCar: &[]bool{false}[0]}, nil)
 	if err != nil {
 		v.status.SetVerifyRestore(0, fmt.Errorf("error restoring backup: %s", err.Error()))
 		return
