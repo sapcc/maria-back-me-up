@@ -94,7 +94,7 @@ func (m *MariaDB) Restore(path string) (err error) {
 		//Cant shutdown database. Lets try restore anyway
 		log.Error(fmt.Errorf("Timed out trying to shutdown database, %s", err.Error()))
 	}
-	err = m.waitMariaDbUp(5 * time.Minute)
+	err = m.waitMariaDbUp(5*time.Minute, true)
 	if err != nil {
 		log.Error(fmt.Errorf("Timed out waiting for mariadb to boot. Delete data dir"))
 		m.deleteMariaDBDatabases()
@@ -102,7 +102,7 @@ func (m *MariaDB) Restore(path string) (err error) {
 		m.dropMariaDBDatabases()
 	}
 
-	if err = m.waitMariaDbUp(1 * time.Minute); err != nil {
+	if err = m.waitMariaDbUp(1*time.Minute, true); err != nil {
 		return fmt.Errorf("Timed out waiting for mariadb to boot. Cant perform restore")
 	}
 
@@ -121,7 +121,7 @@ func (m *MariaDB) Restore(path string) (err error) {
 }
 
 func (m *MariaDB) VerifyRestore(path string) (err error) {
-	if err = m.waitMariaDbUp(5 * time.Minute); err != nil {
+	if err = m.waitMariaDbUp(5*time.Minute, false); err != nil {
 		return fmt.Errorf("Timed out waiting for verfiy mariadb to boot. Cant perform verification")
 	}
 	if err = m.restoreDump(path); err != nil {
@@ -456,13 +456,15 @@ func (m *MariaDB) checkBackupDirExistsAndCreate() (p string, err error) {
 	return
 }
 
-func (m *MariaDB) waitMariaDbUp(timeout time.Duration) (err error) {
+func (m *MariaDB) waitMariaDbUp(timeout time.Duration, withIP bool) (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
-		ip, err := m.kub.GetPodIP(fmt.Sprintf("app=%s-mariadb", m.cfg.ServiceName))
-		if err != nil {
-			return true, err
+		if withIP {
+			ip, err := m.kub.GetPodIP(fmt.Sprintf("app=%s-mariadb", m.cfg.ServiceName))
+			if err != nil {
+				return true, err
+			}
+			m.cfg.Database.Host = ip
 		}
-		m.cfg.Database.Host = ip
 		err = pingMariaDB(m.cfg.Database)
 		if err != nil {
 			log.Error("Error Pinging mariadb. error: ", err.Error())
