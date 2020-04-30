@@ -139,6 +139,7 @@ func (v *Verification) verifyBackup(restoreFolder string) {
 	dbCfg := v.db.GetConfig()
 	verifyDbcfg := config.DatabaseConfig{
 		Host:          fmt.Sprintf("%s-%s-%s-verify", v.storageServiceName, v.serviceName, podName),
+		Type:          dbCfg.Type,
 		Port:          3306,
 		User:          "root",
 		Password:      "verify_passw0rd",
