@@ -148,8 +148,8 @@ func (v *Verification) verifyBackup(restoreFolder string) {
 		VerifyTables:  dbCfg.VerifyTables,
 	}
 
-	dp, err := v.k8sDb.CreateDatabaseDeployment(dbCfg.Host, dbCfg)
-	svc, err := v.k8sDb.CreateDatabaseService(dbCfg.Host, dbCfg)
+	dp, err := v.k8sDb.CreateDatabaseDeployment(verifyDbcfg.Host, verifyDbcfg)
+	svc, err := v.k8sDb.CreateDatabaseService(verifyDbcfg.Host, verifyDbcfg)
 	defer func() {
 		if err = v.k8sDb.DeleteDatabaseResources(dp, svc); err != nil {
 			v.logger.Error(fmt.Errorf("backup verify error: error deleting mariadb resources: %s", err.Error()))
