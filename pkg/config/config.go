@@ -30,7 +30,7 @@ type Config struct {
 	Backup       BackupService       `yaml:"backup"`
 	Storages     StorageService      `yaml:"storages"`
 	Database     DatabaseConfig      `yaml:"database"`
-	Verification VerificationService `yaml:"verification_services"`
+	Verification VerificationService `yaml:"verification"`
 }
 
 type BackupService struct {
