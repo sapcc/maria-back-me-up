@@ -34,7 +34,7 @@ type Database interface {
 	Restore(path string) (err error)
 	VerifyRestore(path string) (err error)
 	HealthCheck() (status Status, err error)
-	GetCheckSumForTable(verifyTables []string) (cs Checksum, err error)
+	GetCheckSumForTable(verifyTables []string, withIP bool) (cs Checksum, err error)
 	GetDatabaseDiff(c1, c2 config.DatabaseConfig) (out []byte, err error)
 }
 

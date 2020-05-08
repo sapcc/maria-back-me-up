@@ -334,7 +334,7 @@ func (m *Manager) GetConfig() config.Config {
 }
 
 func (m *Manager) createTableChecksum() (err error) {
-	cs, err := m.Db.GetCheckSumForTable(m.cfg.Database.VerifyTables)
+	cs, err := m.Db.GetCheckSumForTable(m.cfg.Database.VerifyTables, false)
 	if err != nil {
 		return
 	}

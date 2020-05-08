@@ -135,10 +135,10 @@ func (m *MariaDB) VerifyRestore(path string) (err error) {
 	return
 }
 
-func (m *MariaDB) GetCheckSumForTable(verifyTables []string) (cs Checksum, err error) {
+func (m *MariaDB) GetCheckSumForTable(verifyTables []string, withIP bool) (cs Checksum, err error) {
 	cs.TablesChecksum = make(map[string]int64)
 	cf := wait.ConditionFunc(func() (bool, error) {
-		err = pingMariaDB(m.cfg.Database)
+		err = m.pingMariaDB(withIP)
 		if err != nil {
 			return false, nil
 		}
@@ -458,14 +458,7 @@ func (m *MariaDB) checkBackupDirExistsAndCreate() (p string, err error) {
 
 func (m *MariaDB) waitMariaDbUp(timeout time.Duration, withIP bool) (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
-		if withIP {
-			ip, err := m.kub.GetPodIP(fmt.Sprintf("app=%s-mariadb", m.cfg.ServiceName))
-			if err != nil {
-				return true, err
-			}
-			m.cfg.Database.Host = ip
-		}
-		err = pingMariaDB(m.cfg.Database)
+		err = m.pingMariaDB(withIP)
 		if err != nil {
 			log.Error("Error Pinging mariadb. error: ", err.Error())
 			return false, nil
@@ -501,6 +494,27 @@ func (m *MariaDB) deleteMariaDBDatabases() (err error) {
 	})
 	if m.cfg.Database.DataDir != "" {
 		return wait.Poll(1*time.Second, 30*time.Second, cf)
+	}
+	return
+}
+
+func (m *MariaDB) pingMariaDB(withIP bool) (err error) {
+	var out []byte
+	if withIP {
+		ip, err := m.kub.GetPodIP(fmt.Sprintf("app=%s-mariadb", m.cfg.ServiceName))
+		if err != nil {
+			return err
+		}
+		m.cfg.Database.Host = ip
+	}
+	if out, err = exec.Command("mysqladmin",
+		"status",
+		"-u"+m.cfg.Database.User,
+		"-p"+m.cfg.Database.Password,
+		"-h"+m.cfg.Database.Host,
+		"-P"+strconv.Itoa(m.cfg.Database.Port),
+	).CombinedOutput(); err != nil {
+		return fmt.Errorf("mysqladmin status error: %s", string(out))
 	}
 	return
 }

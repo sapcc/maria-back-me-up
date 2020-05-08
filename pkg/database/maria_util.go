@@ -20,12 +20,10 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	dberror "github.com/sapcc/maria-back-me-up/pkg/error"
 	"github.com/siddontang/go-mysql/client"
-	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 func mariaHealthCheck(c config.DatabaseConfig) (status Status, err error) {
@@ -67,20 +65,6 @@ func mariaHealthCheck(c config.DatabaseConfig) (status Status, err error) {
 	return
 }
 
-func pingMariaDB(c config.DatabaseConfig) (err error) {
-	var out []byte
-	if out, err = exec.Command("mysqladmin",
-		"status",
-		"-u"+c.User,
-		"-p"+c.Password,
-		"-h"+c.Host,
-		"-P"+strconv.Itoa(c.Port),
-	).CombinedOutput(); err != nil {
-		return fmt.Errorf("mysqladmin status error: %s", string(out))
-	}
-	return
-}
-
 func purgeBinlogsTo(c config.DatabaseConfig, log string) (err error) {
 	conn, err := client.Connect(fmt.Sprintf("%s:%s", c.Host, strconv.Itoa(c.Port)), c.User, c.Password, "")
 	if err = conn.Ping(); err != nil {
@@ -91,47 +75,5 @@ func purgeBinlogsTo(c config.DatabaseConfig, log string) (err error) {
 	if err != nil {
 		return
 	}
-	return
-}
-
-func getMariaCheckSumForTable(c config.DatabaseConfig, verifyTables []string) (cs Checksum, err error) {
-	cs.TablesChecksum = make(map[string]int64)
-	cf := wait.ConditionFunc(func() (bool, error) {
-		err = pingMariaDB(c)
-		if err != nil {
-			return false, nil
-		}
-		return true, nil
-	})
-	if err = wait.Poll(5*time.Second, 1*time.Minute, cf); err != nil {
-		return
-	}
-
-	conn, err := client.Connect(fmt.Sprintf("%s:%s", c.Host, strconv.Itoa(c.Port)), c.User, c.Password, "")
-	if err != nil {
-		return
-	}
-	if err = conn.Ping(); err != nil {
-		return
-	}
-
-	defer conn.Close()
-
-	rs, err := conn.Execute(fmt.Sprintf("CHECKSUM TABLE %s", strings.Join(verifyTables, ", ")))
-	if err != nil {
-		return
-	}
-
-	for r := 0; r < rs.RowNumber(); r++ {
-		var tn string
-		var s int64
-		tn, err = rs.GetStringByName(r, "Table")
-		s, err = rs.GetIntByName(r, "Checksum")
-		if err != nil {
-			return
-		}
-		cs.TablesChecksum[tn] = s
-	}
-
 	return
 }

@@ -43,7 +43,7 @@ func (p *Postgres) VerifyRestore(path string) (err error) {
 func (p *Postgres) HealthCheck() (status Status, err error) {
 	return
 }
-func (p *Postgres) GetCheckSumForTable(verifyTables []string) (cs Checksum, err error) {
+func (p *Postgres) GetCheckSumForTable(verifyTables []string, withIP bool) (cs Checksum, err error) {
 	return
 }
 func (p *Postgres) GetDatabaseDiff(c1, c2 config.DatabaseConfig) (out []byte, err error) {

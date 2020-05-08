@@ -203,7 +203,7 @@ func (v *Verification) verifyChecksums(dbcfg config.DatabaseConfig, restorePath 
 		return fmt.Errorf("no checksums found")
 	}
 
-	rs, err := db.GetCheckSumForTable(v.db.GetConfig().VerifyTables)
+	rs, err := db.GetCheckSumForTable(v.db.GetConfig().VerifyTables, true)
 	if err != nil {
 		return fmt.Errorf("error verifying backup: %s", err.Error())
 	}
