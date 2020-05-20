@@ -144,7 +144,7 @@ func (m *MariaDB) GetCheckSumForTable(verifyTables []string, withIP bool) (cs Ch
 		}
 		return true, nil
 	})
-	if err = wait.Poll(5*time.Second, 1*time.Minute, cf); err != nil {
+	if err = wait.Poll(5*time.Second, 20*time.Second, cf); err != nil {
 		return
 	}
 
@@ -252,7 +252,7 @@ func (m *MariaDB) StartIncBackup(ctx context.Context, mp LogPosition, dir string
 		Port:                 uint16(m.cfg.Database.Port),
 		User:                 m.cfg.Database.User,
 		Password:             m.cfg.Database.Password,
-		MaxReconnectAttempts: 5,
+		MaxReconnectAttempts: 10,
 	}
 	syncer := replication.NewBinlogSyncer(cfg)
 	binlogReader, binlogWriter := io.Pipe()
@@ -276,6 +276,7 @@ func (m *MariaDB) StartIncBackup(ctx context.Context, mp LogPosition, dir string
 	for {
 		ev, inerr := streamer.GetEvent(ctx)
 		if inerr != nil {
+			fmt.Println("-------", inerr)
 			if inerr == ctx.Err() {
 				return nil
 			}

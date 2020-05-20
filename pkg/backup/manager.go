@@ -123,6 +123,7 @@ func NewManager(c config.Config) (m *Manager, err error) {
 }
 
 func (m *Manager) Start() (err error) {
+	go m.readErrorChannel()
 	ctx := context.Background()
 	ctx, backupCancel = context.WithCancel(ctx)
 	return m.startBackup(ctx)
@@ -130,7 +131,9 @@ func (m *Manager) Start() (err error) {
 
 func (m *Manager) Stop() {
 	backupCancel()
-	binlogCancel()
+	if binlogCancel != nil {
+		binlogCancel()
+	}
 }
 
 func (m *Manager) startBackup(ctx context.Context) (err error) {
@@ -144,6 +147,7 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 	cronBackup.Start()
 	select {
 	case <-ctx.Done():
+		logger.Info("stopping backup cron")
 		cronBackup.Stop()
 		return
 	}
@@ -151,7 +155,9 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 
 func (m *Manager) scheduleBackup() {
 	logger.Debug("starting full backup cycle")
-	m.createTableChecksum()
+	if err := m.createTableChecksum(); err != nil {
+		logger.Error("cannot create checksum", err)
+	}
 	m.lastBackupTime = ""
 	// Stop binlog
 	if binlogCancel != nil {
@@ -166,8 +172,9 @@ func (m *Manager) scheduleBackup() {
 	if err != nil {
 		logger.Error(fmt.Sprintf("error creating full backup: %s", err.Error()))
 		if err = m.handleFullBackupError(err); err != nil {
+			m.Stop()
 			time.Sleep(time.Duration(2) * time.Minute)
-			return
+			m.Start()
 		}
 		return
 	}
@@ -182,7 +189,6 @@ func (m *Manager) scheduleBackup() {
 	go func() {
 		if err = eg.Wait(); err != nil {
 			m.setUpdateStatus(m.updateSts.incBackup, m.Storage.GetStorageServicesKeys(), false)
-			logger.Error(fmt.Errorf("error saving log files: %s", err.Error()))
 			m.errCh <- err
 		}
 	}()
@@ -229,7 +235,7 @@ func (m *Manager) handleFullBackupError(err error) error {
 	stsError := make([]string, 0)
 	svc := m.Storage.GetStorageServicesKeys()
 	if errors.As(err, &missingErr) && m.cfg.Backup.EnableInitRestore || errors.As(err, &connErr) && m.cfg.Backup.EnableRestoreOnDBFailure {
-		m.setUpdateStatus(m.updateSts.fullBackup, stsError, false)
+		m.setUpdateStatus(m.updateSts.fullBackup, svc, false)
 		var eb *storage.NoBackupError
 		bf, errb := m.Storage.DownloadLatestBackup("")
 		if errors.As(errb, &eb) {
@@ -249,7 +255,7 @@ func (m *Manager) handleFullBackupError(err error) error {
 	}
 
 	if len(svc) == len(merr.Errors) {
-		m.setUpdateStatus(m.updateSts.fullBackup, stsError, false)
+		m.setUpdateStatus(m.updateSts.fullBackup, svc, false)
 		return fmt.Errorf("cannot write to any storage: %s", err.Error())
 	}
 	for _, e := range merr.Errors {
@@ -384,6 +390,26 @@ func (m *Manager) Restore(p string) (err error) {
 	os.RemoveAll(p)
 
 	return
+}
+
+func (m *Manager) readErrorChannel() {
+	for {
+		err, ok := <-m.errCh
+		if !ok {
+			logger.Debug("error channel closed")
+			break
+		}
+		fmt.Println("ERROR CHANNEL", err, ok)
+		if err == nil {
+			continue
+		}
+		if err != nil {
+			logger.Error(fmt.Errorf("error reading log files: %s", err.Error()))
+			m.Stop()
+			time.Sleep(time.Duration(2) * time.Minute)
+			m.Start()
+		}
+	}
 }
 
 func sendReadinessRequest(jsonRdy []byte, h string) (err error) {
