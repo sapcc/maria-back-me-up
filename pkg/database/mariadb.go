@@ -61,12 +61,12 @@ func (m *MariaDB) CreateFullBackup(path string) (bp LogPosition, err error) {
 	if m.cfg.Database.DumpTool == nil || *m.cfg.Database.DumpTool == "mysqldump" {
 		bp, err = m.createMysqlDump(path)
 		if err != nil {
-			return bp, fmt.Errorf("error creating mysqlDump: %w", err)
+			return bp, err
 		}
 	} else {
 		bp, err = m.createMyDump(path)
 		if err != nil {
-			return bp, fmt.Errorf("error creating mysqlDump: %w", err)
+			return bp, err
 		}
 	}
 	return
@@ -276,7 +276,6 @@ func (m *MariaDB) StartIncBackup(ctx context.Context, mp LogPosition, dir string
 	for {
 		ev, inerr := streamer.GetEvent(ctx)
 		if inerr != nil {
-			fmt.Println("-------", inerr)
 			if inerr == ctx.Err() {
 				return nil
 			}

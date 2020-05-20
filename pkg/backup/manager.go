@@ -94,7 +94,7 @@ func NewManager(c config.Config) (m *Manager, err error) {
 	}
 	for _, v := range s.GetStorageServicesKeys() {
 		us.incBackup[v] = 0
-		us.fullBackup[v] = 0
+		us.fullBackup[v] = 1
 	}
 
 	mr, err := k8s.New(c.Namespace)
@@ -171,14 +171,12 @@ func (m *Manager) scheduleBackup() {
 	mp, err := m.createFullBackup(bpath)
 	if err != nil {
 		logger.Error(fmt.Sprintf("error creating full backup: %s", err.Error()))
-		if err = m.handleFullBackupError(err); err != nil {
+		if err = m.handleBackupError(err, m.updateSts.fullBackup); err != nil {
 			m.Stop()
 			time.Sleep(time.Duration(2) * time.Minute)
 			m.Start()
 		}
-		return
 	}
-	m.setUpdateStatus(m.updateSts.fullBackup, m.Storage.GetStorageServicesKeys(), true)
 	ctxBin := context.Background()
 	ctxBin, binlogCancel = context.WithCancel(ctxBin)
 	go m.onBinlogRotation(ch)
@@ -188,6 +186,7 @@ func (m *Manager) scheduleBackup() {
 	})
 	go func() {
 		if err = eg.Wait(); err != nil {
+			m.handleBackupError(err, m.updateSts.incBackup)
 			m.setUpdateStatus(m.updateSts.incBackup, m.Storage.GetStorageServicesKeys(), false)
 			m.errCh <- err
 		}
@@ -222,20 +221,20 @@ func (m *Manager) createFullBackup(bpath string) (bp database.LogPosition, err e
 	bp, err = m.Db.CreateFullBackup(bpath)
 
 	if err != nil {
-		return bp, fmt.Errorf("error cannot read binlog metadata: %s", err.Error())
+		return bp, err
 	}
 
 	logger.Debug("finished full backup")
 	return
 }
 
-func (m *Manager) handleFullBackupError(err error) error {
+func (m *Manager) handleBackupError(err error, backup map[string]int) error {
 	var missingErr *dberror.DatabaseMissingError
 	var connErr *dberror.DatabaseConnectionError
 	stsError := make([]string, 0)
 	svc := m.Storage.GetStorageServicesKeys()
 	if errors.As(err, &missingErr) && m.cfg.Backup.EnableInitRestore || errors.As(err, &connErr) && m.cfg.Backup.EnableRestoreOnDBFailure {
-		m.setUpdateStatus(m.updateSts.fullBackup, svc, false)
+		m.setUpdateStatus(backup, svc, false)
 		var eb *storage.NoBackupError
 		bf, errb := m.Storage.DownloadLatestBackup("")
 		if errors.As(errb, &eb) {
@@ -255,7 +254,7 @@ func (m *Manager) handleFullBackupError(err error) error {
 	}
 
 	if len(svc) == len(merr.Errors) {
-		m.setUpdateStatus(m.updateSts.fullBackup, svc, false)
+		m.setUpdateStatus(backup, svc, false)
 		return fmt.Errorf("cannot write to any storage: %s", err.Error())
 	}
 	for _, e := range merr.Errors {
@@ -265,7 +264,7 @@ func (m *Manager) handleFullBackupError(err error) error {
 		}
 		stsError = append(stsError, err.Storage)
 	}
-	m.setUpdateStatus(m.updateSts.fullBackup, stsError, false)
+	m.setUpdateStatus(backup, stsError, false)
 
 	return nil
 }
