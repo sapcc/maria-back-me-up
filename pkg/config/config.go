@@ -24,37 +24,38 @@ import (
 )
 
 type Config struct {
-	ServiceName         string              `yaml:"service_name"`
-	SideCar             *bool               `yaml:"side_car"`
-	Namespace           string              `yaml:"namespace"`
-	StorageService      StorageService      `yaml:"storage_services"`
-	BackupService       BackupService       `yaml:"backup_service"`
-	VerificationService VerificationService `yaml:"verification_services"`
+	ServiceName  string              `yaml:"service_name"`
+	SideCar      *bool               `yaml:"sidecar"`
+	Namespace    string              `yaml:"namespace"`
+	Backup       BackupService       `yaml:"backup"`
+	Storages     StorageService      `yaml:"storages"`
+	Database     DatabaseConfig      `yaml:"database"`
+	Verification VerificationService `yaml:"verification"`
 }
 
 type BackupService struct {
-	Version                    string  `yaml:"version"`
-	MariaDB                    MariaDB `yaml:"maria_db"`
-	OAuth                      OAuth   `yaml:"oauth"`
-	BackupDir                  string  `yaml:"backup_dir"`
-	FullBackupCronSchedule     string  `yaml:"full_backup_cron_schedule"`
-	IncrementalBackupInMinutes int     `yaml:"incremental_backup_in_minutes"`
-	EnableInitRestore          bool    `yaml:"enable_init_restore"`
-	EnableRestoreOnDBFailure   bool    `yaml:"enable_restore_on_db_failure"`
-	DumpTool                   *string `yaml:"full_dump_tool"`
+	Version                    string `yaml:"version"`
+	OAuth                      OAuth  `yaml:"oauth"`
+	BackupDir                  string `yaml:"backup_dir"`
+	FullBackupCronSchedule     string `yaml:"full_backup_cron_schedule"`
+	IncrementalBackupInMinutes int    `yaml:"incremental_backup_in_minutes"`
+	EnableInitRestore          bool   `yaml:"enable_init_restore"`
+	EnableRestoreOnDBFailure   bool   `yaml:"enable_restore_on_db_failure"`
 }
 
-type MariaDB struct {
-	Flavor       string   `yaml:"flavor"`
-	LogBin       string   `yaml:"log_bin"`
-	Version      string   `yaml:"version"`
-	Host         string   `yaml:"host"`
-	Port         int      `yaml:"port"`
-	User         string   `yaml:"user"`
-	Password     string   `yaml:"password"`
-	DataDir      string   `yaml:"data_dir"`
-	Databases    []string `yaml:"databases"`
-	VerifyTables []string `yaml:"verify_tables"`
+type DatabaseConfig struct {
+	Type          string   `yaml:"type"`
+	DumpTool      *string  `yaml:"full_dump_tool"`
+	Flavor        string   `yaml:"flavor"`
+	LogNameFormat string   `yaml:"log_name_format"`
+	Version       string   `yaml:"version"`
+	Host          string   `yaml:"host"`
+	Port          int      `yaml:"port"`
+	User          string   `yaml:"user"`
+	Password      string   `yaml:"password"`
+	DataDir       string   `yaml:"data_dir"`
+	Databases     []string `yaml:"databases"`
+	VerifyTables  []string `yaml:"verify_tables"`
 }
 
 type StorageService struct {

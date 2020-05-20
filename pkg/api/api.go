@@ -30,7 +30,6 @@ import (
 	"github.com/sapcc/maria-back-me-up/pkg/backup"
 	"github.com/sapcc/maria-back-me-up/pkg/constants"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
-	"github.com/sapcc/maria-back-me-up/pkg/maria"
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
 )
 
@@ -113,7 +112,7 @@ func GetRoot(m *backup.Manager) echo.HandlerFunc {
 		if err != nil {
 			return fmt.Errorf("Error parsing index: %s", err.Error())
 		}
-		s := m.Storage.GetStorageServices()
+		s := m.Storage.GetStorageServicesKeys()
 		return t.Execute(c.Response(), s)
 	}
 }
@@ -157,7 +156,6 @@ func PostRestore(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		c.Response().WriteHeader(http.StatusOK)
-
 		params, err := c.FormParams()
 		if err != nil {
 			return
@@ -169,7 +167,7 @@ func PostRestore(m *backup.Manager) echo.HandlerFunc {
 		if len(params["storage"]) == 0 {
 			return sendJSONResponse(c, "No Storage selected", "")
 		}
-		if m.GetConfig().OAuth.Enabled {
+		if m.GetConfig().Backup.OAuth.Enabled {
 			session, err := store.Get(c.Request(), sessionCookieName)
 			if err != nil {
 				return sendJSONResponse(c, "Cannot read session cookie", err.Error())
@@ -201,7 +199,7 @@ func PostRestore(m *backup.Manager) echo.HandlerFunc {
 		m.Stop()
 		time.Sleep(time.Duration(1 * time.Second))
 
-		s, err := maria.HealthCheck(m.GetConfig().MariaDB)
+		s, err := m.Db.HealthCheck()
 		if err != nil || !s.Ok {
 			sendJSONResponse(c, "Database not healthy. Trying to restore!", "")
 		}
@@ -234,9 +232,15 @@ func GetReadiness(m *backup.Manager) echo.HandlerFunc {
 			m.Health.Lock()
 			defer m.Health.Unlock()
 			if m.Health.Ready {
+				if m.GetConfig().SideCar != nil && !*m.GetConfig().SideCar {
+					return c.String(http.StatusOK, "Backup in progress")
+				}
 				return c.String(http.StatusOK, "READY")
 			}
-			return c.String(http.StatusInternalServerError, "RESTORE IN PROCESS")
+			if m.GetConfig().SideCar != nil && !*m.GetConfig().SideCar {
+				return c.String(http.StatusOK, "Restore in progress")
+			}
+			return c.String(http.StatusInternalServerError, "Restore in progress")
 		}
 		return
 	}

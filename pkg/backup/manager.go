@@ -21,6 +21,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"sync"
@@ -30,11 +32,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	cron "github.com/robfig/cron/v3"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
+	"github.com/sapcc/maria-back-me-up/pkg/database"
+	dberror "github.com/sapcc/maria-back-me-up/pkg/error"
 	"github.com/sapcc/maria-back-me-up/pkg/k8s"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
-	"github.com/sapcc/maria-back-me-up/pkg/maria"
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
-	"github.com/siddontang/go-mysql/mysql"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"gopkg.in/yaml.v2"
@@ -59,10 +61,9 @@ type (
 		Checksums map[string]int64 `yaml:"checksums"`
 	}
 	Manager struct {
-		cfg             config.BackupService
-		backup          *Backup
-		maria           *k8s.Maria
-		restore         *Restore
+		cfg             config.Config
+		Db              database.Database
+		k8sDB           *k8s.Database
 		Storage         *storage.Manager
 		updateSts       *updateStatus
 		Health          *Health
@@ -78,44 +79,40 @@ func init() {
 }
 
 func NewManager(c config.Config) (m *Manager, err error) {
-	s, err := storage.NewManager(c.StorageService, c.ServiceName, c.BackupService.MariaDB.LogBin)
+	s, err := storage.NewManager(c.Storages, c.ServiceName, c.Database.LogNameFormat)
 	if err != nil {
 		return
 	}
-	if c.SideCar == nil || *c.SideCar {
-		c.BackupService.MariaDB.Host = "127.0.0.1"
-	}
 
+	db, err := database.NewDatabase(c, s)
+	if err != nil {
+		return
+	}
 	us := updateStatus{
 		fullBackup: make(map[string]int, 0),
 		incBackup:  make(map[string]int, 0),
 	}
-	for _, v := range s.GetStorageServices() {
+	for _, v := range s.GetStorageServicesKeys() {
 		us.incBackup[v] = 0
-		us.fullBackup[v] = 0
-	}
-	b, err := NewBackup(c, s)
-	if err != nil {
-		return
+		us.fullBackup[v] = 1
 	}
 
-	mr, err := k8s.NewMaria(c.Namespace)
+	mr, err := k8s.New(c.Namespace)
 	if err != nil {
 		return
 	}
 
 	p := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
-	cronSch, err := p.Parse(c.BackupService.FullBackupCronSchedule)
+	cronSch, err := p.Parse(c.Backup.FullBackupCronSchedule)
 	if err != nil {
 		return
 	}
 
-	prometheus.MustRegister(NewMetricsCollector(c.BackupService.MariaDB, &us))
+	prometheus.MustRegister(NewMetricsCollector(&us))
 	return &Manager{
-		cfg:             c.BackupService,
-		backup:          b,
-		maria:           mr,
-		restore:         NewRestore(c.BackupService),
+		Db:              db,
+		cfg:             c,
+		k8sDB:           mr,
 		Storage:         s,
 		updateSts:       &us,
 		Health:          &Health{Ready: true},
@@ -126,6 +123,7 @@ func NewManager(c config.Config) (m *Manager, err error) {
 }
 
 func (m *Manager) Start() (err error) {
+	go m.readErrorChannel()
 	ctx := context.Background()
 	ctx, backupCancel = context.WithCancel(ctx)
 	return m.startBackup(ctx)
@@ -133,19 +131,23 @@ func (m *Manager) Start() (err error) {
 
 func (m *Manager) Stop() {
 	backupCancel()
+	if binlogCancel != nil {
+		binlogCancel()
+	}
 }
 
 func (m *Manager) startBackup(ctx context.Context) (err error) {
-	_, err = checkBackupDirExistsAndCreate(m.cfg.BackupDir)
+	_, err = checkBackupDirExistsAndCreate(m.cfg.Backup.BackupDir)
 	if err != nil {
 		return
 	}
 	go m.scheduleBackup()
 	cronBackup := cron.New()
-	cronBackup.AddFunc(m.cfg.FullBackupCronSchedule, m.scheduleBackup)
+	cronBackup.AddFunc(m.cfg.Backup.FullBackupCronSchedule, m.scheduleBackup)
 	cronBackup.Start()
 	select {
 	case <-ctx.Done():
+		logger.Info("stopping backup cron")
 		cronBackup.Stop()
 		return
 	}
@@ -153,7 +155,9 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 
 func (m *Manager) scheduleBackup() {
 	logger.Debug("starting full backup cycle")
-	m.createTableChecksum()
+	if err := m.createTableChecksum(); err != nil {
+		logger.Error("cannot create checksum", err)
+	}
 	m.lastBackupTime = ""
 	// Stop binlog
 	if binlogCancel != nil {
@@ -162,41 +166,40 @@ func (m *Manager) scheduleBackup() {
 	}
 
 	m.lastBackupTime = time.Now().Format(time.RFC3339)
-	bpath := path.Join(m.cfg.BackupDir, m.lastBackupTime)
+	bpath := path.Join(m.cfg.Backup.BackupDir, m.lastBackupTime)
 	ch := make(chan error)
-	mp, err := m.createMysqlDump(bpath)
+	mp, err := m.createFullBackup(bpath)
 	if err != nil {
-		logger.Error(fmt.Sprintf("error creating mysqldump: %s", err.Error()))
-		if err = m.handleMysqlDumpError(err); err != nil {
+		logger.Error(fmt.Sprintf("error creating full backup: %s", err.Error()))
+		if err = m.handleBackupError(err, m.updateSts.fullBackup); err != nil {
+			m.Stop()
 			time.Sleep(time.Duration(2) * time.Minute)
-			return
+			m.Start()
 		}
-		return
 	}
-	m.setUpdateStatus(m.updateSts.fullBackup, m.Storage.GetStorageServices(), true)
 	ctxBin := context.Background()
 	ctxBin, binlogCancel = context.WithCancel(ctxBin)
 	go m.onBinlogRotation(ch)
 	var eg errgroup.Group
 	eg.Go(func() error {
-		return m.backup.runBinlog(ctxBin, mp, m.lastBackupTime, ch)
+		return m.Db.StartIncBackup(ctxBin, mp, m.lastBackupTime, ch)
 	})
 	go func() {
 		if err = eg.Wait(); err != nil {
-			m.setUpdateStatus(m.updateSts.incBackup, m.Storage.GetStorageServices(), false)
-			logger.Error(fmt.Errorf("error saving log files: %s", err.Error()))
+			m.handleBackupError(err, m.updateSts.incBackup)
+			m.setUpdateStatus(m.updateSts.incBackup, m.Storage.GetStorageServicesKeys(), false)
 			m.errCh <- err
 		}
 	}()
 }
 
-func (m *Manager) createMysqlDump(bpath string) (bp mysql.Position, err error) {
-	logger.Info("creating mysql dump")
+func (m *Manager) createFullBackup(bpath string) (bp database.LogPosition, err error) {
+	logger.Info("creating full backup dump")
 	defer os.RemoveAll(bpath)
 	cf := wait.ConditionFunc(func() (bool, error) {
-		s, err := maria.HealthCheck(m.cfg.MariaDB)
+		s, err := m.Db.HealthCheck()
 		if err != nil {
-			_, ok := err.(*maria.DatabaseMissingError)
+			_, ok := err.(*dberror.DatabaseMissingError)
 			if ok {
 				return false, err
 			}
@@ -208,40 +211,30 @@ func (m *Manager) createMysqlDump(bpath string) (bp mysql.Position, err error) {
 	})
 	//Only do backups if db is healthy
 	if err = wait.Poll(5*time.Second, 5*time.Minute, cf); err != nil {
-		_, err := maria.HealthCheck(m.cfg.MariaDB)
-		connErr, ok := err.(*maria.DatabaseConnectionError)
+		_, err := m.Db.HealthCheck()
+		connErr, ok := err.(*dberror.DatabaseConnectionError)
 		if ok {
 			return bp, fmt.Errorf("cannot start backup: %w", connErr)
 		}
 		return bp, fmt.Errorf("cannot start backup: %w", err)
 	}
-	if m.GetConfig().DumpTool == nil || *m.GetConfig().DumpTool == "mysqldump" {
-		bp, err = m.backup.createMysqlDump(bpath)
-		if err != nil {
-			return bp, fmt.Errorf("error creating mysqlDump: %w", err)
-		}
-	} else {
-		bp, err = m.backup.createMyDump(bpath)
-		if err != nil {
-			return bp, fmt.Errorf("error creating mysqlDump: %w", err)
-		}
-	}
+	bp, err = m.Db.CreateFullBackup(bpath)
 
 	if err != nil {
-		return bp, fmt.Errorf("error cannot read binlog metadata: %s", err.Error())
+		return bp, err
 	}
 
 	logger.Debug("finished full backup")
 	return
 }
 
-func (m *Manager) handleMysqlDumpError(err error) error {
-	var missingErr *maria.DatabaseMissingError
-	var connErr *maria.DatabaseConnectionError
+func (m *Manager) handleBackupError(err error, backup map[string]int) error {
+	var missingErr *dberror.DatabaseMissingError
+	var connErr *dberror.DatabaseConnectionError
 	stsError := make([]string, 0)
-	svc := m.Storage.GetStorageServices()
-	if errors.As(err, &missingErr) && m.cfg.EnableInitRestore || errors.As(err, &connErr) && m.cfg.EnableRestoreOnDBFailure {
-		m.setUpdateStatus(m.updateSts.fullBackup, stsError, false)
+	svc := m.Storage.GetStorageServicesKeys()
+	if errors.As(err, &missingErr) && m.cfg.Backup.EnableInitRestore || errors.As(err, &connErr) && m.cfg.Backup.EnableRestoreOnDBFailure {
+		m.setUpdateStatus(backup, svc, false)
 		var eb *storage.NoBackupError
 		bf, errb := m.Storage.DownloadLatestBackup("")
 		if errors.As(errb, &eb) {
@@ -252,7 +245,7 @@ func (m *Manager) handleMysqlDumpError(err error) error {
 			return err
 		}
 		logger.Infof("starting restore due to %s ", err.Error())
-		return m.restore.restore(bf)
+		return m.Db.Restore(bf)
 	}
 
 	merr, ok := err.(*multierror.Error)
@@ -261,7 +254,7 @@ func (m *Manager) handleMysqlDumpError(err error) error {
 	}
 
 	if len(svc) == len(merr.Errors) {
-		m.setUpdateStatus(m.updateSts.fullBackup, stsError, false)
+		m.setUpdateStatus(backup, svc, false)
 		return fmt.Errorf("cannot write to any storage: %s", err.Error())
 	}
 	for _, e := range merr.Errors {
@@ -271,7 +264,7 @@ func (m *Manager) handleMysqlDumpError(err error) error {
 		}
 		stsError = append(stsError, err.Storage)
 	}
-	m.setUpdateStatus(m.updateSts.fullBackup, stsError, false)
+	m.setUpdateStatus(backup, stsError, false)
 
 	return nil
 }
@@ -294,7 +287,7 @@ func (m *Manager) setUpdateStatus(field map[string]int, storages []string, up bo
 		}
 		return 0
 	}
-	for _, s := range m.Storage.GetStorageServices() {
+	for _, s := range m.Storage.GetStorageServicesKeys() {
 		if find(s) {
 			field[s] = upFnc(up)
 		} else {
@@ -311,14 +304,14 @@ func (m *Manager) onBinlogRotation(c chan error) {
 			break
 		}
 		if err == nil {
-			m.setUpdateStatus(m.updateSts.incBackup, m.Storage.GetStorageServices(), true)
+			m.setUpdateStatus(m.updateSts.incBackup, m.Storage.GetStorageServicesKeys(), true)
 			continue
 		}
 		stsError := make([]string, 0)
 		merr, ok := err.(*multierror.Error)
 		if merr != nil {
 			if !ok {
-				m.setUpdateStatus(m.updateSts.incBackup, m.Storage.GetStorageServices(), false)
+				m.setUpdateStatus(m.updateSts.incBackup, m.Storage.GetStorageServicesKeys(), false)
 				logger.Errorf("unknown error: %s", merr.Error())
 			}
 			if len(merr.Errors) > 0 {
@@ -331,7 +324,7 @@ func (m *Manager) onBinlogRotation(c chan error) {
 						log.Error(merr.Errors[i])
 					}
 					// means all storage services returned an error.
-					if i == len(m.Storage.GetStorageServices())-1 {
+					if i == len(m.Storage.GetStorageServicesKeys())-1 {
 						m.errCh <- err
 					}
 				}
@@ -341,12 +334,12 @@ func (m *Manager) onBinlogRotation(c chan error) {
 	}
 }
 
-func (m *Manager) GetConfig() config.BackupService {
+func (m *Manager) GetConfig() config.Config {
 	return m.cfg
 }
 
 func (m *Manager) createTableChecksum() (err error) {
-	cs, err := maria.GetCheckSumForTable(m.cfg.MariaDB, m.cfg.MariaDB.VerifyTables)
+	cs, err := m.Db.GetCheckSumForTable(m.cfg.Database.VerifyTables, false)
 	if err != nil {
 		return
 	}
@@ -367,19 +360,80 @@ func (m *Manager) Restore(p string) (err error) {
 	m.Health.Lock()
 	m.Health.Ready = false
 	m.Health.Unlock()
+	if m.cfg.SideCar != nil && !*m.cfg.SideCar {
+		if err = sendReadinessRequest([]byte(`{"ready":false}`), m.cfg.Database.Host); err != nil {
+			return
+		}
+	}
 	defer func() {
+		if m.cfg.SideCar != nil && !*m.cfg.SideCar {
+			ip, err := m.k8sDB.GetPodIP(fmt.Sprintf("app=%s-mariadb", m.cfg.ServiceName))
+			if err != nil {
+				logger.Error("Cannot set pod databse to ready")
+			}
+			if err = sendReadinessRequest([]byte(`{"ready":true}`), ip); err != nil {
+				logger.Error("Cannot set pod databse to ready")
+			}
+		}
 		m.Health.Lock()
 		m.Health.Ready = true
 		m.Health.Unlock()
 	}()
-	if err = m.maria.CheckPodNotReady(); err != nil {
+	if err = m.k8sDB.CheckPodNotReady(fmt.Sprintf("app=%s-mariadb", m.cfg.ServiceName)); err != nil {
 		return fmt.Errorf("cannot set pod to status: NotReady. reason: %s", err.Error())
 	}
-	if err = m.restore.restore(p); err != nil {
+	if err = m.Db.Restore(p); err != nil {
 		return
 	}
 	//only remove backup files when restore was succesful, so manual restore is possible!
 	os.RemoveAll(p)
 
+	return
+}
+
+func (m *Manager) readErrorChannel() {
+	for {
+		err, ok := <-m.errCh
+		if !ok {
+			logger.Debug("error channel closed")
+			break
+		}
+		fmt.Println("ERROR CHANNEL", err, ok)
+		if err == nil {
+			continue
+		}
+		if err != nil {
+			logger.Error(fmt.Errorf("error reading log files: %s", err.Error()))
+			m.Stop()
+			time.Sleep(time.Duration(2) * time.Minute)
+			m.Start()
+		}
+	}
+}
+
+func sendReadinessRequest(jsonRdy []byte, h string) (err error) {
+	client := &http.Client{}
+	u, err := url.Parse(fmt.Sprintf("http://%s:8080", h))
+	if err != nil {
+		return
+	}
+	u.Path = path.Join(u.Path, "/pod/readiness")
+	req, err := http.NewRequest(http.MethodPatch, u.String(), bytes.NewBuffer(jsonRdy))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	_, err = client.Do(req)
+	if err != nil {
+		return
+	}
+	return
+}
+
+func checkBackupDirExistsAndCreate(d string) (p string, err error) {
+	if _, err := os.Stat(d); os.IsNotExist(err) {
+		err = os.MkdirAll(d, os.ModePerm)
+		return d, err
+	}
 	return
 }

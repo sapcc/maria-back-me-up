@@ -17,15 +17,19 @@
 package constants
 
 const (
-	PORT            = "8081"
-	PORT_METRICS    = "8082"
-	INDEX           = "templates/index.html"
-	BACKUP          = "templates/backup.html"
-	RESTORE         = "templates/restore.html"
-	MARIADEPLOYMENT = "templates/maria_deployment.yaml"
-	MARIASERIVCE    = "templates/maria_svc.yaml"
-	RESTOREFOLDER   = "restore"
-	HARDRESTORE     = "hard"
-	SOFTRESTORE     = "soft"
-	VERIFYINTERFAL  = 15
+	PORT               = "8081"
+	PORT_METRICS       = "8082"
+	POSTGRES           = "postgres"
+	MARIADB            = "mariadb"
+	INDEX              = "templates/index.html"
+	BACKUP             = "templates/backup.html"
+	RESTORE            = "templates/restore.html"
+	MARIADEPLOYMENT    = "templates/maria_deployment.yaml"
+	MARIASERIVCE       = "templates/maria_svc.yaml"
+	POSTGRESDEPLOYMENT = "templates/postgres_deployment.yaml"
+	POSTGRESSERIVCE    = "templates/postgres_svc.yaml"
+	RESTOREFOLDER      = "restore"
+	HARDRESTORE        = "hard"
+	SOFTRESTORE        = "soft"
+	VERIFYINTERFAL     = 15
 )

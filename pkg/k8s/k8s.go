@@ -45,22 +45,35 @@ import (
 
 var deletePolicy = metav1.DeletePropagationForeground
 
-type Maria struct {
+var k8sDatabase = map[string]string{
+	constants.MARIADB: constants.MARIADEPLOYMENT,
+}
+
+type Database struct {
 	client *kubernetes.Clientset
 	ns     string
 	ys     *json.Serializer
 }
 
-func NewMaria(ns string) (m *Maria, err error) {
+func New(ns string) (m *Database, err error) {
 	var config *rest.Config
 	var kubeconfig *string
 	config, err = rest.InClusterConfig()
 	if err != nil {
 		// use the current context in kubeconfig
-		if home := homeDir(); home != "" {
+		flag.VisitAll(func(f *flag.Flag) {
+			if f.Name == "kubeconfig" {
+				v := f.Value.String()
+				kubeconfig = &v
+				fmt.Println(v)
+			}
+		})
+		if home := homeDir(); home != "" && kubeconfig == nil {
 			kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-		} else {
+		} else if &kubeconfig == nil {
 			kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+		} else {
+
 		}
 		flag.Parse()
 		config, err = clientcmd.BuildConfigFromFlags("", *kubeconfig)
@@ -73,7 +86,7 @@ func NewMaria(ns string) (m *Maria, err error) {
 		return m, err
 	}
 
-	return &Maria{
+	return &Database{
 		client: clientset,
 		ns:     ns,
 		ys: json.NewYAMLSerializer(json.DefaultMetaFactory, scheme.Scheme,
@@ -81,40 +94,52 @@ func NewMaria(ns string) (m *Maria, err error) {
 	}, err
 }
 
-func (m *Maria) CreateMariaDeployment(c config.MariaDB) (deploy *v1beta1.Deployment, err error) {
-	deploy, err = m.createDeployment(constants.MARIADEPLOYMENT, c)
+func (m *Database) CreateDatabaseDeployment(name string, c config.DatabaseConfig) (deploy *v1beta1.Deployment, err error) {
+	var tpl string
+	if c.Type == constants.MARIADB {
+		tpl = constants.MARIADEPLOYMENT
+	} else if c.Type == constants.POSTGRES {
+		tpl = constants.POSTGRESDEPLOYMENT
+	}
+	deploy, err = m.createDeployment(tpl, c)
 	if err != nil {
 		if errors.IsAlreadyExists(err) {
-			if err = m.client.AppsV1beta1().Deployments(m.ns).Delete(c.Host, &metav1.DeleteOptions{
+			if err = m.client.AppsV1beta1().Deployments(m.ns).Delete(name, &metav1.DeleteOptions{
 				PropagationPolicy: &deletePolicy,
 			}); err != nil {
 				return
 			}
 			time.Sleep(10 * time.Second)
-			return m.CreateMariaDeployment(c)
+			return m.CreateDatabaseDeployment(name, c)
 		}
 		return
 	}
 	return
 }
 
-func (m *Maria) CreateMariaService(c config.MariaDB) (svc *v1.Service, err error) {
-	svc, err = m.createService(constants.MARIASERIVCE, c)
+func (m *Database) CreateDatabaseService(name string, c config.DatabaseConfig) (svc *v1.Service, err error) {
+	var tpl string
+	if c.Type == constants.MARIADB {
+		tpl = constants.MARIASERIVCE
+	} else if c.Type == constants.POSTGRES {
+		tpl = constants.POSTGRESSERIVCE
+	}
+	svc, err = m.createService(tpl, c)
 	if err != nil {
 		if errors.IsAlreadyExists(err) {
-			if err = m.client.CoreV1().Services(m.ns).Delete(c.Host, &metav1.DeleteOptions{
+			if err = m.client.CoreV1().Services(m.ns).Delete(name, &metav1.DeleteOptions{
 				PropagationPolicy: &deletePolicy,
 			}); err != nil {
 				return
 			}
-			return m.CreateMariaService(c)
+			return m.CreateDatabaseService(name, c)
 		}
 		return
 	}
 	return
 }
 
-func (m *Maria) createDeployment(p string, cfg interface{}) (deploy *v1beta1.Deployment, err error) {
+func (m *Database) createDeployment(p string, cfg interface{}) (deploy *v1beta1.Deployment, err error) {
 	deploy = &v1beta1.Deployment{}
 	if err = m.unmarshalYamlFile(p, deploy, cfg); err != nil {
 		return
@@ -122,7 +147,7 @@ func (m *Maria) createDeployment(p string, cfg interface{}) (deploy *v1beta1.Dep
 	return m.client.AppsV1beta1().Deployments(m.ns).Create(deploy)
 }
 
-func (m *Maria) createService(p string, cfg interface{}) (svc *v1.Service, err error) {
+func (m *Database) createService(p string, cfg interface{}) (svc *v1.Service, err error) {
 	svc = &v1.Service{}
 	if err = m.unmarshalYamlFile(p, svc, cfg); err != nil {
 		return
@@ -130,19 +155,29 @@ func (m *Maria) createService(p string, cfg interface{}) (svc *v1.Service, err e
 	return m.client.CoreV1().Services(m.ns).Create(svc)
 }
 
-func (m *Maria) CheckPodNotReady() (err error) {
-	name := os.Getenv("HOSTNAME")
-	if name == "" {
-		return fmt.Errorf("No env HOSTNAME found")
+func (m *Database) GetPodIP(labelSelector string) (ip string, err error) {
+	p, err := m.client.CoreV1().Pods(m.ns).List(metav1.ListOptions{LabelSelector: labelSelector})
+	if err != nil {
+		return ip, err
 	}
+	if len(p.Items) > 1 || len(p.Items) == 0 {
+		return ip, fmt.Errorf("wrong number of database pods found")
+	}
+	return p.Items[0].Status.PodIP, nil
+}
+
+func (m *Database) CheckPodNotReady(labelSelector string) (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
-		p, err := m.client.CoreV1().Pods(m.ns).Get(name, metav1.GetOptions{})
+		p, err := m.client.CoreV1().Pods(m.ns).List(metav1.ListOptions{LabelSelector: labelSelector})
 		if err != nil {
 			return false, err
 		}
-		for c := range p.Status.Conditions {
-			if p.Status.Conditions[c].Type == v1.PodReady {
-				if p.Status.Conditions[c].Status == v1.ConditionFalse {
+		if len(p.Items) > 1 || len(p.Items) == 0 {
+			return false, fmt.Errorf("wrong number of database pods found")
+		}
+		for c := range p.Items[0].Status.Conditions {
+			if p.Items[0].Status.Conditions[c].Type == v1.PodReady {
+				if p.Items[0].Status.Conditions[c].Status == v1.ConditionFalse {
 					return true, nil
 				}
 			}
@@ -157,7 +192,7 @@ func (m *Maria) CheckPodNotReady() (err error) {
 	return
 }
 
-func (m *Maria) DeleteMariaResources(deploy *v1beta1.Deployment, svc *v1.Service) (err error) {
+func (m *Database) DeleteDatabaseResources(deploy *v1beta1.Deployment, svc *v1.Service) (err error) {
 	if err = m.client.AppsV1beta1().Deployments(m.ns).Delete(deploy.Name, &metav1.DeleteOptions{
 		PropagationPolicy: &deletePolicy,
 	}); err != nil {
@@ -171,7 +206,7 @@ func (m *Maria) DeleteMariaResources(deploy *v1beta1.Deployment, svc *v1.Service
 	return
 }
 
-func (m *Maria) unmarshalYamlFile(p string, into runtime.Object, vl interface{}) (err error) {
+func (m *Database) unmarshalYamlFile(p string, into runtime.Object, vl interface{}) (err error) {
 	var tpl bytes.Buffer
 	s := json.NewYAMLSerializer(json.DefaultMetaFactory, scheme.Scheme,
 		scheme.Scheme)

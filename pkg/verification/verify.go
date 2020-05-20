@@ -26,10 +26,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sapcc/maria-back-me-up/pkg/backup"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
+	"github.com/sapcc/maria-back-me-up/pkg/database"
 	"github.com/sapcc/maria-back-me-up/pkg/k8s"
-	"github.com/sapcc/maria-back-me-up/pkg/maria"
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
@@ -39,28 +38,27 @@ const podName = "mariadb"
 
 type Verification struct {
 	storage            *storage.Manager
-	maria              *k8s.Maria
+	k8sDb              *k8s.Database
+	db                 database.Database
 	serviceName        string
 	lastBackup         storage.Backup
 	storageServiceName string
 	cfg                config.VerificationService
-	cfgMariaDB         config.MariaDB
 	status             *Status
 	logger             *logrus.Entry
 }
 
-func NewVerification(serviceName, storageServiceName string, cs config.StorageService, cv config.VerificationService, cm config.MariaDB, m *k8s.Maria) (*Verification, error) {
-	s, err := storage.NewManager(cs, serviceName, cm.LogBin)
+func NewVerification(serviceName, storageServiceName string, s *storage.Manager, cv config.VerificationService, db database.Database, kd *k8s.Database) *Verification {
 	return &Verification{
 		serviceName:        serviceName,
 		storage:            s,
-		maria:              m,
+		db:                 db,
+		k8sDb:              kd,
 		cfg:                cv,
-		cfgMariaDB:         cm,
 		storageServiceName: storageServiceName,
 		status:             NewStatus(serviceName, storageServiceName),
 		logger:             logger.WithFields(logrus.Fields{"service": serviceName, "storage": storageServiceName}),
-	}, err
+	}
 }
 
 func (v *Verification) Start(ctx context.Context) (err error) {
@@ -138,23 +136,23 @@ func (v *Verification) verifyBackup(restoreFolder string) {
 		v.status.UploadStatus(restoreFolder, v.storage)
 	}()
 
-	cfg := config.BackupService{
-		MariaDB: config.MariaDB{
-			Host:         fmt.Sprintf("%s-%s-%s-verify", v.storageServiceName, v.serviceName, podName),
-			Port:         3306,
-			User:         "root",
-			Password:     "verify_passw0rd",
-			Version:      v.cfgMariaDB.Version,
-			LogBin:       v.cfgMariaDB.LogBin,
-			Databases:    v.cfgMariaDB.Databases,
-			VerifyTables: v.cfgMariaDB.VerifyTables,
-		},
+	dbCfg := v.db.GetConfig()
+	verifyDbcfg := config.DatabaseConfig{
+		Host:          fmt.Sprintf("%s-%s-%s-verify", v.storageServiceName, v.serviceName, podName),
+		Type:          dbCfg.Type,
+		Port:          3306,
+		User:          "root",
+		Password:      "verify_passw0rd",
+		Version:       dbCfg.Version,
+		LogNameFormat: dbCfg.LogNameFormat,
+		Databases:     dbCfg.Databases,
+		VerifyTables:  dbCfg.VerifyTables,
 	}
 
-	dp, err := v.maria.CreateMariaDeployment(cfg.MariaDB)
-	svc, err := v.maria.CreateMariaService(cfg.MariaDB)
+	dp, err := v.k8sDb.CreateDatabaseDeployment(verifyDbcfg.Host, verifyDbcfg)
+	svc, err := v.k8sDb.CreateDatabaseService(verifyDbcfg.Host, verifyDbcfg)
 	defer func() {
-		if err = v.maria.DeleteMariaResources(dp, svc); err != nil {
+		if err = v.k8sDb.DeleteDatabaseResources(dp, svc); err != nil {
 			v.logger.Error(fmt.Errorf("backup verify error: error deleting mariadb resources: %s", err.Error()))
 		}
 	}()
@@ -164,20 +162,25 @@ func (v *Verification) verifyBackup(restoreFolder string) {
 		return
 	}
 
-	r := backup.NewRestore(cfg)
-	if err = r.VerifyRestore(restoreFolder); err != nil {
+	db, err := database.NewDatabase(config.Config{Database: verifyDbcfg, SideCar: &[]bool{false}[0]}, nil)
+	if err != nil {
+		v.status.SetVerifyRestore(0, fmt.Errorf("error restoring backup: %s", err.Error()))
+		return
+	}
+
+	if err = db.VerifyRestore(restoreFolder); err != nil {
 		v.status.SetVerifyRestore(0, fmt.Errorf("error restoring backup: %s", err.Error()))
 		return
 	}
 	v.status.SetVerifyRestore(1, nil)
-	if out, err := maria.RunMysqlDiff(v.cfgMariaDB, cfg.MariaDB); err != nil {
+	if out, err := v.db.GetDatabaseDiff(dbCfg, verifyDbcfg); err != nil {
 		//This is very bad. 1 or more tables are different or missing
 		v.status.SetVerifyDiff(0, fmt.Errorf("error mysqldiff: %s", string(out)))
 		return
 	}
 	v.status.SetVerifyDiff(1, nil)
-	if len(v.cfgMariaDB.VerifyTables) > 0 {
-		if err = v.verifyChecksums(cfg.MariaDB, restoreFolder); err != nil {
+	if len(dbCfg.VerifyTables) > 0 {
+		if err = v.verifyChecksums(verifyDbcfg, restoreFolder); err != nil {
 			v.status.SetVerifyChecksum(0, fmt.Errorf("error table checksum: %s", err.Error()))
 		} else {
 			v.status.SetVerifyChecksum(1, nil)
@@ -186,7 +189,12 @@ func (v *Verification) verifyBackup(restoreFolder string) {
 	v.logger.Info("successfully verified backup")
 }
 
-func (v *Verification) verifyChecksums(cfg config.MariaDB, restorePath string) (err error) {
+func (v *Verification) verifyChecksums(dbcfg config.DatabaseConfig, restorePath string) (err error) {
+	cfg := config.Config{Database: dbcfg}
+	db, err := database.NewDatabase(cfg, nil)
+	if err != nil {
+		return
+	}
 	cs, err := v.loadChecksums(restorePath)
 	if err != nil {
 		return
@@ -195,7 +203,7 @@ func (v *Verification) verifyChecksums(cfg config.MariaDB, restorePath string) (
 		return fmt.Errorf("no checksums found")
 	}
 
-	rs, err := maria.GetCheckSumForTable(cfg, v.cfgMariaDB.VerifyTables)
+	rs, err := db.GetCheckSumForTable(v.db.GetConfig().VerifyTables, true)
 	if err != nil {
 		return fmt.Errorf("error verifying backup: %s", err.Error())
 	}
@@ -206,7 +214,7 @@ func (v *Verification) verifyChecksums(cfg config.MariaDB, restorePath string) (
 	return
 }
 
-func (v *Verification) loadChecksums(restorePath string) (cs maria.Checksum, err error) {
+func (v *Verification) loadChecksums(restorePath string) (cs database.Checksum, err error) {
 	files, err := ioutil.ReadDir(restorePath)
 	if err != nil {
 		return
