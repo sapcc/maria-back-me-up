@@ -140,6 +140,7 @@ func (m *MariaDB) GetCheckSumForTable(verifyTables []string, withIP bool) (cs Ch
 	cf := wait.ConditionFunc(func() (bool, error) {
 		err = m.pingMariaDB(withIP)
 		if err != nil {
+			log.Debug("could not ping mariadb: ", err.Error())
 			return false, nil
 		}
 		return true, nil

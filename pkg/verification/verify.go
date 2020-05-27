@@ -199,11 +199,13 @@ func (v *Verification) verifyChecksums(dbcfg config.DatabaseConfig, restorePath 
 	if err != nil {
 		return
 	}
+	v.logger.Debugf("successfully loaded checksum %s", cs)
+
 	if len(cs.TablesChecksum) == 0 {
 		return fmt.Errorf("no checksums found")
 	}
 
-	rs, err := db.GetCheckSumForTable(v.db.GetConfig().VerifyTables, false)
+	rs, err := db.GetCheckSumForTable(db.GetConfig().VerifyTables, false)
 	if err != nil {
 		return err
 	}
