@@ -190,7 +190,7 @@ func (v *Verification) verifyBackup(restoreFolder string) {
 }
 
 func (v *Verification) verifyChecksums(dbcfg config.DatabaseConfig, restorePath string) (err error) {
-	cfg := config.Config{Database: dbcfg}
+	cfg := config.Config{Database: dbcfg, SideCar: &[]bool{false}[0]}
 	db, err := database.NewDatabase(cfg, nil)
 	if err != nil {
 		return
