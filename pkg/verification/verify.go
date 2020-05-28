@@ -190,7 +190,7 @@ func (v *Verification) verifyBackup(restoreFolder string) {
 }
 
 func (v *Verification) verifyChecksums(dbcfg config.DatabaseConfig, restorePath string) (err error) {
-	cfg := config.Config{Database: dbcfg}
+	cfg := config.Config{Database: dbcfg, SideCar: &[]bool{false}[0]}
 	db, err := database.NewDatabase(cfg, nil)
 	if err != nil {
 		return
@@ -199,16 +199,18 @@ func (v *Verification) verifyChecksums(dbcfg config.DatabaseConfig, restorePath 
 	if err != nil {
 		return
 	}
+	v.logger.Debugf("successfully loaded checksum %s", cs)
+
 	if len(cs.TablesChecksum) == 0 {
 		return fmt.Errorf("no checksums found")
 	}
 
-	rs, err := db.GetCheckSumForTable(v.db.GetConfig().VerifyTables, true)
+	rs, err := db.GetCheckSumForTable(db.GetConfig().VerifyTables, false)
 	if err != nil {
-		return fmt.Errorf("error verifying backup: %s", err.Error())
+		return err
 	}
 	if err = compareChecksums(cs.TablesChecksum, rs.TablesChecksum); err != nil {
-		return fmt.Errorf("error verifying backup: %s", err.Error())
+		return err
 	}
 	v.logger.Infof("successfully verified checksum %s", cs)
 	return
