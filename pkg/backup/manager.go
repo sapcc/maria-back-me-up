@@ -360,11 +360,7 @@ func (m *Manager) Restore(p string) (err error) {
 	m.Health.Lock()
 	m.Health.Ready = false
 	m.Health.Unlock()
-	if m.cfg.SideCar != nil && !*m.cfg.SideCar {
-		if err = sendReadinessRequest([]byte(`{"ready":false}`), m.cfg.Database.Host); err != nil {
-			return
-		}
-	}
+	logger.Debug("Restore with sidecar ", *m.cfg.SideCar)
 	defer func() {
 		if m.cfg.SideCar != nil && !*m.cfg.SideCar {
 			ip, err := m.k8sDB.GetPodIP(fmt.Sprintf("app=%s-mariadb", m.cfg.ServiceName))
@@ -379,6 +375,12 @@ func (m *Manager) Restore(p string) (err error) {
 		m.Health.Ready = true
 		m.Health.Unlock()
 	}()
+	if m.cfg.SideCar != nil && !*m.cfg.SideCar {
+		if err = sendReadinessRequest([]byte(`{"ready":false}`), m.cfg.Database.Host); err != nil {
+			return
+		}
+	}
+
 	if err = m.k8sDB.CheckPodNotReady(fmt.Sprintf("app=%s-mariadb", m.cfg.ServiceName)); err != nil {
 		return fmt.Errorf("cannot set pod to status: NotReady. reason: %s", err.Error())
 	}
@@ -418,6 +420,8 @@ func sendReadinessRequest(jsonRdy []byte, h string) (err error) {
 		return
 	}
 	u.Path = path.Join(u.Path, "/pod/readiness")
+	logger.Debug(fmt.Sprintf("updating mariadb pod readiness %s", u.String()))
+
 	req, err := http.NewRequest(http.MethodPatch, u.String(), bytes.NewBuffer(jsonRdy))
 	if err != nil {
 		return

@@ -101,8 +101,6 @@ func Oauth(enabled bool, opts config.Options) echo.MiddlewareFunc {
 func Restore(m *backup.Manager) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) (err error) {
-			m.Health.Lock()
-			defer m.Health.Unlock()
 			if !m.Health.Ready {
 				return c.String(http.StatusOK, "Restore in progress")
 			}
