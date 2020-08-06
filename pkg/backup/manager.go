@@ -236,12 +236,13 @@ func (m *Manager) handleBackupError(err error, backup map[string]int) error {
 	if errors.As(err, &missingErr) && m.cfg.Backup.EnableInitRestore || errors.As(err, &connErr) && m.cfg.Backup.EnableRestoreOnDBFailure {
 		m.setUpdateStatus(backup, svc, false)
 		var eb *storage.NoBackupError
-		bf, errb := m.Storage.DownloadLatestBackup("")
+		bf, errb := m.Storage.DownloadLatestBackup(svc[1])
 		if errors.As(errb, &eb) {
 			logger.Info("cannot restore. no backup available")
 			return nil
 		}
 		if errb != nil {
+			logger.Errorf("cannot do init restore. err: %s", err.Error())
 			return err
 		}
 		logger.Infof("starting restore due to %s ", err.Error())
