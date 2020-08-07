@@ -171,11 +171,12 @@ func (m *Manager) scheduleBackup() {
 	mp, err := m.createFullBackup(bpath)
 	if err != nil {
 		logger.Error(fmt.Sprintf("error creating full backup: %s", err.Error()))
+		m.Stop()
 		if err = m.handleBackupError(err, m.updateSts.fullBackup); err != nil {
-			m.Stop()
 			time.Sleep(time.Duration(2) * time.Minute)
-			m.Start()
 		}
+		m.Start()
+		return
 	}
 	ctxBin := context.Background()
 	ctxBin, binlogCancel = context.WithCancel(ctxBin)
