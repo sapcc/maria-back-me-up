@@ -114,7 +114,7 @@ func (s *Status) UploadStatus(restoreFolder string, storage *storage.Manager, lo
 		tags := make(map[string]string)
 		tags["key"] = restoreFolder
 		tags["binlog"] = fmt.Sprintf("%s.%d", logNameFormat, binlogNumber)
-		err = storage.WriteStream(s.StorageService, "last_successful_backup", "", nil, tags)
+		err = storage.WriteStream(s.StorageService, "last_successful_backup", "", strings.NewReader("latest_backup"), tags)
 		if err != nil {
 			s.logger.Error(fmt.Errorf("cannot upload verify status: %s", err.Error()))
 		}
