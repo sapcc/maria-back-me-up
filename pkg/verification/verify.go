@@ -129,7 +129,7 @@ func (v *Verification) verifyBackup(restoreFolder string) {
 	v.logger.Infof("Start verifying backup for service %s", v.serviceName)
 	dbCfg := v.db.GetConfig()
 	defer func() {
-		v.status.UploadStatus(restoreFolder, v.storage, dbCfg.LogNameFormat)
+		v.status.UploadStatus(restoreFolder, dbCfg.LogNameFormat, v.serviceName, v.storage)
 		if err = os.RemoveAll(restoreFolder); err != nil {
 			v.logger.Error(err)
 		}

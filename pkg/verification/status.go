@@ -81,7 +81,7 @@ func (s *Status) Reset() {
 	s.VerifyError = ""
 }
 
-func (s *Status) UploadStatus(restoreFolder string, storage *storage.Manager, logNameFormat string) {
+func (s *Status) UploadStatus(restoreFolder, logNameFormat, serviceName string, storage *storage.Manager) {
 	s.RLock()
 	out, err := yaml.Marshal(s)
 	s.RUnlock()
@@ -112,7 +112,8 @@ func (s *Status) UploadStatus(restoreFolder string, storage *storage.Manager, lo
 			return nil
 		})
 		tags := make(map[string]string)
-		tags["key"] = restoreFolder
+		base := path.Base(restoreFolder)
+		tags["key"] = path.Join(serviceName, base)
 		tags["binlog"] = fmt.Sprintf("%s.%d", logNameFormat, binlogNumber)
 		err = storage.WriteStream(s.StorageService, "last_successful_backup", "", strings.NewReader("latest_backup"), tags)
 		if err != nil {
