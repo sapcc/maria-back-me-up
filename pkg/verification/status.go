@@ -3,8 +3,11 @@ package verification
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"path"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -78,7 +81,7 @@ func (s *Status) Reset() {
 	s.VerifyError = ""
 }
 
-func (s *Status) UploadStatus(restoreFolder string, storage *storage.Manager) {
+func (s *Status) UploadStatus(restoreFolder string, storage *storage.Manager, logNameFormat string) {
 	s.RLock()
 	out, err := yaml.Marshal(s)
 	s.RUnlock()
@@ -88,8 +91,32 @@ func (s *Status) UploadStatus(restoreFolder string, storage *storage.Manager) {
 	u := strconv.FormatInt(time.Now().Unix(), 10)
 	_, file := path.Split(restoreFolder)
 	s.logger.Debug("Uploading verify status to: ", file+"/verify_"+u+".yaml")
-	err = storage.WriteStream(s.StorageService, file+"/verify_"+u+".yaml", "", bytes.NewReader(out))
+	err = storage.WriteStream(s.StorageService, file+"/verify_"+u+".yaml", "", bytes.NewReader(out), nil)
 	if err != nil {
 		s.logger.Error(fmt.Errorf("cannot upload verify status: %s", err.Error()))
+	}
+	if s.VerifyDiff == 1 && s.VerifyRestore == 1 {
+		binlogNumber := 0
+		filepath.Walk(restoreFolder, func(path string, f os.FileInfo, err error) error {
+			if f.IsDir() && f.Name() == "dump" {
+				return filepath.SkipDir
+			}
+
+			if !f.IsDir() && strings.Contains(f.Name(), logNameFormat) {
+				bin := strings.Split(f.Name(), ".")
+				binlogNbr, _ := strconv.Atoi(bin[1])
+				if binlogNbr > binlogNumber {
+					binlogNumber = binlogNbr
+				}
+			}
+			return nil
+		})
+		tags := make(map[string]string)
+		tags["key"] = restoreFolder
+		tags["binlog"] = fmt.Sprintf("%s.%d", logNameFormat, binlogNumber)
+		err = storage.WriteStream(s.StorageService, "last_successful_backup", "", nil, tags)
+		if err != nil {
+			s.logger.Error(fmt.Errorf("cannot upload verify status: %s", err.Error()))
+		}
 	}
 }

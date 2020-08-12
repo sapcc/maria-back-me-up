@@ -9,7 +9,7 @@ import (
 type Storage interface {
 	//WriteBytes(s3Name, f string, b []byte) (err error)
 	WriteFolder(p string) (err error)
-	WriteStream(name, mimeType string, body io.Reader) (err error)
+	WriteStream(name, mimeType string, body io.Reader, tags map[string]string) (err error)
 	GetBackupByTimestamp(t time.Time) (path string, err error)
 	DownloadLatestBackup() (path string, err error)
 	ListFullBackups() (bl []Backup, err error)

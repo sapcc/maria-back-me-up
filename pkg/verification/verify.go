@@ -127,16 +127,13 @@ func (v *Verification) downloadBackup(b storage.Backup) (restoreFolder string, e
 func (v *Verification) verifyBackup(restoreFolder string) {
 	var err error
 	v.logger.Infof("Start verifying backup for service %s", v.serviceName)
-
+	dbCfg := v.db.GetConfig()
 	defer func() {
+		v.status.UploadStatus(restoreFolder, v.storage, dbCfg.LogNameFormat)
 		if err = os.RemoveAll(restoreFolder); err != nil {
 			v.logger.Error(err)
 		}
-
-		v.status.UploadStatus(restoreFolder, v.storage)
 	}()
-
-	dbCfg := v.db.GetConfig()
 	verifyDbcfg := config.DatabaseConfig{
 		Host:          fmt.Sprintf("%s-%s-%s-verify", v.storageServiceName, v.serviceName, podName),
 		Type:          dbCfg.Type,

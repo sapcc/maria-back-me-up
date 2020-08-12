@@ -246,7 +246,7 @@ func (m *Manager) handleBackupError(err error, backup map[string]int) error {
 			logger.Errorf("cannot do init restore. err: %s", err.Error())
 			return err
 		}
-		logger.Infof("starting restore due to %s ", err.Error())
+		logger.Infof("starting restore due to %s, using backup %s", err.Error(), bf)
 		return m.Db.Restore(bf)
 	}
 

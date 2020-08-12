@@ -17,6 +17,7 @@
 package storage
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path"
@@ -98,14 +99,18 @@ func (s *S3) WriteFolder(p string) (err error) {
 	if err != nil {
 		return s.handleError(p, err)
 	}
-	return s.WriteStream(path.Join(filepath.Base(p), "dump.tar"), "zip", r)
+	return s.WriteStream(path.Join(filepath.Base(p), "dump.tar"), "zip", r, nil)
 }
 
-func (s *S3) WriteStream(fileName, mimeType string, body io.Reader) error {
+func (s *S3) WriteStream(fileName, mimeType string, body io.Reader, tags map[string]string) error {
 	uploader := s3manager.NewUploader(s.session, func(u *s3manager.Uploader) {
 		u.PartSize = 20 << 20 // 20MB
 		u.MaxUploadParts = 10000
 	})
+	var tag string
+	for k, v := range tags {
+		tag += fmt.Sprintf("%s=%s&", k, v)
+	}
 
 	input := s3manager.UploadInput{
 		Bucket:               aws.String(s.cfg.BucketName),
@@ -113,6 +118,7 @@ func (s *S3) WriteStream(fileName, mimeType string, body io.Reader) error {
 		Body:                 body,
 		SSECustomerAlgorithm: s.cfg.SSECustomerAlgorithm,
 		SSECustomerKey:       s.cfg.SSECustomerKey,
+		Tagging:              &tag,
 	}
 
 	_, err := uploader.Upload(&input)
@@ -122,11 +128,17 @@ func (s *S3) WriteStream(fileName, mimeType string, body io.Reader) error {
 	return nil
 }
 func (s *S3) DownloadBackupFrom(fullBackupPath, binlog string) (path string, err error) {
+	if fullBackupPath == "" || binlog == "" {
+		return path, &NoBackupError{}
+	}
 	svc := s3.New(s.session)
 	until := strings.Split(binlog, ".")
 	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(fullBackupPath)})
 	if err != nil {
 		return path, s.handleError("", err)
+	}
+	if len(listRes.Contents) == 0 {
+		return path, &NoBackupError{}
 	}
 	for _, listObj := range listRes.Contents {
 		if err != nil {
@@ -249,46 +261,28 @@ func (s *S3) DownloadBackup(fullBackup Backup) (path string, err error) {
 }
 
 func (s *S3) DownloadLatestBackup() (path string, err error) {
-	var newestBackup *s3.Object
-	var newestTime int64 = 0
 	svc := s3.New(s.session)
-	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(s.serviceName + "/"), Delimiter: aws.String("y")})
-	if err != nil {
-		return path, s.handleError("", err)
-	}
-	for _, listObj := range listRes.Contents {
-		if err != nil {
-			continue
-		}
-
-		if strings.Contains(*listObj.Key, "dump.tar") {
-			currTime := listObj.LastModified.Unix()
-			if currTime > newestTime {
-				newestTime = currTime
-				newestBackup = listObj
-			}
-		}
-	}
-
-	if newestBackup == nil {
-		return path, &NoBackupError{}
-	}
-
-	listRes, err = svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.Replace(*newestBackup.Key, "dump.tar", "", -1))})
+	tag, err := svc.GetObjectTagging(&s3.GetObjectTaggingInput{Bucket: aws.String(s.cfg.BucketName), Key: aws.String(s.serviceName + "/last_successful_backup")})
 	if err != nil {
 		return path, s.handleError("", err)
 	}
 
-	for _, listObj := range listRes.Contents {
-		if !strings.HasSuffix(*listObj.Key, "/") {
-			if err := s.downloadFile(s.restoreFolder, listObj); err != nil {
-				return path, err
+	if len(tag.TagSet) == 2 {
+		var key string
+		var binlog string
+		for _, t := range tag.TagSet {
+			if *t.Key == "key" {
+				key = *t.Value
+			}
+			if *t.Key == "binlog" {
+				binlog = *t.Value
 			}
 		}
+
+		return s.DownloadBackupFrom(key, binlog)
 	}
-	path = filepath.Join(s.restoreFolder, *newestBackup.Key)
-	path = filepath.Dir(path)
-	return
+
+	return path, &NoBackupError{}
 }
 
 func (s *S3) GetBackupByTimestamp(t time.Time) (path string, err error) {

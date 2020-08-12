@@ -33,7 +33,7 @@ func mariaHealthCheck(c config.DatabaseConfig) (status Status, err error) {
 	}
 
 	dbs := strings.Join(c.Databases, " -B ")
-	args := strings.Split(fmt.Sprintf("-c -B %s -u%s -p%s -h%s -P%s", dbs, c.User, c.Password, c.Host, strconv.Itoa(c.Port)), " ")
+	args := strings.Split(fmt.Sprintf("-c -B -q %s -u%s -p%s -h%s -P%s", dbs, c.User, c.Password, c.Host, strconv.Itoa(c.Port)), " ")
 	args = append(args, "--skip-write-binlog")
 	cmd := exec.Command(
 		"mysqlcheck",
