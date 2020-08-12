@@ -13,6 +13,7 @@ import (
 
 	"github.com/ncw/swift"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
+	"github.com/sapcc/maria-back-me-up/pkg/constants"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 )
@@ -47,7 +48,7 @@ func NewSwift(c config.Swift, serviceName string, logBin string) (s *Swift, err 
 		cfg:           c,
 		connection:    conn,
 		serviceName:   serviceName,
-		restoreFolder: path.Join("./restore", c.Name),
+		restoreFolder: path.Join(constants.RESTOREFOLDER, c.Name),
 		logger:        logger.WithField("service", serviceName),
 		logBin:        logBin,
 		statusError:   make(map[string]string, 0),

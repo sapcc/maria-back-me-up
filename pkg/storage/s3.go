@@ -31,6 +31,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
+	"github.com/sapcc/maria-back-me-up/pkg/constants"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
@@ -72,7 +73,7 @@ func NewS3(c config.S3, serviceName, binLog string) (s3 *S3, err error) {
 		cfg:           c,
 		session:       s,
 		serviceName:   serviceName,
-		restoreFolder: path.Join("/restore", c.Name),
+		restoreFolder: path.Join(constants.RESTOREFOLDER, c.Name),
 		logger:        logger.WithField("service", serviceName),
 		binLog:        binLog,
 		statusError:   make(map[string]string, 0),

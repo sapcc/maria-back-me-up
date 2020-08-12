@@ -28,7 +28,7 @@ const (
 	MARIASERIVCE       = "templates/maria_svc.yaml"
 	POSTGRESDEPLOYMENT = "templates/postgres_deployment.yaml"
 	POSTGRESSERIVCE    = "templates/postgres_svc.yaml"
-	RESTOREFOLDER      = "restore"
+	RESTOREFOLDER      = "/restore"
 	HARDRESTORE        = "hard"
 	SOFTRESTORE        = "soft"
 	VERIFYINTERFAL     = 15
