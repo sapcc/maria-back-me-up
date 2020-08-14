@@ -13,6 +13,7 @@ import (
 
 	"github.com/ncw/swift"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
+	"github.com/sapcc/maria-back-me-up/pkg/constants"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 )
@@ -47,7 +48,7 @@ func NewSwift(c config.Swift, serviceName string, logBin string) (s *Swift, err 
 		cfg:           c,
 		connection:    conn,
 		serviceName:   serviceName,
-		restoreFolder: path.Join("/restore", c.Name),
+		restoreFolder: path.Join(constants.RESTOREFOLDER, c.Name),
 		logger:        logger.WithField("service", serviceName),
 		logBin:        logBin,
 		statusError:   make(map[string]string, 0),
@@ -74,14 +75,18 @@ func (s *Swift) WriteFolder(p string) (err error) {
 	if err != nil {
 		return s.handleError(path.Join(filepath.Base(p), "dump.tar"), err)
 	}
-	return s.WriteStream(path.Join(filepath.Base(p), "dump.tar"), "zip", r)
+	return s.WriteStream(path.Join(filepath.Base(p), "dump.tar"), "zip", r, nil)
 }
 
-func (s *Swift) WriteStream(name, mimeType string, body io.Reader) error {
+func (s *Swift) WriteStream(name, mimeType string, body io.Reader, tags map[string]string) error {
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(body)
 	backupKey := path.Join(s.serviceName, name)
-	f, err := s.connection.ObjectCreate(s.cfg.ContainerName, backupKey, false, "", "", swift.Headers{"X-Delete-At": strconv.FormatInt(time.Now().AddDate(0, 0, 7).Unix(), 10)})
+	headers := swift.Headers{"X-Delete-At": strconv.FormatInt(time.Now().AddDate(0, 0, 7).Unix(), 10)}
+	for k, v := range tags {
+		headers["X-Object-Meta-"+k] = v
+	}
+	f, err := s.connection.ObjectCreate(s.cfg.ContainerName, backupKey, false, "", "", headers)
 	defer f.Close()
 	if err != nil {
 		return s.handleError(name, err)
@@ -98,35 +103,19 @@ func (s *Swift) GetBackupByTimestamp(t time.Time) (path string, err error) {
 }
 
 func (s *Swift) DownloadLatestBackup() (path string, err error) {
-	var newestBackup swift.Object
-	var newestTime int64 = 0
-	objs, err := s.connection.ObjectsAll(s.cfg.ContainerName, &swift.ObjectsOpts{Prefix: s.serviceName + "/", Delimiter: 'y'})
-	for _, o := range objs {
-		if strings.Contains(o.Name, "dump.tar") {
-			currTime := o.LastModified.Unix()
-			if currTime > newestTime {
-				newestTime = currTime
-				newestBackup = o
-			}
-		}
-	}
-	if newestBackup.Name == "" {
+	var b bytes.Buffer
+	wr := bufio.NewWriter(&b)
+	headers, err := s.connection.ObjectGet(s.cfg.ContainerName, s.serviceName+"/last_successful_backup", wr, true, nil)
+	meta := headers.ObjectMetadata()
+	binlog, isset := meta["binlog"]
+	if !isset {
 		return path, &NoBackupError{}
 	}
-	objs, err = s.connection.ObjectsAll(s.cfg.ContainerName, &swift.ObjectsOpts{Prefix: strings.Replace(newestBackup.Name, "dump.tar", "", -1)})
-	if err != nil {
-		return path, s.handleError("", err)
+	key, isset := meta["key"]
+	if !isset {
+		return path, &NoBackupError{}
 	}
-	for _, o := range objs {
-		if !strings.HasSuffix(o.Name, "/") && !strings.Contains(o.Name, "verify") {
-			if err := s.downloadFile(s.restoreFolder, &o); err != nil {
-				return path, err
-			}
-		}
-	}
-	path = filepath.Join(s.restoreFolder, newestBackup.Name)
-	path = filepath.Dir(path)
-	return
+	return s.DownloadBackupFrom(key, binlog)
 }
 
 func (s *Swift) ListFullBackups() (b []Backup, err error) {

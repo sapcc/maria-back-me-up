@@ -33,7 +33,7 @@ func mariaHealthCheck(c config.DatabaseConfig) (status Status, err error) {
 	}
 
 	dbs := strings.Join(c.Databases, " -B ")
-	args := strings.Split(fmt.Sprintf("-c -B %s -u%s -p%s -h%s -P%s", dbs, c.User, c.Password, c.Host, strconv.Itoa(c.Port)), " ")
+	args := strings.Split(fmt.Sprintf("-c -B -q %s -u%s -p%s -h%s -P%s", dbs, c.User, c.Password, c.Host, strconv.Itoa(c.Port)), " ")
 	args = append(args, "--skip-write-binlog")
 	cmd := exec.Command(
 		"mysqlcheck",
@@ -72,6 +72,19 @@ func purgeBinlogsTo(c config.DatabaseConfig, log string) (err error) {
 	}
 
 	_, err = conn.Execute(fmt.Sprintf("PURGE BINARY LOGS TO '%s'", log))
+	if err != nil {
+		return
+	}
+	return
+}
+
+func resetSlave(c config.DatabaseConfig) (err error) {
+	conn, err := client.Connect(fmt.Sprintf("%s:%s", c.Host, strconv.Itoa(c.Port)), c.User, c.Password, "")
+	if err = conn.Ping(); err != nil {
+		return
+	}
+
+	_, err = conn.Execute("RESET SLAVE")
 	if err != nil {
 		return
 	}

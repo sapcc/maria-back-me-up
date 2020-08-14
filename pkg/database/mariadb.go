@@ -97,7 +97,7 @@ func (m *MariaDB) Restore(path string) (err error) {
 	err = m.waitMariaDbUp(5*time.Minute, true)
 	if err != nil {
 		log.Error(fmt.Errorf("Timed out waiting for mariadb to boot. Delete data dir"))
-		m.deleteMariaDBDatabases()
+		m.deleteMariaDBDataDir()
 	} else {
 		m.dropMariaDBDatabases()
 	}
@@ -116,6 +116,9 @@ func (m *MariaDB) Restore(path string) (err error) {
 
 	if sts, err := mariaHealthCheck(m.cfg.Database); err != nil || !sts.Ok {
 		return fmt.Errorf("Mariadb health check failed after restore. Tables corrupted: %s", sts.Details)
+	}
+	if err = resetSlave(m.cfg.Database); err != nil {
+		log.Error(fmt.Errorf("cannot call RESET slave: %s", err.Error()))
 	}
 	return
 }
@@ -483,13 +486,16 @@ func (m *MariaDB) waitMariaDBHealthy(timeout time.Duration) (err error) {
 	return wait.Poll(5*time.Second, timeout, cf)
 }
 
-func (m *MariaDB) deleteMariaDBDatabases() (err error) {
+func (m *MariaDB) deleteMariaDBDataDir() (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
 		for _, d := range m.cfg.Database.Databases {
 			log.Debug("deleting database: ", d)
 			if err = os.RemoveAll(filepath.Join(m.cfg.Database.DataDir, d)); err != nil {
 				return false, nil
 			}
+		}
+		if err = os.RemoveAll(m.cfg.Database.DataDir); err != nil {
+			return false, nil
 		}
 		return true, nil
 	})
