@@ -94,7 +94,7 @@ func NewManager(c config.Config) (m *Manager, err error) {
 	}
 	for _, v := range s.GetStorageServicesKeys() {
 		us.incBackup[v] = 0
-		us.fullBackup[v] = 1
+		us.fullBackup[v] = 0
 	}
 
 	mr, err := k8s.New(c.Namespace)
@@ -173,11 +173,14 @@ func (m *Manager) scheduleBackup() {
 		logger.Error(fmt.Sprintf("error creating full backup: %s", err.Error()))
 		m.Stop()
 		if err = m.handleBackupError(err, m.updateSts.fullBackup); err != nil {
+			logger.Error(fmt.Sprintf("cannot handle full backup error. Retrying in 2min: %s", err.Error()))
+			m.setUpdateStatus(m.updateSts.fullBackup, m.Storage.GetStorageServicesKeys(), false)
 			time.Sleep(time.Duration(2) * time.Minute)
 		}
 		m.Start()
 		return
 	}
+	m.setUpdateStatus(m.updateSts.fullBackup, m.Storage.GetStorageServicesKeys(), true)
 	ctxBin := context.Background()
 	ctxBin, binlogCancel = context.WithCancel(ctxBin)
 	go m.onBinlogRotation(ch)
@@ -235,16 +238,13 @@ func (m *Manager) handleBackupError(err error, backup map[string]int) error {
 	stsError := make([]string, 0)
 	svc := m.Storage.GetStorageServicesKeys()
 	if errors.As(err, &missingErr) && m.cfg.Backup.EnableInitRestore || errors.As(err, &connErr) && m.cfg.Backup.EnableRestoreOnDBFailure {
-		m.setUpdateStatus(backup, svc, false)
 		var eb *storage.NoBackupError
 		bf, errb := m.Storage.DownloadLatestBackup(svc[1])
 		if errors.As(errb, &eb) {
-			logger.Info("cannot restore. no backup available")
-			return nil
+			return fmt.Errorf("cannot restore. no backup available")
 		}
 		if errb != nil {
-			logger.Errorf("cannot do init restore. err: %s", err.Error())
-			return err
+			return fmt.Errorf("cannot do init restore. err: %s", err.Error())
 		}
 		logger.Infof("starting restore due to %s, using backup %s", err.Error(), bf)
 		return m.Db.Restore(bf)
@@ -255,10 +255,13 @@ func (m *Manager) handleBackupError(err error, backup map[string]int) error {
 		return fmt.Errorf("unknown error: %s", err.Error())
 	}
 
+	//backups cant be written to any storage
 	if len(svc) == len(merr.Errors) {
-		m.setUpdateStatus(backup, svc, false)
 		return fmt.Errorf("cannot write to any storage: %s", err.Error())
 	}
+
+	//backups cant be written to all storages
+	m.setUpdateStatus(backup, svc, true)
 	for _, e := range merr.Errors {
 		err, ok := e.(*storage.StorageError)
 		if !ok {
