@@ -8,6 +8,10 @@ type (
 	DatabaseConnectionError struct {
 		message string
 	}
+
+	DatabaseNoTablesError struct {
+		message string
+	}
 )
 
 func (d *DatabaseMissingError) Error() string {
@@ -16,4 +20,8 @@ func (d *DatabaseMissingError) Error() string {
 
 func (d *DatabaseConnectionError) Error() string {
 	return "cannot connect to database"
+}
+
+func (d *DatabaseNoTablesError) Error() string {
+	return "database has no tables"
 }

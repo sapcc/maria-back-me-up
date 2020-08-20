@@ -207,10 +207,15 @@ func (m *Manager) createFullBackup(bpath string) (bp database.LogPosition, err e
 			if ok {
 				return false, err
 			}
+			_, ok = err.(*dberror.DatabaseNoTablesError)
+			if ok {
+				return false, err
+			}
 			return false, nil
 		} else if !s.Ok {
 			return false, fmt.Errorf("tables corrupt: %s", s.Details)
 		}
+
 		return true, nil
 	})
 	//Only do backups if db is healthy
@@ -235,16 +240,17 @@ func (m *Manager) createFullBackup(bpath string) (bp database.LogPosition, err e
 func (m *Manager) handleBackupError(err error, backup map[string]int) error {
 	var missingErr *dberror.DatabaseMissingError
 	var connErr *dberror.DatabaseConnectionError
+	var noTablesErr *dberror.DatabaseNoTablesError
 	stsError := make([]string, 0)
 	svc := m.Storage.GetStorageServicesKeys()
-	if errors.As(err, &missingErr) && m.cfg.Backup.EnableInitRestore || errors.As(err, &connErr) && m.cfg.Backup.EnableRestoreOnDBFailure {
+	if ((errors.As(err, &missingErr) && m.cfg.Backup.EnableInitRestore) || (errors.As(err, &noTablesErr) && m.cfg.Backup.EnableInitRestore)) || (errors.As(err, &connErr) && m.cfg.Backup.EnableRestoreOnDBFailure) {
 		var eb *storage.NoBackupError
 		bf, errb := m.Storage.DownloadLatestBackup(svc[1])
 		if errors.As(errb, &eb) {
 			return fmt.Errorf("cannot restore. no backup available")
 		}
 		if errb != nil {
-			return fmt.Errorf("cannot do init restore. err: %s", err.Error())
+			return fmt.Errorf("cannot do init restore. err: %s", errb.Error())
 		}
 		logger.Infof("starting restore due to %s, using backup %s", err.Error(), bf)
 		return m.Db.Restore(bf)
