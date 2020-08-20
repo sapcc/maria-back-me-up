@@ -22,6 +22,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -133,7 +134,8 @@ func (s *S3) DownloadBackupFrom(fullBackupPath, binlog string) (path string, err
 		return path, &NoBackupError{}
 	}
 	svc := s3.New(s.session)
-	until := strings.Split(binlog, ".")
+	untils := strings.Split(binlog, ".")
+	untilBinlog, err := strconv.Atoi(untils[1])
 	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(fullBackupPath)})
 	if err != nil {
 		return path, s.handleError("", err)
@@ -153,7 +155,11 @@ func (s *S3) DownloadBackupFrom(fullBackupPath, binlog string) (path string, err
 		}
 		_, file := filepath.Split(*listObj.Key)
 		nbr := strings.Split(file, ".")
-		if nbr[1] <= until[1] {
+		currentBinlog, err := strconv.Atoi(nbr[1])
+		if err != nil {
+			continue
+		}
+		if currentBinlog <= untilBinlog {
 			if err := s.downloadFile(s.restoreFolder, listObj); err != nil {
 				return path, err
 			}

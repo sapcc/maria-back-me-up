@@ -192,7 +192,14 @@ func (s *Swift) ListIncBackupsFor(key string) (bl []Backup, err error) {
 	return
 }
 func (s *Swift) DownloadBackupFrom(fullBackupPath string, binlog string) (path string, err error) {
-	until := strings.Split(binlog, ".")
+	if fullBackupPath == "" || binlog == "" {
+		return path, &NoBackupError{}
+	}
+	untils := strings.Split(binlog, ".")
+	untilBinlog, err := strconv.Atoi(untils[1])
+	if err != nil {
+		return
+	}
 	objs, err := s.connection.ObjectsAll(s.cfg.ContainerName, &swift.ObjectsOpts{Prefix: fullBackupPath})
 	if err != nil {
 		return path, s.handleError("", err)
@@ -206,7 +213,11 @@ func (s *Swift) DownloadBackupFrom(fullBackupPath string, binlog string) (path s
 		}
 		_, file := filepath.Split(o.Name)
 		nbr := strings.Split(file, ".")
-		if nbr[1] <= until[1] {
+		currentBinlog, err := strconv.Atoi(nbr[1])
+		if err != nil {
+			continue
+		}
+		if currentBinlog <= untilBinlog {
 			if err := s.downloadFile(s.restoreFolder, &o); err != nil {
 				return path, err
 			}
