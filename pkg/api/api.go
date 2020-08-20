@@ -31,6 +31,7 @@ import (
 	"github.com/sapcc/maria-back-me-up/pkg/constants"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
+	"github.com/sirupsen/logrus"
 )
 
 type TemplateRenderer struct {
@@ -41,6 +42,12 @@ type jsonResponse struct {
 	Time   string `json:"time"`
 	Status string `json:"status"`
 	Error  string `json:"error,omitempty"`
+}
+
+var logger *logrus.Entry
+
+func init() {
+	logger = log.WithFields(logrus.Fields{"component": "api"})
 }
 
 func getKeyPath(key string) string {

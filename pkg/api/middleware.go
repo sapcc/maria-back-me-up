@@ -22,7 +22,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"fmt"
 	"net/http"
 
 	"github.com/coreos/go-oidc"
@@ -70,7 +69,7 @@ func InitAPI(m *backup.Manager, opts config.Options) {
 		RedirectURL: m.GetConfig().Backup.OAuth.RedirectURL + "/auth/callback",
 		Endpoint:    provider.Endpoint(),
 
-		Scopes: []string{oidc.ScopeOpenID, "groups", "email"},
+		Scopes: []string{oidc.ScopeOpenID, "email"},
 	}
 
 }
@@ -149,19 +148,19 @@ func HandleOAuth2Callback(opts config.Options) echo.HandlerFunc {
 		}
 		oauth2Token, err := oauth2Config.Exchange(ctx, c.Request().URL.Query().Get("code"))
 		if err != nil {
-			fmt.Println(err.Error())
+			logger.Error(err.Error())
 			return
 		}
 
 		rawIDToken, ok := oauth2Token.Extra("id_token").(string)
 		if !ok {
-			fmt.Println(err.Error())
+			logger.Error(err.Error())
 			return
 		}
 
 		idToken, err := idTokenVerifier.Verify(ctx, rawIDToken)
 		if err != nil {
-			fmt.Println(err.Error())
+			logger.Error(err.Error())
 			return
 		}
 
@@ -169,18 +168,20 @@ func HandleOAuth2Callback(opts config.Options) echo.HandlerFunc {
 		var claims struct {
 			Email    string   `json:"email"`
 			Verified bool     `json:"email_verified"`
-			Groups   []string `json:"groups"`
+			//Groups   []string `json:"groups"`
 		}
 
 		if err = idToken.Claims(&claims); err != nil {
-			fmt.Println(err.Error())
+			logger.Error(err.Error())
 			return
 		}
 
 		session, err := store.Get(c.Request(), sessionCookieName)
 		url := session.Values["url"].(string)
 
-		updateSessionStore(c.Response(), c.Request(), rawIDToken, claims.Email, "")
+		if err = updateSessionStore(c.Response(), c.Request(), rawIDToken, claims.Email, ""); err != nil {
+			logger.Error(err.Error())
+		}
 
 		return c.Redirect(http.StatusTemporaryRedirect, url)
 	}
