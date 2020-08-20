@@ -97,7 +97,9 @@ func (m *MariaDB) Restore(path string) (err error) {
 	err = m.waitMariaDbUp(5*time.Minute, true)
 	if err != nil {
 		log.Error(fmt.Errorf("Timed out waiting for mariadb to boot. Delete data dir"))
-		m.deleteMariaDBDataDir()
+		if err := m.deleteMariaDBDataDir(); err != nil {
+			return fmt.Errorf("cannot delete data dir %s", err.Error())
+		}
 	} else {
 		m.dropMariaDBDatabases()
 	}

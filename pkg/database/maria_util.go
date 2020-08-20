@@ -53,6 +53,9 @@ func mariaHealthCheck(c config.DatabaseConfig) (status Status, err error) {
 		return status, fmt.Errorf("mysqlcheck failed with %s", string(out))
 	}
 	outa := strings.Fields(string(out))
+	if len(outa) == 0 {
+		return status, &dberror.DatabaseNoTablesError{}
+	}
 	for i := 0; i < len(outa)-1; i++ {
 		if i%2 == 0 {
 			if outa[i+1] != "OK" {
