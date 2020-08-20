@@ -367,11 +367,11 @@ func (m *Manager) createTableChecksum() (err error) {
 }
 
 func (m *Manager) Restore(p string) (err error) {
-	logger.Info("STARTING RESTORE")
+	logger.Info("starting restore")
 	m.Health.Lock()
 	m.Health.Ready = false
 	m.Health.Unlock()
-	logger.Debug("Restore with sidecar ", *m.cfg.SideCar)
+	logger.Debug("restore with sidecar: ", *m.cfg.SideCar)
 	defer func() {
 		if m.cfg.SideCar != nil && !*m.cfg.SideCar {
 			ip, err := m.k8sDB.GetPodIP(fmt.Sprintf("app=%s-mariadb", m.cfg.ServiceName))
@@ -398,6 +398,7 @@ func (m *Manager) Restore(p string) (err error) {
 	if err = m.Db.Restore(p); err != nil {
 		return
 	}
+	logger.Info("restore successful")
 	//only remove backup files when restore was succesful, so manual restore is possible!
 	os.RemoveAll(p)
 
@@ -411,7 +412,7 @@ func (m *Manager) readErrorChannel() {
 			logger.Debug("error channel closed")
 			break
 		}
-		fmt.Println("ERROR CHANNEL", err, ok)
+
 		if err == nil {
 			continue
 		}

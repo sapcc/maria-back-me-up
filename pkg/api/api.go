@@ -187,7 +187,7 @@ func PostRestore(m *backup.Manager) echo.HandlerFunc {
 			if user == "" {
 				return sendJSONResponse(c, "Cannot read user info", "")
 			}
-			log.Info("RESTORE TRIGGERED BY USER: " + user)
+			log.Info("restore triggered by user: " + user)
 		}
 		p := params["backup"][0]
 		if p == "" {
