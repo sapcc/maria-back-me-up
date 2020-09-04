@@ -7,6 +7,7 @@ RUN make all
 
 FROM alpine:3
 LABEL maintainer="Stefan Hipfel <stefan.hipfel@sap.com>"
+LABEL source_repository="https://github.com/sapcc/maria-back-me-up"
 
 ENV PACKAGES="mysql-client mariadb curl python" \
     LIB_PACKAGES="glib-dev mariadb-dev zlib-dev pcre-dev libressl-dev" \
