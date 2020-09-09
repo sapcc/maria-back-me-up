@@ -1,4 +1,4 @@
-IMAGE   ?= hub.global.cloud.sap/monsoon/maria-back-me-up
+IMAGE   ?= keppel.eu-de-1.cloud.sap/ccloud/maria-back-me-up
 VERSION = $(shell git rev-parse --verify HEAD | head -c 8)
 
 GOOS    ?= $(shell go env | grep GOOS | cut -d'"' -f2)
@@ -18,7 +18,7 @@ all: $(BINARIES:%=bin/$(GOOS)/%)
 bin/%: $(GOFILES) Makefile
 	GOOS=$(*D) GOARCH=amd64 go build $(GOFLAGS) -v -i -o $(@D)/$(@F) ./cmd/$(basename $(@F))
 
-build: 
+build:
 	docker build -t $(IMAGE):$(VERSION) .
 
 push: build
