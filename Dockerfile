@@ -9,7 +9,7 @@ FROM alpine:3
 LABEL maintainer="Stefan Hipfel <stefan.hipfel@sap.com>"
 LABEL source_repository="https://github.com/sapcc/maria-back-me-up"
 
-ENV PACKAGES="mysql-client mariadb curl python" \
+ENV PACKAGES="mysql-client mariadb curl python2" \
     LIB_PACKAGES="glib-dev mariadb-dev zlib-dev pcre-dev libressl-dev" \
     BUILD_PACKAGES="cmake build-base git" \
     BUILD_PATH="/opt/mydumper-src/"
@@ -34,7 +34,7 @@ RUN apk --no-cache add \
 
 ADD mysql-utilities-1.6.5.tar.gz /tmp/
 WORKDIR /tmp/mysql-utilities-1.6.5/
-RUN python setup.py install
+RUN python2 setup.py install
 RUN rm -rf /tmp/mysql-utilities-1.6.5/
 
 WORKDIR /
