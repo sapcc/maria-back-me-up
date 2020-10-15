@@ -177,8 +177,8 @@ func (m *Manager) scheduleBackup() {
 			m.setUpdateStatus(m.updateSts.fullBackup, m.Storage.GetStorageServicesKeys(), false)
 			time.Sleep(time.Duration(2) * time.Minute)
 			m.Start()
+			return
 		}
-		return
 	}
 	m.setUpdateStatus(m.updateSts.fullBackup, m.Storage.GetStorageServicesKeys(), true)
 	ctxBin := context.Background()
