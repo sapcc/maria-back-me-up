@@ -87,6 +87,8 @@ func (s *Swift) WriteStream(name, mimeType string, body io.Reader, tags map[stri
 		headers["X-Object-Meta-"+k] = v
 	}
 	f, err := s.connection.ObjectCreate(s.cfg.ContainerName, backupKey, false, "", "", headers)
+	// swift will not throw ObjectCreate error when container does not exists. check headers instead
+	_, err = f.Headers()
 	defer f.Close()
 	if err != nil {
 		return s.handleError(name, err)

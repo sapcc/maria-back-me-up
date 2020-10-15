@@ -175,7 +175,7 @@ func (m *Manager) createIOReaders(count int) ([]io.Reader, io.Writer, io.Closer)
 }
 
 func (m *Manager) updateErroStatus() {
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(5 * time.Minute)
 	go func() {
 		for {
 			select {

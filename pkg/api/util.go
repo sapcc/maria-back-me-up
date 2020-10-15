@@ -41,18 +41,18 @@ func ReadFile(path string) (d string, err error) {
 
 func calcVerifyState(v storage.Verify, showError bool) string {
 	verifyState := verifyNotCompleteState
-	verifyError := "Verification not completed..."
+	verifyError := "verification not completed..."
 	if v.VerifyRestore == 1 && v.VerifyDiff == 1 {
 		verifyState = verifyOkState
 		if v.VerifyError != "" {
 			verifyError = v.VerifyError
 		} else {
-			verifyError = "Restore + MySQL Diff successful! Table checksum was not executed."
+			verifyError = "mySQL restore and diff successful! Table checksum was not executed yet."
 		}
 	}
 	if v.VerifyChecksum == 1 {
 		verifyState = verifyCompleteState
-		verifyError = "MySQL Checksum successful"
+		verifyError = "mySQL checksum successful"
 	}
 	if v.VerifyRestore == 0 || v.VerifyDiff == 0 {
 		verifyState = verifyErrorState

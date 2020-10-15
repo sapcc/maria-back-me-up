@@ -171,13 +171,13 @@ func (m *Manager) scheduleBackup() {
 	mp, err := m.createFullBackup(bpath)
 	if err != nil {
 		logger.Error(fmt.Sprintf("error creating full backup: %s", err.Error()))
-		m.Stop()
 		if err = m.handleBackupError(err, m.updateSts.fullBackup); err != nil {
+			m.Stop()
 			logger.Error(fmt.Sprintf("cannot handle full backup error. Retrying in 2min: %s", err.Error()))
 			m.setUpdateStatus(m.updateSts.fullBackup, m.Storage.GetStorageServicesKeys(), false)
 			time.Sleep(time.Duration(2) * time.Minute)
+			m.Start()
 		}
-		m.Start()
 		return
 	}
 	m.setUpdateStatus(m.updateSts.fullBackup, m.Storage.GetStorageServicesKeys(), true)
@@ -245,7 +245,15 @@ func (m *Manager) handleBackupError(err error, backup map[string]int) error {
 	svc := m.Storage.GetStorageServicesKeys()
 	if ((errors.As(err, &missingErr) && m.cfg.Backup.EnableInitRestore) || (errors.As(err, &noTablesErr) && m.cfg.Backup.EnableInitRestore)) || (errors.As(err, &connErr) && m.cfg.Backup.EnableRestoreOnDBFailure) {
 		var eb *storage.NoBackupError
-		bf, errb := m.Storage.DownloadLatestBackup(svc[1])
+		var errb error
+		var bf string
+		//try to find a latest/successful backup in any of the available storages
+		for _, k := range svc {
+			bf, errb = m.Storage.DownloadLatestBackup(k)
+			if errb == nil {
+				break
+			}
+		}
 		if errors.As(errb, &eb) {
 			return fmt.Errorf("cannot restore. no backup available")
 		}
@@ -360,7 +368,7 @@ func (m *Manager) createTableChecksum() (err error) {
 	}
 	err = m.Storage.WriteStreamAll(m.lastBackupTime+"/tablesChecksum.yaml", "", bytes.NewReader(out))
 	if err != nil {
-		logger.Error(fmt.Errorf("cannot upload verify status: %s", err.Error()))
+		logger.Error(fmt.Errorf("cannot upload table checksums: %s", err.Error()))
 		return
 	}
 	return
