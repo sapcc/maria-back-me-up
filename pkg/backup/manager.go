@@ -169,18 +169,18 @@ func (m *Manager) scheduleBackup() {
 	bpath := path.Join(m.cfg.Backup.BackupDir, m.lastBackupTime)
 	ch := make(chan error)
 	mp, err := m.createFullBackup(bpath)
+	m.setUpdateStatus(m.updateSts.fullBackup, m.Storage.GetStorageServicesKeys(), true)
 	if err != nil {
 		logger.Error(fmt.Sprintf("error creating full backup: %s", err.Error()))
 		if err = m.handleBackupError(err, m.updateSts.fullBackup); err != nil {
+			m.setUpdateStatus(m.updateSts.fullBackup, m.Storage.GetStorageServicesKeys(), false)
 			m.Stop()
 			logger.Error(fmt.Sprintf("cannot handle full backup error. Retrying in 2min: %s", err.Error()))
-			m.setUpdateStatus(m.updateSts.fullBackup, m.Storage.GetStorageServicesKeys(), false)
 			time.Sleep(time.Duration(2) * time.Minute)
 			m.Start()
 			return
 		}
 	}
-	m.setUpdateStatus(m.updateSts.fullBackup, m.Storage.GetStorageServicesKeys(), true)
 	ctxBin := context.Background()
 	ctxBin, binlogCancel = context.WithCancel(ctxBin)
 	go m.onBinlogRotation(ch)
