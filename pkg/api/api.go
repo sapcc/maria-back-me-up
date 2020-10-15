@@ -60,14 +60,14 @@ func getServiceName(key string) string {
 	return fmt.Sprintf("Service: %s", s[0])
 }
 
-func getVerifyBackupState(v []storage.Verify, t time.Time, err bool) string {
+func getVerifyBackupState(v []storage.Verify, t time.Time, withErr bool) string {
 	var duration time.Duration
 	var latestVerify storage.Verify
 	var closestVerify storage.Verify
 	var verifyState = verifyNotCompleteState
 	duration = time.Duration(1000 * time.Hour)
-	if len(v) == 0 && err {
-		return "Verification not completed..."
+	if len(v) == 0 && withErr {
+		return "verification not completed..."
 	}
 	for _, k := range v {
 		if k.Time.After(latestVerify.Time) {
@@ -75,7 +75,7 @@ func getVerifyBackupState(v []storage.Verify, t time.Time, err bool) string {
 		}
 		if t.Before(k.Time) {
 			if k.Time.Sub(t) < duration {
-				verifyState = calcVerifyState(k, err)
+				verifyState = calcVerifyState(k, withErr)
 				closestVerify = k
 			}
 			duration = k.Time.Sub(t)
@@ -83,7 +83,10 @@ func getVerifyBackupState(v []storage.Verify, t time.Time, err bool) string {
 	}
 	// check if the latest verify status sub is equal or smaller than the closest verify status
 	if !latestVerify.Time.IsZero() && math.Round(latestVerify.Time.Sub(closestVerify.Time).Minutes()) <= constants.VERIFYINTERFAL {
-		return calcVerifyState(latestVerify, err)
+		return calcVerifyState(latestVerify, withErr)
+	}
+	if t.After(latestVerify.Time) && withErr {
+		return "verification not completed..."
 	}
 
 	return verifyState
@@ -187,7 +190,7 @@ func PostRestore(m *backup.Manager) echo.HandlerFunc {
 			if user == "" {
 				return sendJSONResponse(c, "Cannot read user info", "")
 			}
-			log.Info("RESTORE TRIGGERED BY USER: " + user)
+			log.Info("restore triggered by user: " + user)
 		}
 		p := params["backup"][0]
 		if p == "" {

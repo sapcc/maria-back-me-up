@@ -31,5 +31,5 @@ const (
 	RESTOREFOLDER      = "/restore"
 	HARDRESTORE        = "hard"
 	SOFTRESTORE        = "soft"
-	VERIFYINTERFAL     = 15
+	VERIFYINTERFAL     = 30
 )
