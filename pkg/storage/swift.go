@@ -89,8 +89,11 @@ func (s *Swift) WriteStream(name, mimeType string, body io.Reader, tags map[stri
 	f, err := s.connection.ObjectCreate(s.cfg.ContainerName, backupKey, false, "", "", headers)
 	defer func() {
 		f.Close()
-		// swift will not throw ObjectCreate error when container does not exists. check headers instead
-		_, err = f.Headers()
+		if err == nil {
+			// swift will not throw ObjectCreate error when container does not exists. check headers instead
+			// only if no other error occurred before
+			_, err = f.Headers()
+		}
 	}()
 	if err != nil {
 		return s.handleError(name, err)
