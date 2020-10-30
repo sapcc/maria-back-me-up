@@ -78,7 +78,7 @@ func (s *Swift) WriteFolder(p string) (err error) {
 	return s.WriteStream(path.Join(filepath.Base(p), "dump.tar"), "zip", r, nil)
 }
 
-func (s *Swift) WriteStream(name, mimeType string, body io.Reader, tags map[string]string) error {
+func (s *Swift) WriteStream(name, mimeType string, body io.Reader, tags map[string]string) (err error) {
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(body)
 	backupKey := path.Join(s.serviceName, name)
@@ -87,9 +87,11 @@ func (s *Swift) WriteStream(name, mimeType string, body io.Reader, tags map[stri
 		headers["X-Object-Meta-"+k] = v
 	}
 	f, err := s.connection.ObjectCreate(s.cfg.ContainerName, backupKey, false, "", "", headers)
-	// swift will not throw ObjectCreate error when container does not exists. check headers instead
-	_, err = f.Headers()
-	defer f.Close()
+	defer func() {
+		f.Close()
+		// swift will not throw ObjectCreate error when container does not exists. check headers instead
+		_, err = f.Headers()
+	}()
 	if err != nil {
 		return s.handleError(name, err)
 	}
@@ -97,7 +99,7 @@ func (s *Swift) WriteStream(name, mimeType string, body io.Reader, tags map[stri
 	if err != nil {
 		return s.handleError(name, err)
 	}
-	return nil
+	return err
 }
 
 func (s *Swift) GetBackupByTimestamp(t time.Time) (path string, err error) {
