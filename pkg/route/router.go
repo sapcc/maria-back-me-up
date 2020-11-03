@@ -37,6 +37,7 @@ func InitAPI(m *backup.Manager, opts config.Options) *echo.Echo {
 	i.GET("backup", api.GetBackup(m))
 	i.GET("restore", api.GetRestore(m))
 	i.POST("restore", api.PostRestore(m))
+	i.POST("restore/download", api.PostRestoreDownload(m))
 
 	gb := e.Group("/api")
 	gb.Use(api.Oauth(m.GetConfig().Backup.OAuth.Enabled, opts), api.Restore(m))

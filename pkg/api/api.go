@@ -22,6 +22,7 @@ import (
 	"html/template"
 	"math"
 	"net/http"
+	"os"
 	"path"
 	"strings"
 	"time"
@@ -159,6 +160,36 @@ func PostLatestRestore(m *backup.Manager) echo.HandlerFunc {
 		}
 		go m.Start()
 		return sendJSONResponse(c, "Restore finished!", "")
+	}
+}
+
+func PostRestoreDownload(m *backup.Manager) echo.HandlerFunc {
+	return func(c echo.Context) (err error) {
+		res := c.Response()
+		params, err := c.FormParams()
+		res.WriteHeader(http.StatusOK)
+		res.Header().Set("Content-Disposition", "attachment; filename=backup.tar")
+		p := params["backup"][0]
+		if p == "" {
+			return sendJSONResponse(c, "Error parsing backup param", err.Error())
+		}
+		path, binlog := path.Split(p)
+		st := params["storage"][0]
+		if st == "" {
+			return sendJSONResponse(c, "Error parsing storage param", err.Error())
+		}
+		backupPath, err := m.Storage.DownloadBackupFrom(st, path, binlog)
+		if err != nil {
+			return sendJSONResponse(c, "Error downloading backup", err.Error())
+		}
+		defer os.RemoveAll(backupPath)
+		pr, err := storage.ZipFolderPath(backupPath)
+		if err != nil {
+			return sendJSONResponse(c, "Error downloading backup", err.Error())
+		}
+		c.Stream(http.StatusOK, "application/x-gzip", pr)
+
+		return
 	}
 }
 

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 )
 
-func zipFolderPath(pathToZip string) (pr *io.PipeReader, err error) {
+func ZipFolderPath(pathToZip string) (pr *io.PipeReader, err error) {
 	dir, err := os.Open(pathToZip)
 	if err != nil {
 		return

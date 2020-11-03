@@ -97,7 +97,7 @@ func (s *S3) GetStatusErrorByKey(backupKey string) string {
 }
 
 func (s *S3) WriteFolder(p string) (err error) {
-	r, err := zipFolderPath(p)
+	r, err := ZipFolderPath(p)
 	if err != nil {
 		return s.handleError(p, err)
 	}

@@ -71,7 +71,7 @@ func (s *Swift) GetStatusErrorByKey(backupKey string) string {
 }
 
 func (s *Swift) WriteFolder(p string) (err error) {
-	r, err := zipFolderPath(p)
+	r, err := ZipFolderPath(p)
 	if err != nil {
 		return s.handleError(path.Join(filepath.Base(p), "dump.tar"), err)
 	}
