@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"sort"
 	"strings"
 	"time"
 
@@ -137,7 +138,10 @@ func GetRestore(m *backup.Manager) echo.HandlerFunc {
 		}
 		var tmpl = template.New("restore.html").Funcs(funcMap)
 		t, err := tmpl.ParseFiles(constants.RESTORE)
-		incBackups, err := m.Storage.ListIncBackupsFor(s, k)
+
+		var incBackups backupSlice
+		incBackups, err = m.Storage.ListIncBackupsFor(s, k)
+		sort.Stable(incBackups)
 		if err != nil {
 			return sendJSONResponse(c, "Error fetching backup list", err.Error())
 		}
@@ -165,6 +169,7 @@ func PostLatestRestore(m *backup.Manager) echo.HandlerFunc {
 
 func PostRestoreDownload(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
+		os.RemoveAll(constants.RESTOREFOLDER)
 		res := c.Response()
 		params, err := c.FormParams()
 		res.WriteHeader(http.StatusOK)
