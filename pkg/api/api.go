@@ -100,23 +100,6 @@ var funcMap = template.FuncMap{
 	"getServiceName":       getServiceName,
 }
 
-func GetBackup(m *backup.Manager) echo.HandlerFunc {
-	return func(c echo.Context) (err error) {
-		s := c.QueryParam("storage")
-		if err != nil {
-			return sendJSONResponse(c, "Error parsing storage key", err.Error())
-		}
-		var tmpl = template.New("backup.html").Funcs(funcMap)
-		t, err := tmpl.ParseFiles(constants.BACKUP)
-		backups, err := m.Storage.ListFullBackups(s)
-		if err != nil {
-			return sendJSONResponse(c, "Error fetching backup list", err.Error())
-		}
-
-		return t.Execute(c.Response(), backups)
-	}
-}
-
 func GetRoot(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		var tmpl = template.New("index.html").Funcs(funcMap)
@@ -126,6 +109,25 @@ func GetRoot(m *backup.Manager) echo.HandlerFunc {
 		}
 		s := m.Storage.GetStorageServicesKeys()
 		return t.Execute(c.Response(), s)
+	}
+}
+
+func GetBackup(m *backup.Manager) echo.HandlerFunc {
+	return func(c echo.Context) (err error) {
+		s := c.QueryParam("storage")
+		if err != nil {
+			return sendJSONResponse(c, "Error parsing storage key", err.Error())
+		}
+		var tmpl = template.New("backup.html").Funcs(funcMap)
+		t, err := tmpl.ParseFiles(constants.BACKUP)
+		var backups backupSlice
+		backups, err = m.Storage.ListFullBackups(s)
+		sort.Stable(backups)
+		if err != nil {
+			return sendJSONResponse(c, "Error fetching backup list", err.Error())
+		}
+
+		return t.Execute(c.Response(), backups)
 	}
 }
 
@@ -139,7 +141,7 @@ func GetRestore(m *backup.Manager) echo.HandlerFunc {
 		var tmpl = template.New("restore.html").Funcs(funcMap)
 		t, err := tmpl.ParseFiles(constants.RESTORE)
 
-		var incBackups backupSlice
+		var incBackups incBackupSlice
 		incBackups, err = m.Storage.ListIncBackupsFor(s, k)
 		sort.Stable(incBackups)
 		if err != nil {

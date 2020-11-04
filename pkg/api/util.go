@@ -66,17 +66,30 @@ func calcVerifyState(v storage.Verify, showError bool) string {
 	return verifyState
 }
 
-type backupSlice []storage.Backup
+type incBackupSlice []storage.Backup
 
-func (s backupSlice) Len() int {
+func (s incBackupSlice) Len() int {
 	return len(s[0].IncList)
 }
 
-func (s backupSlice) Less(i, j int) bool {
-	fmt.Println(s[0].IncList[i].LastModified)
+func (s incBackupSlice) Less(i, j int) bool {
 	return (s[0].IncList[i].LastModified).After(s[0].IncList[j].LastModified)
 }
 
-func (s backupSlice) Swap(i, j int) {
+func (s incBackupSlice) Swap(i, j int) {
 	s[0].IncList[i], s[0].IncList[j] = s[0].IncList[j], s[0].IncList[i]
+}
+
+type backupSlice []storage.Backup
+
+func (s backupSlice) Len() int {
+	return len(s)
+}
+
+func (s backupSlice) Less(i, j int) bool {
+	return (s[i].Time).After(s[j].Time)
+}
+
+func (s backupSlice) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
 }

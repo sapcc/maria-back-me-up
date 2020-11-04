@@ -65,7 +65,6 @@ func New(ns string) (m *Database, err error) {
 			if f.Name == "kubeconfig" {
 				v := f.Value.String()
 				kubeconfig = &v
-				fmt.Println(v)
 			}
 		})
 		if home := homeDir(); home != "" && kubeconfig == nil {
