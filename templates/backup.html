@@ -6,27 +6,25 @@
 </head>
 
 <body>
-    <div class="container">
-        <div class="card">
-            <div class="card-header">
-                <h1>MariaDB Restore</h1>
-                <p>Choose a full backup</p>
-            </div>
+    <div class="card">
+        <div class="card-header">
+            <h1>MariaDB Restore</h1>
+            <p>Choose a full backup</p>
         </div>
+    </div>
 
-        <div class="card-body">
-        <li class="card">
-        {{ range $index, $backup := . }}
-            <ul class="list-group">
-                <li class="list-group-item  list-group-item-info" style="background-color: rgba(0,0,0,.03);">
-                    <a style="color:black" aria-expanded="false" href="/restore?key={{ $backup.Key }}&storage={{ $backup.Storage }}">
-                    {{ $backup.Time }}
-                </a>
-                </li>
-            </ul>
-        {{ end }}
-        </li>
-        </div>
+    <div class="card-body">
+    <li class="card overflowAuto">
+    {{ range $index, $backup := . }}
+        <ul class="list-group">
+            <li class="list-group-item  list-group-item-info" style="background-color: rgba(0,0,0,.03);">
+                <a style="color:black" aria-expanded="false" href="/restore?key={{ $backup.Key }}&storage={{ $backup.Storage }}">
+                {{ $backup.Time }}
+            </a>
+            </li>
+        </ul>
+    {{ end }}
+    </li>
     </div>
 
     <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
@@ -34,5 +32,17 @@
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
 
 </body>
-
+<style>
+    html, body {
+        height: 100%;
+        overflow: hidden;
+        padding: 10px;
+        background-color: grey;
+    }
+    .overflowAuto {
+        overflow-x: hidden;
+        overflow-y: auto;
+        height: calc(100vh - 180px);
+    }
+</style>
 </html>
