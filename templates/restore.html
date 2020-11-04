@@ -6,60 +6,63 @@
 </head>
 
 <body>
-    <div class="container">
-        <div class="card">
-            <div class="card-header">
-                <h1>MariaDB Restore</h1>
-                <p>Choose one timestamp to restore to</p>
+    <div class="card">
+        <div class="card-header">
+            <h1>MariaDB Restore</h1>
+            <div>
+                <span class="badge badge-pill badge-success">Backup</span>Verification successful</br>
+                <span class="badge badge-pill badge-secondary">Backup</span>Verification was not completed yet</br>
+                <span class="badge badge-pill badge-warning">Backup</span>Verfication partly successful. Table checksum not run or incorrect</br>
+                <span class="badge badge-pill badge-danger">Backup</span>Verification Error. Hover over to see the reason</br>
             </div>
         </div>
-
         <div class="card-body">
-        <li class="card">
-        {{ range $index, $backup := . }}
-            <ul class="list-group">
-                <li class="list-group-item  list-group-item-info" style="background-color: rgba(0,0,0,.03);">
-                    <h3 style="margin:30px;" aria-expanded="false">
-                        {{ getServiceName $backup.Key }}</br>
-                    </h3>
-                    <h4 style="margin:30px;" aria-expanded="false">
-                        {{ getKeyPath $backup.Key }}</br>
-                    </h4>
-                    <h5 style="margin:30px;" aria-expanded="false">
-                        List of available incremental backups. Choose one:
-                    </h5>
-                    <ul>
-                        <div class="form-check">
-                            <form action="/restore" method="post">
-                                <input class="form-check-input" type="hidden" name="storage" id="storage" value="{{$backup.Storage}}">
-                                {{ range $backup.IncList}}
-                                <li class="list-group-item" style="background-color: {{ getVerifyBackupState $backup.Verify .LastModified false}}" data-toggle="popover" data-trigger="hover" data-placement="top" data-content="{{ getVerifyBackupState $backup.Verify .LastModified true}}">
-                                    <input class="form-check-input" type="radio" name="backup" id="backup" value="{{.Key}}">
-                                    <label class="form-check-label" style="color:white" for="backup">
-                                        {{.LastModified}}
-                                    </label>
-                                </li>
-                                {{ end }}
-                               
-                            </form>
-                        </div>
-                        <button id="download_btn"type="button" class="btn btn-dark btn-lg btn-block">
-                            <span id="loading_spinner" class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="display: none; margin-right: 10px;"></span>
-                            Download
-                        </button>
-                        <button id="restore_btn" type="button" name="restore" class="btn btn-primary btn-lg btn-block" data-toggle="modal" data-target="#restoreModal">Restore</button>
-                    </ul>
-                </li>
-            </ul>
-        {{ end }}
-        </li>
+            {{ range $index, $backup := . }}
+                <ul class="list-group">
+                    <li class="list-group-item  list-group-item-info" style="background-color: rgba(0,0,0,.03);">
+                        <h3 style="margin:30px;" aria-expanded="false">
+                            {{ getServiceName $backup.Key }}</br>
+                        </h3>
+                        <h4 style="margin:30px;" aria-expanded="false">
+                            {{ getKeyPath $backup.Key }}</br>
+                        </h4>
+                        <h5 style="margin:30px;" aria-expanded="false">
+                            List of available incremental backups. Choose one:
+                        </h5>
+                        <ul>
+                            <div class="form-check">
+                                <form action="/restore" method="post" class="overflowAuto">
+                                    <input class="form-check-input" type="hidden" name="storage" id="storage" value="{{$backup.Storage}}">
+                                    {{ range $backup.IncList}}
+                                    <li class="list-group-item" style="background-color: {{ getVerifyBackupState $backup.Verify .LastModified false}}" data-toggle="popover" data-trigger="hover" data-placement="top" data-content="{{ getVerifyBackupState $backup.Verify .LastModified true}}">
+                                        <input class="form-check-input" type="radio" name="backup" id="backup" value="{{.Key}}">
+                                        <label class="form-check-label" style="color:white" for="backup">
+                                            {{.LastModified}}
+                                        </label>
+                                    </li>
+                                    {{ end }}
+                                
+                                </form>
+                            </div>
+                        </ul>
+                    </li>
+                </ul>
+            {{ end }}
         </div>
-        <span class="badge badge-pill badge-success">Backup</span>Verification successful</br>
-        <span class="badge badge-pill badge-secondary">Backup</span>Verification was not completed yet</br>
-        <span class="badge badge-pill badge-warning">Backup</span>Verfication partly successful. Table checksum not run or incorrect</br>
-        <span class="badge badge-pill badge-danger">Backup</span>Verification Error. Hover over to see the reason</br>
+        <div class="card-footer">
+            <button id="download_btn"type="button" class="btn btn-dark btn-lg btn-block" disabled>
+                <span id="loading_spinner" class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="display: none; margin-right: 10px;"></span>
+                Download
+            </button>
+            <button id="restore_btn" type="button" name="restore" class="btn btn-primary btn-lg btn-block" data-toggle="modal" data-target="#restoreModal" disabled>Restore</button>
+        </div>
+    </div>
+    <div class="footer">
+
     </div>
   
+
+
     <!-- Modal -->
     <div class="modal fade" id="restoreModal" tabindex="-1" role="dialog" aria-labelledby="restoreModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
@@ -85,9 +88,21 @@
     <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+
     <script>
         $(function () {
             $('[data-toggle="popover"]').popover()
+        })
+
+        let radioBtns = document.querySelectorAll("input[type=radio]")
+        radioBtns.forEach((elem) => {
+            elem.addEventListener("change", function(event) {
+                const checked = event.target.checked
+                if (event.target.checked) {
+                    enableButton('download_btn', 'Download')
+                    enableButton('restore_btn', "Restore")
+                }
+            })
         })
 
         document.querySelectorAll("#restore_btn")[0].addEventListener("click", function() {
@@ -132,6 +147,7 @@
                 enableButton('restore_modal_btn', "Restore")
             })
         })
+
         document.querySelectorAll("#download_btn")[0].addEventListener("click", function() {
             disableButton('download_btn', "working on it . . .")
             postFormData("restore/download")
@@ -164,13 +180,14 @@
                 body: formData,
                 method: "post"
             })
-
         }
 
         let enableButton = function(selector, btnText) {
             const btn = document.getElementById(selector)
             btn.disabled = false
-            btn.getElementsByClassName('spinner-border')[0].style.display = "none"
+            if (btn.getElementsByClassName('spinner-border').length > 0) {
+                btn.getElementsByClassName('spinner-border')[0].style.display = "none"
+            }
             btn.childNodes[2].nodeValue = btnText
         }
 
@@ -198,10 +215,16 @@
         }
     </script>
     <style>
-        .form-check{
-            max-height: 500px;
-            margin-bottom: 10px;
-            overflow:scroll;
+        html, body {
+            height: 100%;
+            overflow: hidden;
+            padding: 10px;
+            background-color: grey;
+        }
+        .overflowAuto {
+            overflow-x: hidden;
+            overflow-y: auto;
+            height: calc(100vh - 635px);
         }
     </style>
 </body>
