@@ -25,8 +25,8 @@ import (
 type (
 	updateStatus struct {
 		sync.RWMutex `yaml:"-"`
-		incBackup    map[string]int
-		fullBackup   map[string]int
+		IncBackup    map[string]int
+		FullBackup   map[string]int
 	}
 
 	MetricsCollector struct {
@@ -43,7 +43,7 @@ func (c *MetricsCollector) Describe(ch chan<- *prometheus.Desc) {
 func (c *MetricsCollector) Collect(ch chan<- prometheus.Metric) {
 	c.updateSts.RLock()
 	defer c.updateSts.RUnlock()
-	for storage, up := range c.updateSts.fullBackup {
+	for storage, up := range c.updateSts.FullBackup {
 		ch <- prometheus.MustNewConstMetric(
 			c.backup,
 			prometheus.GaugeValue,
@@ -52,7 +52,7 @@ func (c *MetricsCollector) Collect(ch chan<- prometheus.Metric) {
 			storage,
 		)
 	}
-	for storage, up := range c.updateSts.incBackup {
+	for storage, up := range c.updateSts.IncBackup {
 		ch <- prometheus.MustNewConstMetric(
 			c.backup,
 			prometheus.GaugeValue,

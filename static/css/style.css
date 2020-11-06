@@ -1,0 +1,23 @@
+html, body {
+    height: 100%;
+    overflow: hidden;
+    padding: 10px;
+    background-color: grey;
+}
+.card-footer-config {
+    padding: .75rem 1.25rem;
+    background-color: rgb(247 247 247);
+    border: 5px solid rgb(0 0 0 / 56%);
+    border-radius: 15px;
+    margin: 15px;
+}
+
+.btn-group-sep {
+    display: block;
+    left: calc(50% + -260px);
+}
+
+.backup_sts {
+    background-color: #dc143c;
+    color: white;
+}

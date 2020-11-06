@@ -1,0 +1,106 @@
+<html lang="en">
+
+<head>
+    <title>MariaDB Restore</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <link rel="stylesheet" href="static/css/style.css">
+</head>
+
+<body>
+    <div class="card">
+        <div class="card-header">
+            <h1>maria_db restore | {{ .service }}</h1>
+            <div>
+                <span class="badge badge-pill badge-success">Backup</span>Verification successful</br>
+                <span class="badge badge-pill badge-secondary">Backup</span>Verification was not completed yet</br>
+                <span class="badge badge-pill badge-warning">Backup</span>Verfication partly successful. Table checksum not run or incorrect</br>
+                <span class="badge badge-pill badge-danger">Backup</span>Verification Error. Hover over to see the reason</br>
+            </div>
+        </div>
+        <div class="card-body">
+            {{ range $index, $backup := .incBackups }}
+                <ul class="list-group">
+                    <li class="list-group-item  list-group-item-info" style="background-color: rgba(0,0,0,.03);">
+                        <h4 style="margin:30px;" aria-expanded="false">
+                            {{ getKeyPath $backup.Key }}</br>
+                        </h4>
+                        <h5 style="margin:30px;" aria-expanded="false">
+                            List of available incremental backups. Choose one:
+                        </h5>
+                        <ul>
+                            <div class="form-check">
+                                <form action="/restore" method="post" class="overflowAuto">
+                                    <input class="form-check-input" type="hidden" name="storage" id="storage" value="{{$backup.Storage}}">
+                                    {{ range $backup.IncList}}
+                                    <li class="list-group-item" style="background-color: {{ getVerifyBackupState $backup.Verify .LastModified false}}" data-toggle="popover" data-trigger="hover" data-placement="top" data-content="{{ getVerifyBackupState $backup.Verify .LastModified true}}">
+                                        <input class="form-check-input" type="radio" name="backup" id="backup" value="{{.Key}}">
+                                        <label class="form-check-label" style="color:white" for="backup">
+                                            {{.LastModified}}
+                                        </label>
+                                    </li>
+                                    {{ end }}
+                                
+                                </form>
+                            </div>
+                        </ul>
+                    </li>
+                </ul>
+            {{ end }}
+        </div>
+        <div class="card-footer">
+            <button id="download_btn"type="button" class="btn btn-dark btn-lg btn-block" disabled>
+                <span id="loading_spinner" class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="display: none; margin-right: 10px;"></span>
+                Download
+            </button>
+            <button id="restore_btn" type="button" name="restore" class="btn btn-primary btn-lg btn-block" data-toggle="modal" data-target="#restoreModal" disabled>Restore</button>
+        </div>
+    </div>
+    <div class="footer">
+
+    </div>
+  
+
+
+    <!-- Modal -->
+    <div class="modal fade" id="restoreModal" tabindex="-1" role="dialog" aria-labelledby="restoreModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+            <h5 class="modal-title" id="restoreModalLabel">Restore from backup</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+            </button>
+            </div>
+            <div class="modal-body">
+            </div>
+            <div class="modal-footer">
+            <button type="button" id="restore_modal_btn" type="submit" class="btn btn-primary" value="soft">
+                <span id="loading_spinner" class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="display: none; margin-right: 10px;"></span>
+                Restore
+            </button>
+            </div>
+        </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+    <script src="/static/js/ui.js"></script>
+    <script src="/static/js/restore.js"></script>
+
+    <script>
+        $(function () {
+            $('[data-toggle="popover"]').popover()
+        })
+    </script>
+    <style>
+        .overflowAuto {
+            overflow-x: hidden;
+            overflow-y: auto;
+            height: calc(100vh - 575px);
+        }
+    </style>
+</body>
+
+</html>

@@ -46,6 +46,7 @@ import (
 var (
 	binlogCancel  context.CancelFunc
 	backupCancel  context.CancelFunc
+	binlogChan    chan error
 	logUpdate     chan<- time.Time
 	logger        *logrus.Entry
 	scheduleTimer *time.Timer
@@ -71,6 +72,7 @@ type (
 		lastBackupTime  string
 		backupCheckSums map[string]int64
 		errCh           chan error
+		cronBackup      *cron.Cron
 	}
 )
 
@@ -89,12 +91,12 @@ func NewManager(c config.Config) (m *Manager, err error) {
 		return
 	}
 	us := updateStatus{
-		fullBackup: make(map[string]int, 0),
-		incBackup:  make(map[string]int, 0),
+		FullBackup: make(map[string]int, 0),
+		IncBackup:  make(map[string]int, 0),
 	}
 	for _, v := range s.GetStorageServicesKeys() {
-		us.incBackup[v] = 0
-		us.fullBackup[v] = 0
+		us.IncBackup[v] = 0
+		us.FullBackup[v] = 0
 	}
 
 	mr, err := k8s.New(c.Namespace)
@@ -123,16 +125,26 @@ func NewManager(c config.Config) (m *Manager, err error) {
 }
 
 func (m *Manager) Start() (err error) {
+	if m.cronBackup != nil {
+		return fmt.Errorf("backup already running")
+	}
 	go m.readErrorChannel()
 	ctx := context.Background()
 	ctx, backupCancel = context.WithCancel(ctx)
 	return m.startBackup(ctx)
 }
 
-func (m *Manager) Stop() {
+func (m *Manager) Stop() (ctx context.Context) {
 	backupCancel()
-	if binlogCancel != nil {
-		binlogCancel()
+	m.stopIncBackup()
+	if m.cronBackup == nil {
+		return context.TODO()
+	}
+	ctx = m.cronBackup.Stop()
+	select {
+	case <-ctx.Done():
+		m.cronBackup = nil
+		return ctx
 	}
 }
 
@@ -141,60 +153,54 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 	if err != nil {
 		return
 	}
-	go m.scheduleBackup()
-	cronBackup := cron.New()
-	cronBackup.AddFunc(m.cfg.Backup.FullBackupCronSchedule, m.scheduleBackup)
-	cronBackup.Start()
-	select {
-	case <-ctx.Done():
-		logger.Info("stopping backup cron")
-		cronBackup.Stop()
-		return
-	}
+	go m.scheduleBackup(ctx)
+	m.cronBackup = cron.New()
+	m.cronBackup.AddFunc(m.cfg.Backup.FullBackupCronSchedule, func() { m.scheduleBackup(ctx) })
+	m.cronBackup.Start()
+	return
 }
 
-func (m *Manager) scheduleBackup() {
-	logger.Debug("starting full backup cycle")
+func (m *Manager) scheduleBackup(ctx context.Context) {
+	logger.Debug("starting full backup cycle", len(m.cronBackup.Entries()))
 	if err := m.createTableChecksum(); err != nil {
 		logger.Error("cannot create checksum", err)
 	}
-	m.lastBackupTime = ""
-	// Stop binlog
-	if binlogCancel != nil {
-		binlogCancel()
-		time.Sleep(time.Duration(100) * time.Millisecond)
+	defer func() {
+		m.lastBackupTime = ""
+	}()
+
+	if m.lastBackupTime != "" {
+		log.Error("full backup already in process")
+		return
 	}
+	// Stop binlog
+	m.stopIncBackup()
 
 	m.lastBackupTime = time.Now().Format(time.RFC3339)
 	bpath := path.Join(m.cfg.Backup.BackupDir, m.lastBackupTime)
-	ch := make(chan error)
-	mp, err := m.createFullBackup(bpath)
-	m.setUpdateStatus(m.updateSts.fullBackup, m.Storage.GetStorageServicesKeys(), true)
+	if ctx.Err() != nil {
+		return
+	}
+	lp, err := m.createFullBackup(bpath)
+	m.setUpdateStatus(m.updateSts.FullBackup, m.Storage.GetStorageServicesKeys(), true)
 	if err != nil {
 		logger.Error(fmt.Sprintf("error creating full backup: %s", err.Error()))
-		if err = m.handleBackupError(err, m.updateSts.fullBackup); err != nil {
-			m.setUpdateStatus(m.updateSts.fullBackup, m.Storage.GetStorageServicesKeys(), false)
+		if err = m.handleBackupError(err, m.updateSts.FullBackup); err != nil {
+			m.setUpdateStatus(m.updateSts.FullBackup, m.Storage.GetStorageServicesKeys(), false)
 			m.Stop()
 			logger.Error(fmt.Sprintf("cannot handle full backup error. Retrying in 2min: %s", err.Error()))
 			time.Sleep(time.Duration(2) * time.Minute)
+			if ctx.Err() != nil {
+				return
+			}
 			m.Start()
 			return
 		}
 	}
-	ctxBin := context.Background()
-	ctxBin, binlogCancel = context.WithCancel(ctxBin)
-	go m.onBinlogRotation(ch)
-	var eg errgroup.Group
-	eg.Go(func() error {
-		return m.Db.StartIncBackup(ctxBin, mp, m.lastBackupTime, ch)
-	})
-	go func() {
-		if err = eg.Wait(); err != nil {
-			m.handleBackupError(err, m.updateSts.incBackup)
-			m.setUpdateStatus(m.updateSts.incBackup, m.Storage.GetStorageServicesKeys(), false)
-			m.errCh <- err
-		}
-	}()
+	if ctx.Err() != nil {
+		return
+	}
+	m.createIncBackup(lp)
 }
 
 func (m *Manager) createFullBackup(bpath string) (bp database.LogPosition, err error) {
@@ -235,6 +241,31 @@ func (m *Manager) createFullBackup(bpath string) (bp database.LogPosition, err e
 
 	logger.Debug("finished full backup")
 	return
+}
+
+func (m *Manager) createIncBackup(lp database.LogPosition) {
+	logger.Info("creating incremental backup")
+	ctx := context.Background()
+	ctx, binlogCancel = context.WithCancel(ctx)
+	binlogChan = make(chan error)
+	go m.onBinlogRotation(binlogChan)
+	var eg errgroup.Group
+	eg.Go(func() error {
+		return m.Db.StartIncBackup(ctx, lp, m.lastBackupTime, binlogChan)
+	})
+	go func() {
+		if err := eg.Wait(); err != nil {
+			m.handleBackupError(err, m.updateSts.IncBackup)
+			m.setUpdateStatus(m.updateSts.IncBackup, m.Storage.GetStorageServicesKeys(), false)
+			m.errCh <- err
+		}
+	}()
+}
+
+func (m *Manager) stopIncBackup() {
+	if binlogCancel != nil {
+		binlogCancel()
+	}
 }
 
 func (m *Manager) handleBackupError(err error, backup map[string]int) error {
@@ -284,7 +315,6 @@ func (m *Manager) handleBackupError(err error, backup map[string]int) error {
 		stsError = append(stsError, err.Storage)
 	}
 	m.setUpdateStatus(backup, stsError, false)
-
 	return nil
 }
 
@@ -323,14 +353,14 @@ func (m *Manager) onBinlogRotation(c chan error) {
 			break
 		}
 		if err == nil {
-			m.setUpdateStatus(m.updateSts.incBackup, m.Storage.GetStorageServicesKeys(), true)
+			m.setUpdateStatus(m.updateSts.IncBackup, m.Storage.GetStorageServicesKeys(), true)
 			continue
 		}
 		stsError := make([]string, 0)
 		merr, ok := err.(*multierror.Error)
 		if merr != nil {
 			if !ok {
-				m.setUpdateStatus(m.updateSts.incBackup, m.Storage.GetStorageServicesKeys(), false)
+				m.setUpdateStatus(m.updateSts.IncBackup, m.Storage.GetStorageServicesKeys(), false)
 				logger.Errorf("unknown error: %s", merr.Error())
 			}
 			if len(merr.Errors) > 0 {
@@ -348,13 +378,9 @@ func (m *Manager) onBinlogRotation(c chan error) {
 					}
 				}
 			}
-			m.setUpdateStatus(m.updateSts.incBackup, stsError, false)
+			m.setUpdateStatus(m.updateSts.IncBackup, stsError, false)
 		}
 	}
-}
-
-func (m *Manager) GetConfig() config.Config {
-	return m.cfg
 }
 
 func (m *Manager) createTableChecksum() (err error) {
@@ -371,45 +397,6 @@ func (m *Manager) createTableChecksum() (err error) {
 		logger.Error(fmt.Errorf("cannot upload table checksums: %s", err.Error()))
 		return
 	}
-	return
-}
-
-func (m *Manager) Restore(p string) (err error) {
-	logger.Info("starting restore")
-	m.Health.Lock()
-	m.Health.Ready = false
-	m.Health.Unlock()
-	logger.Debug("restore with sidecar: ", *m.cfg.SideCar)
-	defer func() {
-		if m.cfg.SideCar != nil && !*m.cfg.SideCar {
-			ip, err := m.k8sDB.GetPodIP(fmt.Sprintf("app=%s-mariadb", m.cfg.ServiceName))
-			if err != nil {
-				logger.Error("Cannot set pod databse to ready")
-			}
-			if err = sendReadinessRequest([]byte(`{"ready":true}`), ip); err != nil {
-				logger.Error("Cannot set pod databse to ready")
-			}
-		}
-		m.Health.Lock()
-		m.Health.Ready = true
-		m.Health.Unlock()
-	}()
-	if m.cfg.SideCar != nil && !*m.cfg.SideCar {
-		if err = sendReadinessRequest([]byte(`{"ready":false}`), m.cfg.Database.Host); err != nil {
-			return
-		}
-	}
-
-	if err = m.k8sDB.CheckPodNotReady(fmt.Sprintf("app=%s-mariadb", m.cfg.ServiceName)); err != nil {
-		return fmt.Errorf("cannot set pod to status: NotReady. reason: %s", err.Error())
-	}
-	if err = m.Db.Restore(p); err != nil {
-		return
-	}
-	logger.Info("restore successful")
-	//only remove backup files when restore was succesful, so manual restore is possible!
-	os.RemoveAll(p)
-
 	return
 }
 

@@ -334,6 +334,18 @@ func (m *MariaDB) StartIncBackup(ctx context.Context, mp LogPosition, dir string
 	}
 }
 
+func (m *MariaDB) FlushIncBackup() (err error) {
+	if m.flushTimer != nil {
+		if !m.flushTimer.Stop() {
+			<-m.flushTimer.C
+		}
+		m.flushTimer.Reset(0)
+	} else {
+		return fmt.Errorf("no writes to database happened yet")
+	}
+	return
+}
+
 func (m *MariaDB) handleWriteErrors(ctx context.Context, eg *errgroup.Group, ch chan error) {
 	err := eg.Wait()
 	if ctx.Err() != nil {
@@ -561,20 +573,6 @@ func (m *MariaDB) restartMariaDB() (err error) {
 		return true, nil
 	})
 	return wait.Poll(5*time.Second, 30*time.Second, cf)
-}
-
-func IsEmpty(name string) (bool, error) {
-	f, err := os.Open(name)
-	if err != nil {
-		return false, err
-	}
-	defer f.Close()
-
-	_, err = f.Readdirnames(1)
-	if err == io.EOF {
-		return true, nil
-	}
-	return false, err
 }
 
 func getMyDumpBinlog(p string) (mp mysql.Position, err error) {

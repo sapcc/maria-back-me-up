@@ -34,6 +34,7 @@ import (
 	"github.com/sapcc/maria-back-me-up/pkg/log"
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/net/websocket"
 )
 
 type TemplateRenderer struct {
@@ -55,11 +56,6 @@ func init() {
 func getKeyPath(key string) string {
 	s := strings.Split(key, "/")
 	return fmt.Sprintf("Full Dump: %s", s[1])
-}
-
-func getServiceName(key string) string {
-	s := strings.Split(key, "/")
-	return fmt.Sprintf("Service: %s", s[0])
 }
 
 func getVerifyBackupState(v []storage.Verify, t time.Time, withErr bool) string {
@@ -97,7 +93,6 @@ func getVerifyBackupState(v []storage.Verify, t time.Time, withErr bool) string 
 var funcMap = template.FuncMap{
 	"getKeyPath":           getKeyPath,
 	"getVerifyBackupState": getVerifyBackupState,
-	"getServiceName":       getServiceName,
 }
 
 func GetRoot(m *backup.Manager) echo.HandlerFunc {
@@ -108,7 +103,11 @@ func GetRoot(m *backup.Manager) echo.HandlerFunc {
 			return fmt.Errorf("Error parsing index: %s", err.Error())
 		}
 		s := m.Storage.GetStorageServicesKeys()
-		return t.Execute(c.Response(), s)
+		d := map[string]interface{}{
+			"storages": s,
+			"config":   m.GetConfig(),
+		}
+		return t.Execute(c.Response(), d)
 	}
 }
 
@@ -123,11 +122,15 @@ func GetBackup(m *backup.Manager) echo.HandlerFunc {
 		var backups backupSlice
 		backups, err = m.Storage.ListFullBackups(s)
 		sort.Stable(backups)
+		d := map[string]interface{}{
+			"backups": backups,
+			"service": m.GetConfig().ServiceName,
+		}
 		if err != nil {
 			return sendJSONResponse(c, "Error fetching backup list", err.Error())
 		}
 
-		return t.Execute(c.Response(), backups)
+		return t.Execute(c.Response(), d)
 	}
 }
 
@@ -144,28 +147,14 @@ func GetRestore(m *backup.Manager) echo.HandlerFunc {
 		var incBackups incBackupSlice
 		incBackups, err = m.Storage.ListIncBackupsFor(s, k)
 		sort.Stable(incBackups)
+		d := map[string]interface{}{
+			"incBackups": incBackups,
+			"service":    m.GetConfig().ServiceName,
+		}
 		if err != nil {
 			return sendJSONResponse(c, "Error fetching backup list", err.Error())
 		}
-		return t.Execute(c.Response(), incBackups)
-	}
-}
-
-func PostLatestRestore(m *backup.Manager) echo.HandlerFunc {
-	return func(c echo.Context) (err error) {
-		c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-		c.Response().WriteHeader(http.StatusOK)
-
-		p, err := m.Storage.DownloadLatestBackup("")
-		if err != nil {
-			return sendJSONResponse(c, "Restore Error", err.Error())
-		}
-		m.Stop()
-		if err = m.Restore(p); err != nil {
-			sendJSONResponse(c, "Error during restore!", err.Error())
-		}
-		go m.Start()
-		return sendJSONResponse(c, "Restore finished!", "")
+		return t.Execute(c.Response(), d)
 	}
 }
 
@@ -261,16 +250,58 @@ func PostRestore(m *backup.Manager) echo.HandlerFunc {
 	}
 }
 
-func GetGackup(m *backup.Manager) echo.HandlerFunc {
+func GetBackupStatus(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
-		if c.Path() == "/backup/stop" {
-			m.Stop()
-			return c.JSON(http.StatusOK, "Stopped")
-		} else if c.Path() == "/backup/start" {
+		websocket.Handler(func(ws *websocket.Conn) {
+			defer ws.Close()
+			ticker := time.NewTicker(10 * time.Second)
+			for {
+				d := map[string]interface{}{
+					"active": m.GetBackupActive(),
+					"health": m.GetHealthStatus(),
+				}
+				s, _ := json.Marshal(d)
+				err := websocket.Message.Send(ws, string(s))
+				if err != nil {
+					log.Debug("cant write status to websocket")
+					ticker.Stop()
+					return
+				}
+				select {
+				case <-c.Request().Context().Done():
+					return
+				case <-ticker.C:
+					continue
+				}
+			}
+		}).ServeHTTP(c.Response(), c.Request())
+		return
+	}
+}
+
+func StartStopBackup(m *backup.Manager) echo.HandlerFunc {
+	return func(c echo.Context) (err error) {
+		if c.Path() == "/api/backup/stop" {
+			ctx := m.Stop()
+			select {
+			case <-ctx.Done():
+				return c.JSON(http.StatusOK, "Stopped")
+			}
+
+		} else if c.Path() == "/api/backup/start" {
 			go m.Start()
 			return c.JSON(http.StatusOK, "Started")
 		}
 		return
+	}
+}
+
+func CreateIncBackup(m *backup.Manager) echo.HandlerFunc {
+	return func(c echo.Context) (err error) {
+		if err := m.CreateIncBackup(); err != nil {
+			return c.JSON(http.StatusInternalServerError, "Cannot trigger an incremental backup: "+err.Error())
+		}
+		return c.JSON(http.StatusOK, "Ok")
 	}
 }
 

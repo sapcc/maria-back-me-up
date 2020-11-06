@@ -31,6 +31,7 @@ type Database interface {
 	GetConfig() config.DatabaseConfig
 	CreateFullBackup(path string) (lp LogPosition, err error)
 	StartIncBackup(ctx context.Context, lp LogPosition, dir string, ch chan error) (err error)
+	FlushIncBackup() (err error)
 	Restore(path string) (err error)
 	VerifyRestore(path string) (err error)
 	HealthCheck() (status Status, err error)

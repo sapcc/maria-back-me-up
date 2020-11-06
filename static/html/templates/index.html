@@ -1,0 +1,100 @@
+<html lang="en">
+
+<head>
+    <title>MariaDB Backup & Restore</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <link rel="stylesheet" href="static/css/style.css">
+</head>
+
+<body>
+    <div class="card">
+        <div class="card-header">
+            <h1>maria_db backup & restore | {{ .config.ServiceName }}</h1>
+            <p>Choose a storage</p>
+        </div>
+        <div class="row">
+            <div class="col-sm">
+                <div class="custom-control custom-switch">
+                    <input type="checkbox" class="custom-control-input" id="backup_switch">
+                    <label class="custom-control-label" for="backup_switch">backup on</label>
+                </div>
+            </div>
+            <div class="col-sm" style="text-align: right;">
+                <button id="inc_backup_btn"type="button" class="btn-primary btn-sm" disabled>
+                    <span id="loading_spinner" class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="display: none; margin-right: 10px;"></span>
+                    trigger incremental backup
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card-body">
+        <div class="row">
+            <div class="list-group" id="list-tab" role="tablist" style="width: 100%">
+                {{ range $storageService := .storages }}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <a href="/backup?storage={{ $storageService }}" class="list-group-item list-group-item-action" style="border: 0px">{{ $storageService }}</a>
+                    <span class="badge badge-primary badge-pill" style="color:black; background-color: transparent;"> > </span>
+                </li>
+                {{ end }}
+            </div>
+        </div>
+    </div>
+    <div class="card-footer card-footer-config">
+        <p class="font-weight-bold">Config - Schedules</p>
+        <div class="input-group mb-3">
+            <div class="input-group-prepend">
+                <span class="input-group-text" id="basic-addon1">Full Backup (cron)</span>
+            </div>
+            <input type="text" class="form-control" placeholder="{{ .config.Backup.FullBackupCronSchedule }}" aria-label="Username" aria-describedby="basic-addon1">
+        </div>
+        <div class="input-group mb-3">
+            <div class="input-group-prepend">
+                <span class="input-group-text" id="basic-addon1">Incremental Backup (min)</span>
+            </div>
+            <input type="text" class="form-control" placeholder="{{ .config.Backup.IncrementalBackupInMinutes }}" aria-label="Username" aria-describedby="basic-addon1">
+        </div>
+        <div class="input-group mb-3">
+            <div class="input-group-prepend">
+                <span class="input-group-text" id="basic-addon1">Verification Backup (min)</span>
+            </div>
+            <input type="text" class="form-control" placeholder="{{ .config.Verification.IntervalInMinutes }}" aria-label="Username" aria-describedby="basic-addon1">
+        </div>
+    </div>
+    <div class="card-footer card-footer-config">
+        <p class="font-weight-bold">Backup - Status</p>
+        <div class="container">
+            <div class="row">
+                <div class="col-sm">
+                    full backup
+                </div>
+                {{ range $storageService := .storages }}
+                <div class="col-sm backup_sts" id="{{ $storageService }}_full">
+                    {{ $storageService }}
+                </div>
+                {{ end }}
+            </div>
+            <div class="row">
+                <div class="col-sm">
+                    incremental backup
+                </div>
+                {{ range $storageService := .storages }}
+                <div class="col-sm backup_sts" id="{{ $storageService }}_inc">
+                    {{ $storageService }}
+                </div>
+                {{ end }}
+            </div>
+          </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+    <script src="/static/js/ui.js"></script>
+    <script src="/static/js/index.js"></script>
+    <script>
+        getBackupStatusSocket();
+    </script>
+    </body>
+
+</html>

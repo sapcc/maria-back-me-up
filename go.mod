@@ -22,6 +22,7 @@ require (
 	github.com/sirupsen/logrus v1.4.2
 	github.com/slack-go/slack v0.6.6 // indirect
 	golang.org/x/crypto v0.0.0-20190820162420-60c769a6c586 // indirect
+	golang.org/x/net v0.0.0-20191004110552-13f9640d40b9
 	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58
 	golang.org/x/time v0.0.0-20190921001708-c4c64cad1fd0 // indirect

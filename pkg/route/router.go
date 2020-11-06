@@ -29,6 +29,8 @@ func InitAPI(m *backup.Manager, opts config.Options) *echo.Echo {
 
 	api.InitAPI(m, opts)
 
+	e.Static("/static", "static")
+
 	e.GET("auth/callback", api.HandleOAuth2Callback(opts))
 
 	i := e.Group("/")
@@ -37,13 +39,14 @@ func InitAPI(m *backup.Manager, opts config.Options) *echo.Echo {
 	i.GET("backup", api.GetBackup(m))
 	i.GET("restore", api.GetRestore(m))
 	i.POST("restore", api.PostRestore(m))
-	i.POST("restore/download", api.PostRestoreDownload(m))
 
 	gb := e.Group("/api")
 	gb.Use(api.Oauth(m.GetConfig().Backup.OAuth.Enabled, opts), api.Restore(m))
-	i.POST("/restore/latestbackup", api.PostLatestRestore(m))
-	gb.GET("/stop_backup", api.GetGackup(m))
-	gb.GET("/start_backup", api.GetGackup(m))
+	gb.GET("/backup/status", api.GetBackupStatus(m))
+	gb.GET("/backup/stop", api.StartStopBackup(m))
+	gb.GET("/backup/start", api.StartStopBackup(m))
+	gb.GET("/backup/inc/create", api.CreateIncBackup(m))
+	gb.POST("/restore/download", api.PostRestoreDownload(m))
 
 	return e
 }

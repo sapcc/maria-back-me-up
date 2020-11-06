@@ -30,7 +30,6 @@ import (
 	"github.com/sapcc/maria-back-me-up/pkg/route"
 	"github.com/sapcc/maria-back-me-up/pkg/server"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
 )
 
 var opts config.Options
@@ -69,20 +68,14 @@ func main() {
 	api := route.InitAPI(m, opts)
 	metrics := route.InitMetrics(m)
 
-	var eg errgroup.Group
 	s1 := server.NewServer(metrics)
 	s2 := server.NewServer(api)
 	go s1.Start(constants.PORT_METRICS)
 	go s2.Start(constants.PORT)
 
-	eg.Go(func() error {
-		return m.Start()
-	})
-	go func() {
-		if err = eg.Wait(); err != nil {
-			log.Fatal(err)
-		}
-	}()
+	if err = m.Start(); err != nil {
+		log.Fatal(err)
+	}
 
 	defer func() {
 		signal.Stop(c)

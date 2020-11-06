@@ -34,6 +34,9 @@ func (p *Postgres) CreateFullBackup(path string) (bp LogPosition, err error) {
 func (p *Postgres) StartIncBackup(ctx context.Context, bp LogPosition, dir string, ch chan error) (err error) {
 	return
 }
+func (p *Postgres) FlushIncBackup() (err error) {
+	return
+}
 func (p *Postgres) Restore(path string) (err error) {
 	return
 }
