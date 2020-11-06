@@ -162,9 +162,6 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 
 func (m *Manager) scheduleBackup(ctx context.Context) {
 	logger.Debug("starting full backup cycle", len(m.cronBackup.Entries()))
-	if err := m.createTableChecksum(); err != nil {
-		logger.Error("cannot create checksum", err)
-	}
 	defer func() {
 		m.lastBackupTime = ""
 	}()
@@ -177,6 +174,9 @@ func (m *Manager) scheduleBackup(ctx context.Context) {
 	m.stopIncBackup()
 
 	m.lastBackupTime = time.Now().Format(time.RFC3339)
+	if err := m.createTableChecksum(m.lastBackupTime); err != nil {
+		logger.Error("cannot create checksum", err)
+	}
 	bpath := path.Join(m.cfg.Backup.BackupDir, m.lastBackupTime)
 	if ctx.Err() != nil {
 		return
@@ -200,7 +200,7 @@ func (m *Manager) scheduleBackup(ctx context.Context) {
 	if ctx.Err() != nil {
 		return
 	}
-	m.createIncBackup(lp)
+	m.createIncBackup(lp, m.lastBackupTime)
 }
 
 func (m *Manager) createFullBackup(bpath string) (bp database.LogPosition, err error) {
@@ -243,7 +243,7 @@ func (m *Manager) createFullBackup(bpath string) (bp database.LogPosition, err e
 	return
 }
 
-func (m *Manager) createIncBackup(lp database.LogPosition) {
+func (m *Manager) createIncBackup(lp database.LogPosition, backupTime string) {
 	logger.Info("creating incremental backup")
 	ctx := context.Background()
 	ctx, binlogCancel = context.WithCancel(ctx)
@@ -251,7 +251,7 @@ func (m *Manager) createIncBackup(lp database.LogPosition) {
 	go m.onBinlogRotation(binlogChan)
 	var eg errgroup.Group
 	eg.Go(func() error {
-		return m.Db.StartIncBackup(ctx, lp, m.lastBackupTime, binlogChan)
+		return m.Db.StartIncBackup(ctx, lp, backupTime, binlogChan)
 	})
 	go func() {
 		if err := eg.Wait(); err != nil {
@@ -383,7 +383,7 @@ func (m *Manager) onBinlogRotation(c chan error) {
 	}
 }
 
-func (m *Manager) createTableChecksum() (err error) {
+func (m *Manager) createTableChecksum(backupTime string) (err error) {
 	cs, err := m.Db.GetCheckSumForTable(m.cfg.Database.VerifyTables, false)
 	if err != nil {
 		return
@@ -392,7 +392,7 @@ func (m *Manager) createTableChecksum() (err error) {
 	if err != nil {
 		return
 	}
-	err = m.Storage.WriteStreamAll(m.lastBackupTime+"/tablesChecksum.yaml", "", bytes.NewReader(out))
+	err = m.Storage.WriteStreamAll(backupTime+"/tablesChecksum.yaml", "", bytes.NewReader(out))
 	if err != nil {
 		logger.Error(fmt.Errorf("cannot upload table checksums: %s", err.Error()))
 		return
