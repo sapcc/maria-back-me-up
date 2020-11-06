@@ -42,6 +42,7 @@ RUN curl -Lo /bin/dumb-init https://github.com/Yelp/dumb-init/releases/download/
 	&& chmod +x /bin/dumb-init \
 	&& dumb-init -V
 COPY --from=builder /go/src/github.com/sapcc/maria-back-me-up/bin/linux/backup /go/src/github.com/sapcc/maria-back-me-up/bin/linux/verification /usr/local/bin/
-COPY templates /templates/
+COPY static /static/
+COPY k8s_templates /k8s_templates/
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["backup"]
