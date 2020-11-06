@@ -21,6 +21,10 @@ document.querySelector("#inc_backup_btn").addEventListener("click", function() {
 document.querySelector("#backup_switch").addEventListener("change", function(ev) {
     if (ev.target.checked) {
         getStartStopBackup("start")
+        .catch(err => {
+            alert(err)
+            document.querySelector("#backup_switch").checked = false
+        })
     } else {
         stoppingBackup = true
         disableButton("backup_switch", "")
@@ -32,10 +36,10 @@ document.querySelector("#backup_switch").addEventListener("change", function(ev)
         .catch(err => {
             enableButton("backup_switch", "")
             stoppingBackup = false
+            document.querySelector("#backup_switch").checked = false
             alert(err)
         })
     }
-    console.log(ev)
 })
 
 function getStartStopBackup(action) {
@@ -48,6 +52,9 @@ function getStartStopBackup(action) {
              throw new Error("cannot start/stop backup")
         }
         return res
+    })
+    .catch(err => {
+        throw new Error("cannot connect to backup api")
     })
 }
 
