@@ -10,7 +10,6 @@
     <div class="card">
         <div class="card-header">
             <h1>maria_db backup & restore | {{ .config.ServiceName }}</h1>
-            <p>Choose a storage</p>
         </div>
         <div class="row">
             <div class="col-sm">
@@ -27,8 +26,8 @@
             </div>
         </div>
     </div>
-
-    <div class="card-body">
+    <div class="card-body card-body-list">
+        <p class="font-weight-bold">backup storages</p>
         <div class="row">
             <div class="list-group" id="list-tab" role="tablist" style="width: 100%">
                 {{ range $storageService := .storages }}
@@ -41,7 +40,7 @@
         </div>
     </div>
     <div class="card-footer card-footer-config">
-        <p class="font-weight-bold">Config - Schedules</p>
+        <p class="font-weight-bold">config - schedules</p>
         <div class="input-group mb-3">
             <div class="input-group-prepend">
                 <span class="input-group-text" id="basic-addon1">Full Backup (cron)</span>
@@ -62,7 +61,7 @@
         </div>
     </div>
     <div class="card-footer card-footer-config">
-        <p class="font-weight-bold">Backup - Status</p>
+        <p class="font-weight-bold">backup - status</p>
         <div class="container">
             <div class="row">
                 <div class="col-sm">

@@ -12,6 +12,11 @@ html, body {
     margin: 15px;
 }
 
+.card-body-list {
+    background-color: rgb(247 247 247);
+    margin-top: 20px;
+}
+
 .btn-group-sep {
     display: block;
     left: calc(50% + -260px);
