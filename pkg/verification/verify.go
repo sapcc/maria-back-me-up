@@ -17,6 +17,7 @@
 package verification
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -86,16 +87,17 @@ func (v *Verification) verifyLatestBackup() (err error) {
 		return fmt.Errorf("no backup found")
 	}
 	backups := sortBackupsByTime(bs)
+	latestBackup := backups[len(backups)-1]
 
-	if v.lastBackup.Time.Unix() > 0 && v.lastBackup.Time.Unix() < backups[len(backups)-1].Time.Unix() {
+	if v.lastBackup.Time.Unix() > 0 && v.lastBackup.Time.Unix() < latestBackup.Time.Unix() {
 		v.logger.Debug("found new full backup")
-		//Found new full backup
 		restoreFolder, err = v.downloadBackup(v.lastBackup)
 		if err != nil {
 			return
 		}
 	} else {
-		restoreFolder, err = v.downloadBackup(backups[len(backups)-1])
+		v.createTableChecksum(latestBackup.Time.String())
+		restoreFolder, err = v.downloadBackup(latestBackup)
 		if err != nil {
 			return
 		}
@@ -106,7 +108,7 @@ func (v *Verification) verifyLatestBackup() (err error) {
 	}
 
 	v.verifyBackup(restoreFolder)
-	v.lastBackup = backups[len(backups)-1]
+	v.lastBackup = latestBackup
 	return
 }
 
@@ -192,24 +194,42 @@ func (v *Verification) verifyChecksums(dbcfg config.DatabaseConfig, restorePath 
 	if err != nil {
 		return
 	}
-	cs, err := v.loadChecksums(restorePath)
-	if err != nil {
-		return
-	}
-	v.logger.Debugf("successfully loaded checksum %s", cs)
 
-	if len(cs.TablesChecksum) == 0 {
+	csOrigin, err := db.GetCheckSumForTable(db.GetConfig().VerifyTables, false)
+	if err != nil {
+		return err
+	}
+	v.logger.Debugf("successfully loaded checksum %s", csOrigin)
+
+	if len(csOrigin.TablesChecksum) == 0 {
 		return fmt.Errorf("no checksums found")
 	}
 
-	rs, err := db.GetCheckSumForTable(db.GetConfig().VerifyTables, false)
+	csBackup, err := db.GetCheckSumForTable(db.GetConfig().VerifyTables, false)
 	if err != nil {
 		return err
 	}
-	if err = compareChecksums(cs.TablesChecksum, rs.TablesChecksum); err != nil {
+	if err = compareChecksums(csOrigin.TablesChecksum, csBackup.TablesChecksum); err != nil {
 		return err
 	}
-	v.logger.Infof("successfully verified checksum %s", cs)
+	v.logger.Infof("successfully verified checksum")
+	return
+}
+
+func (v *Verification) createTableChecksum(backupTime string) (err error) {
+	cs, err := v.db.GetCheckSumForTable(v.db.GetConfig().VerifyTables, false)
+	if err != nil {
+		return
+	}
+	out, err := yaml.Marshal(cs)
+	if err != nil {
+		return
+	}
+	err = v.storage.WriteStreamAll(backupTime+"/tablesChecksum.yaml", "", bytes.NewReader(out))
+	if err != nil {
+		logger.Error(fmt.Errorf("cannot upload table checksums: %s", err.Error()))
+		return
+	}
 	return
 }
 
