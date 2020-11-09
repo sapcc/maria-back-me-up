@@ -22,13 +22,23 @@ type Storage interface {
 	GetStatusErrorByKey(backupKey string) string
 }
 
-type Backup struct {
-	Storage string
-	Time    time.Time
-	Key     string
-	IncList []IncBackup
-	Verify  []Verify
+type Verify struct {
+	VerifyRestore  int    `yaml:"verify_backup"`
+	VerifyChecksum int    `yaml:"verify_checksum"`
+	VerifyDiff     int    `yaml:"verify_diff"`
+	VerifyError    string `yaml:"verify_error"`
+	Time           time.Time
 }
+
+type Backup struct {
+	Storage       string
+	Time          time.Time
+	Key           string
+	IncList       []IncBackup
+	VerifySuccess *Verify
+	VerifyFail    *Verify
+}
+
 type IncBackup struct {
 	Key          string
 	LastModified time.Time

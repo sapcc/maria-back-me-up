@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"math"
 	"net/http"
 	"os"
 	"path"
@@ -58,33 +57,32 @@ func getKeyPath(key string) string {
 	return fmt.Sprintf("Full Dump: %s", s[1])
 }
 
-func getVerifyBackupState(v []storage.Verify, t time.Time, withErr bool) string {
-	var duration time.Duration
-	var latestVerify storage.Verify
-	var closestVerify storage.Verify
-	var verifyState = verifyNotCompleteState
-	duration = time.Duration(1000 * time.Hour)
-	if len(v) == 0 && withErr {
-		return "verification not completed..."
+func getVerifyBackupState(v storage.Backup, t time.Time, withErr bool) string {
+	var verifyState string
+	// no verify yet available
+	if v.VerifySuccess == nil && v.VerifyFail == nil {
+		return calcVerifyState(nil, withErr)
 	}
-	for _, k := range v {
-		if k.Time.After(latestVerify.Time) {
-			latestVerify = k
+	// check if latest backup is newer than verify status
+	if (v.VerifySuccess != nil && t.After(v.VerifySuccess.Time)) && (v.VerifyFail != nil && t.After(v.VerifyFail.Time)) {
+		return calcVerifyState(nil, withErr)
+	}
+
+	// check which status is closer to the backup
+	if v.VerifySuccess != nil && v.VerifyFail != nil {
+		if t.Sub(v.VerifySuccess.Time) < t.Sub(v.VerifyFail.Time) {
+			verifyState = calcVerifyState(v.VerifySuccess, withErr)
+		} else {
+			verifyState = calcVerifyState(v.VerifyFail, withErr)
 		}
-		if t.Before(k.Time) {
-			if k.Time.Sub(t) < duration {
-				verifyState = calcVerifyState(k, withErr)
-				closestVerify = k
-			}
-			duration = k.Time.Sub(t)
-		}
+		return verifyState
 	}
-	// check if the latest verify status sub is equal or smaller than the closest verify status
-	if !latestVerify.Time.IsZero() && math.Round(latestVerify.Time.Sub(closestVerify.Time).Minutes()) <= constants.VERIFYINTERFAL {
-		return calcVerifyState(latestVerify, withErr)
+
+	if v.VerifySuccess != nil {
+		verifyState = calcVerifyState(v.VerifySuccess, withErr)
 	}
-	if t.After(latestVerify.Time) && withErr {
-		return "verification not completed..."
+	if v.VerifyFail != nil {
+		verifyState = calcVerifyState(v.VerifyFail, withErr)
 	}
 
 	return verifyState

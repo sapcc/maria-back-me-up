@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
 	"github.com/sirupsen/logrus"
@@ -88,10 +87,15 @@ func (s *Status) UploadStatus(restoreFolder, logNameFormat, serviceName string, 
 	if err != nil {
 		return
 	}
-	u := strconv.FormatInt(time.Now().Unix(), 10)
+
 	_, file := path.Split(restoreFolder)
-	s.logger.Debug("Uploading verify status to: ", file+"/verify_"+u+".yaml")
-	err = storage.WriteStream(s.StorageService, file+"/verify_"+u+".yaml", "", bytes.NewReader(out), nil)
+	if s.VerifyDiff == 1 && s.VerifyRestore == 1 || s.VerifyChecksum == 1 {
+		file = file + "/verify_success.yaml"
+	} else {
+		file = file + "/verify_fail.yaml"
+	}
+	s.logger.Debug("Uploading verify status to: ", file)
+	err = storage.WriteStream(s.StorageService, file, "", bytes.NewReader(out), nil)
 	if err != nil {
 		s.logger.Error(fmt.Errorf("cannot upload verify status: %s", err.Error()))
 	}

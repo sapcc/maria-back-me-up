@@ -39,9 +39,15 @@ func ReadFile(path string) (d string, err error) {
 	return string(fBytes), nil
 }
 
-func calcVerifyState(v storage.Verify, showError bool) string {
+func calcVerifyState(v *storage.Verify, showError bool) string {
 	verifyState := verifyNotCompleteState
 	verifyError := "verification not completed..."
+	if v == nil {
+		if showError {
+			return verifyError
+		}
+		return verifyState
+	}
 	if v.VerifyRestore == 1 && v.VerifyDiff == 1 {
 		verifyState = verifyOkState
 		if v.VerifyError != "" {

@@ -32,7 +32,7 @@
                                 <form action="/restore" method="post" class="overflowAuto">
                                     <input class="form-check-input" type="hidden" name="storage" id="storage" value="{{$backup.Storage}}">
                                     {{ range $backup.IncList}}
-                                    <li class="list-group-item" style="background-color: {{ getVerifyBackupState $backup.Verify .LastModified false}}" data-toggle="popover" data-trigger="hover" data-placement="top" data-content="{{ getVerifyBackupState $backup.Verify .LastModified true}}">
+                                    <li class="list-group-item" style="background-color: {{ getVerifyBackupState $backup .LastModified false}}" data-toggle="popover" data-trigger="hover" data-placement="top" data-content="{{ getVerifyBackupState $backup .LastModified true}}">
                                         <input class="form-check-input" type="radio" name="backup" id="backup" value="{{.Key}}">
                                         <label class="form-check-label" style="color:white" for="backup">
                                             {{.LastModified}}

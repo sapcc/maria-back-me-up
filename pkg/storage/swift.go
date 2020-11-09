@@ -3,6 +3,7 @@ package storage
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"path"
@@ -138,7 +139,6 @@ func (s *Swift) ListFullBackups() (b []Backup, err error) {
 				Time:    o.LastModified,
 				Key:     o.Name,
 				IncList: make([]IncBackup, 0),
-				Verify:  make([]Verify, 0),
 			})
 		}
 	}
@@ -163,7 +163,6 @@ func (s *Swift) ListIncBackupsFor(key string) (bl []Backup, err error) {
 	b := Backup{
 		Storage: s.cfg.Name,
 		IncList: make([]IncBackup, 0),
-		Verify:  make([]Verify, 0),
 		Key:     key,
 	}
 	objs, err := s.connection.ObjectsAll(s.cfg.ContainerName, &swift.ObjectsOpts{Prefix: strings.Replace(key, "dump.tar", "", -1)})
@@ -182,14 +181,19 @@ func (s *Swift) ListIncBackupsFor(key string) (bl []Backup, err error) {
 				return bl, s.handleError("", err)
 			}
 			v.Time = o.LastModified
-			b.Verify = append(b.Verify, v)
+			if strings.Contains(o.Name, "verify_fail") {
+				b.VerifyFail = &v
+			} else {
+				b.VerifySuccess = &v
+				fmt.Println(o.Name, "++++++++++++++++")
+			}
 			continue
 		}
 		if strings.Contains(o.Name, backupIcomplete) {
 			v := Verify{}
 			v.VerifyError = "backup incomplete!!!"
 			v.Time = time.Now()
-			b.Verify = append(b.Verify, v)
+			b.VerifyFail = &v
 		}
 		if !strings.HasSuffix(o.Name, "/") && strings.Contains(o.Name, s.logBin) {
 			b.IncList = append(b.IncList, IncBackup{Key: o.Name, LastModified: o.LastModified})

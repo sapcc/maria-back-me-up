@@ -161,7 +161,7 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 }
 
 func (m *Manager) scheduleBackup(ctx context.Context) {
-	logger.Debug("starting full backup cycle", len(m.cronBackup.Entries()))
+	logger.Debug("starting full backup cycle")
 	defer func() {
 		m.lastBackupTime = ""
 	}()

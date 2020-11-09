@@ -50,13 +50,6 @@ type (
 		binLog        string
 		statusError   map[string]string
 	}
-	Verify struct {
-		VerifyRestore  int    `yaml:"verify_backup"`
-		VerifyChecksum int    `yaml:"verify_checksum"`
-		VerifyDiff     int    `yaml:"verify_diff"`
-		VerifyError    string `yaml:"verify_error"`
-		Time           time.Time
-	}
 )
 
 func NewS3(c config.S3, serviceName, binLog string) (s3 *S3, err error) {
@@ -174,7 +167,6 @@ func (s *S3) ListIncBackupsFor(key string) (bl []Backup, err error) {
 	b := Backup{
 		Storage: s.cfg.Name,
 		IncList: make([]IncBackup, 0),
-		Verify:  make([]Verify, 0),
 		Key:     key,
 	}
 
@@ -191,14 +183,18 @@ func (s *S3) ListIncBackupsFor(key string) (bl []Backup, err error) {
 			}
 			err = yaml.Unmarshal(w.Bytes(), &v)
 			v.Time = *incObj.LastModified
-			b.Verify = append(b.Verify, v)
+			if strings.Contains(*incObj.Key, "verify_fail") {
+				b.VerifyFail = &v
+			} else {
+				b.VerifySuccess = &v
+			}
 			continue
 		}
 		if strings.Contains(*incObj.Key, backupIcomplete) {
 			v := Verify{}
 			v.VerifyError = "backup incomplete!!!"
 			v.Time = time.Now()
-			b.Verify = append(b.Verify, v)
+			b.VerifyFail = &v
 		}
 		if !strings.HasSuffix(*incObj.Key, "/") && strings.Contains(*incObj.Key, s.binLog) {
 			b.IncList = append(b.IncList, IncBackup{Key: *incObj.Key, LastModified: *incObj.LastModified})
@@ -227,7 +223,6 @@ func (s *S3) ListFullBackups() (bl []Backup, err error) {
 				Time:    *fullObj.LastModified,
 				Key:     *fullObj.Key,
 				IncList: make([]IncBackup, 0),
-				Verify:  make([]Verify, 0),
 			}
 			bl = append(bl, b)
 		}
