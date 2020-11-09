@@ -67,20 +67,36 @@ func getVerifyBackupState(v storage.Backup, t time.Time, withErr bool) string {
 	if v.VerifySuccess != nil && v.VerifyFail != nil {
 		// if successful verify is the latest status...everything is green
 		if v.VerifySuccess.Time.After(v.VerifyFail.Time) {
+			if t.After(v.VerifySuccess.Time) {
+				return calcVerifyState(nil, withErr)
+			}
 			return calcVerifyState(v.VerifySuccess, withErr)
 		}
-		// if backup is before a green verify, mark it as sucessful
-		if t.Before(v.VerifySuccess.Time) {
-			return calcVerifyState(v.VerifySuccess, withErr)
+		// latest verify: fail
+		if v.VerifyFail.Time.After(v.VerifySuccess.Time) {
+			if t.After(v.VerifyFail.Time) {
+				return calcVerifyState(nil, withErr)
+			}
+			// if backup is before a green verify, mark it as sucessful
+			if t.Before(v.VerifySuccess.Time) {
+				return calcVerifyState(v.VerifySuccess, withErr)
+			}
+			return calcVerifyState(v.VerifyFail, withErr)
 		}
 		return calcVerifyState(v.VerifyFail, withErr)
 	}
 
 	if v.VerifySuccess != nil {
+		if t.After(v.VerifySuccess.Time) {
+			return calcVerifyState(nil, withErr)
+		}
 		return calcVerifyState(v.VerifySuccess, withErr)
 	}
 
 	if v.VerifyFail != nil {
+		if t.After(v.VerifyFail.Time) {
+			return calcVerifyState(nil, withErr)
+		}
 		return calcVerifyState(v.VerifyFail, withErr)
 	}
 
