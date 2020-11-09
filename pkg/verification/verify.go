@@ -96,7 +96,11 @@ func (v *Verification) verifyLatestBackup() (err error) {
 			return
 		}
 	} else {
-		v.createTableChecksum(latestBackup.Time.String())
+		path := strings.Split(latestBackup.Key, "/")
+		if len(path) < 1 {
+			return fmt.Errorf("wrong backup path")
+		}
+		v.createTableChecksum(path[1])
 		restoreFolder, err = v.downloadBackup(latestBackup)
 		if err != nil {
 			return
