@@ -29,6 +29,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/constants"
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/api/apps/v1beta1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -93,7 +94,7 @@ func New(ns string) (m *Database, err error) {
 	}, err
 }
 
-func (m *Database) CreateDatabaseDeployment(name string, c config.DatabaseConfig) (deploy *v1beta1.Deployment, err error) {
+func (m *Database) CreateDatabaseDeployment(name string, c config.DatabaseConfig) (deploy *appsv1.Deployment, err error) {
 	var tpl string
 	if c.Type == constants.MARIADB {
 		tpl = constants.MARIADEPLOYMENT
@@ -103,7 +104,7 @@ func (m *Database) CreateDatabaseDeployment(name string, c config.DatabaseConfig
 	deploy, err = m.createDeployment(tpl, c)
 	if err != nil {
 		if errors.IsAlreadyExists(err) {
-			if err = m.client.AppsV1beta1().Deployments(m.ns).Delete(name, &metav1.DeleteOptions{
+			if err = m.client.AppsV1().Deployments(m.ns).Delete(name, &metav1.DeleteOptions{
 				PropagationPolicy: &deletePolicy,
 			}); err != nil {
 				return
@@ -138,12 +139,12 @@ func (m *Database) CreateDatabaseService(name string, c config.DatabaseConfig) (
 	return
 }
 
-func (m *Database) createDeployment(p string, cfg interface{}) (deploy *v1beta1.Deployment, err error) {
-	deploy = &v1beta1.Deployment{}
+func (m *Database) createDeployment(p string, cfg interface{}) (deploy *appsv1.Deployment, err error) {
+	deploy = &appsv1.Deployment{}
 	if err = m.unmarshalYamlFile(p, deploy, cfg); err != nil {
 		return
 	}
-	return m.client.AppsV1beta1().Deployments(m.ns).Create(deploy)
+	return m.client.AppsV1().Deployments(m.ns).Create(deploy)
 }
 
 func (m *Database) createService(p string, cfg interface{}) (svc *v1.Service, err error) {
