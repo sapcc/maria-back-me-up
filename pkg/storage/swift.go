@@ -3,7 +3,6 @@ package storage
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"io"
 	"os"
 	"path"
@@ -185,7 +184,6 @@ func (s *Swift) ListIncBackupsFor(key string) (bl []Backup, err error) {
 				b.VerifyFail = &v
 			} else {
 				b.VerifySuccess = &v
-				fmt.Println(o.Name, "++++++++++++++++")
 			}
 			continue
 		}
