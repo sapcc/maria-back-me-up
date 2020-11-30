@@ -30,7 +30,6 @@ import (
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/constants"
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/api/apps/v1beta1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -192,7 +191,7 @@ func (m *Database) CheckPodNotReady(labelSelector string) (err error) {
 	return
 }
 
-func (m *Database) DeleteDatabaseResources(deploy *v1beta1.Deployment, svc *v1.Service) (err error) {
+func (m *Database) DeleteDatabaseResources(deploy *appsv1.Deployment, svc *v1.Service) (err error) {
 	if err = m.client.AppsV1beta1().Deployments(m.ns).Delete(deploy.Name, &metav1.DeleteOptions{
 		PropagationPolicy: &deletePolicy,
 	}); err != nil {
