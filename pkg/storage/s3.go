@@ -287,54 +287,6 @@ func (s *S3) DownloadLatestBackup() (path string, err error) {
 	return path, &NoBackupError{}
 }
 
-func (s *S3) GetBackupByTimestamp(t time.Time) (path string, err error) {
-	var s3Backup *s3.Object
-	minAge := 100.0
-	svc := s3.New(s.session)
-	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(s.serviceName + "/")})
-	if err != nil {
-		return path, s.handleError("", err)
-	}
-
-	for _, listObj := range listRes.Contents {
-		if err != nil {
-			continue
-		}
-
-		if strings.Contains(*listObj.Key, "dump.tar") && t.After(*listObj.LastModified) {
-			age := t.Sub(*listObj.LastModified).Minutes()
-			if age < minAge {
-				minAge = age
-				s3Backup = listObj
-			}
-			continue
-		}
-		if t.After(*listObj.LastModified) {
-			continue
-		}
-	}
-
-	if s3Backup == nil {
-		return path, &NoBackupError{}
-	}
-
-	listRes, err = svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.Replace(*s3Backup.Key, "dump.tar", "", -1))})
-	if err != nil {
-		return path, s.handleError("", err)
-	}
-
-	for _, listObj := range listRes.Contents {
-		if !strings.HasSuffix(*listObj.Key, "/") {
-			if listObj.LastModified.Before(t) {
-				s.downloadFile(s.restoreFolder, listObj)
-			}
-		}
-	}
-	path = filepath.Join(s.restoreFolder, *s3Backup.Key)
-	path = filepath.Dir(path)
-	return
-}
-
 func (s *S3) downloadFile(path string, obj *s3.Object) error {
 	if err := os.MkdirAll(filepath.Join(path, filepath.Dir(*obj.Key)), os.ModePerm); err != nil {
 		return s.handleError("", err)

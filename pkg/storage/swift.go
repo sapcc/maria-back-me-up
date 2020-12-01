@@ -105,10 +105,6 @@ func (s *Swift) WriteStream(name, mimeType string, body io.Reader, tags map[stri
 	return err
 }
 
-func (s *Swift) GetBackupByTimestamp(t time.Time) (path string, err error) {
-	return
-}
-
 func (s *Swift) DownloadLatestBackup() (path string, err error) {
 	var b bytes.Buffer
 	wr := bufio.NewWriter(&b)
