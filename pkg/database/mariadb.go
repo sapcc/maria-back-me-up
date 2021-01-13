@@ -94,7 +94,7 @@ func (m *MariaDB) Restore(path string) (err error) {
 		//Cant shutdown database. Lets try restore anyway
 		log.Error(fmt.Errorf("Timed out trying to shutdown database, %s", err.Error()))
 	}
-	err = m.waitMariaDbUp(5*time.Minute, true)
+	err = m.Up(5*time.Minute, true)
 	if err != nil {
 		log.Error(fmt.Errorf("Timed out waiting for mariadb to boot. Delete data dir"))
 		if err := m.deleteMariaDBDataDir(); err != nil {
@@ -104,7 +104,7 @@ func (m *MariaDB) Restore(path string) (err error) {
 		m.dropMariaDBDatabases()
 	}
 
-	if err = m.waitMariaDbUp(1*time.Minute, true); err != nil {
+	if err = m.Up(1*time.Minute, true); err != nil {
 		return fmt.Errorf("Timed out waiting for mariadb to boot. Cant perform restore")
 	}
 
@@ -126,7 +126,7 @@ func (m *MariaDB) Restore(path string) (err error) {
 }
 
 func (m *MariaDB) VerifyRestore(path string) (err error) {
-	if err = m.waitMariaDbUp(5*time.Minute, false); err != nil {
+	if err = m.Up(5*time.Minute, false); err != nil {
 		return fmt.Errorf("Timed out waiting for verfiy mariadb to boot. Cant perform verification")
 	}
 	if err = m.restoreDump(path); err != nil {
@@ -142,18 +142,6 @@ func (m *MariaDB) VerifyRestore(path string) (err error) {
 
 func (m *MariaDB) GetCheckSumForTable(verifyTables []string, withIP bool) (cs Checksum, err error) {
 	cs.TablesChecksum = make(map[string]int64)
-	cf := wait.ConditionFunc(func() (bool, error) {
-		err = m.pingMariaDB(withIP)
-		if err != nil {
-			log.Debug("could not ping mariadb: ", err.Error())
-			return false, nil
-		}
-		return true, nil
-	})
-	if err = wait.Poll(5*time.Second, 20*time.Second, cf); err != nil {
-		return
-	}
-
 	conn, err := client.Connect(fmt.Sprintf("%s:%s", m.cfg.Database.Host, strconv.Itoa(m.cfg.Database.Port)), m.cfg.Database.User, m.cfg.Database.Password, "")
 	if err != nil {
 		return
@@ -474,7 +462,7 @@ func (m *MariaDB) checkBackupDirExistsAndCreate() (p string, err error) {
 	return
 }
 
-func (m *MariaDB) waitMariaDbUp(timeout time.Duration, withIP bool) (err error) {
+func (m *MariaDB) Up(timeout time.Duration, withIP bool) (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
 		err = m.pingMariaDB(withIP)
 		if err != nil {

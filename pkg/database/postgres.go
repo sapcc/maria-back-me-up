@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"time"
 
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
@@ -50,5 +51,8 @@ func (p *Postgres) GetCheckSumForTable(verifyTables []string, withIP bool) (cs C
 	return
 }
 func (p *Postgres) GetDatabaseDiff(c1, c2 config.DatabaseConfig) (out []byte, err error) {
+	return
+}
+func (p *Postgres) Up(timeout time.Duration, withIP bool) (err error) {
 	return
 }

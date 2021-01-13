@@ -40,7 +40,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"gopkg.in/yaml.v2"
-	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 var (
@@ -166,12 +165,20 @@ func (m *Manager) scheduleBackup(ctx context.Context) {
 		m.lastBackupTime = ""
 	}()
 
-	if m.lastBackupTime != "" {
+	if ctx.Err() != nil {
 		log.Error("full backup already in process")
 		return
 	}
 	// Stop binlog
 	m.stopIncBackup()
+
+	log.Debug("check if db is up and runnging")
+	if err := m.Db.Up(2*time.Minute, false); err != nil {
+		log.Error("cannot connect to database")
+		m.Stop()
+		m.Start()
+		return
+	}
 
 	m.lastBackupTime = time.Now().Format(time.RFC3339)
 	if err := m.createTableChecksum(m.lastBackupTime); err != nil {
@@ -188,11 +195,8 @@ func (m *Manager) scheduleBackup(ctx context.Context) {
 		if err = m.handleBackupError(err, m.updateSts.FullBackup); err != nil {
 			m.setUpdateStatus(m.updateSts.FullBackup, m.Storage.GetStorageServicesKeys(), false)
 			m.Stop()
-			logger.Error(fmt.Sprintf("cannot handle full backup error. Retrying in 2min: %s", err.Error()))
+			logger.Error(fmt.Sprintf("cannot handle full backup error: %s. -> Restarting in 2min", err.Error()))
 			time.Sleep(time.Duration(2) * time.Minute)
-			if ctx.Err() != nil {
-				return
-			}
 			m.Start()
 			return
 		}
@@ -206,31 +210,8 @@ func (m *Manager) scheduleBackup(ctx context.Context) {
 func (m *Manager) createFullBackup(bpath string) (bp database.LogPosition, err error) {
 	logger.Info("creating full backup dump")
 	defer os.RemoveAll(bpath)
-	cf := wait.ConditionFunc(func() (bool, error) {
-		s, err := m.Db.HealthCheck()
-		if err != nil {
-			_, ok := err.(*dberror.DatabaseMissingError)
-			if ok {
-				return false, err
-			}
-			_, ok = err.(*dberror.DatabaseNoTablesError)
-			if ok {
-				return false, err
-			}
-			return false, nil
-		} else if !s.Ok {
-			return false, fmt.Errorf("tables corrupt: %s", s.Details)
-		}
-
-		return true, nil
-	})
-	//Only do backups if db is healthy
-	if err = wait.Poll(5*time.Second, 5*time.Minute, cf); err != nil {
-		_, err := m.Db.HealthCheck()
-		connErr, ok := err.(*dberror.DatabaseConnectionError)
-		if ok {
-			return bp, fmt.Errorf("cannot start backup: %w", connErr)
-		}
+	_, err = m.Db.HealthCheck()
+	if err != nil {
 		return bp, fmt.Errorf("cannot start backup: %w", err)
 	}
 	bp, err = m.Db.CreateFullBackup(bpath)
@@ -297,7 +278,7 @@ func (m *Manager) handleBackupError(err error, backup map[string]int) error {
 
 	merr, ok := err.(*multierror.Error)
 	if !ok {
-		return fmt.Errorf("unknown error: %s", err.Error())
+		return err
 	}
 
 	//backups cant be written to any storage
