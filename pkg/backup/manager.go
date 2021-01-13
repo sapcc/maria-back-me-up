@@ -118,7 +118,6 @@ func NewManager(c config.Config) (m *Manager, err error) {
 		updateSts:       &us,
 		Health:          &Health{Ready: true},
 		backupCheckSums: make(map[string]int64),
-		errCh:           make(chan error, 1),
 		cronSch:         cronSch,
 	}, err
 }
@@ -127,9 +126,11 @@ func (m *Manager) Start() (err error) {
 	if m.cronBackup != nil {
 		return fmt.Errorf("backup already running")
 	}
-	go m.readErrorChannel()
+
 	ctx := context.Background()
 	ctx, backupCancel = context.WithCancel(ctx)
+	m.errCh = make(chan error, 1)
+	go m.readErrorChannel()
 	return m.startBackup(ctx)
 }
 
@@ -139,6 +140,7 @@ func (m *Manager) Stop() (ctx context.Context) {
 	if m.cronBackup == nil {
 		return context.TODO()
 	}
+	close(m.errCh)
 	ctx = m.cronBackup.Stop()
 	select {
 	case <-ctx.Done():
