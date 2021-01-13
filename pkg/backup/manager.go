@@ -196,10 +196,7 @@ func (m *Manager) scheduleBackup(ctx context.Context) {
 		logger.Error(fmt.Sprintf("error creating full backup: %s", err.Error()))
 		if err = m.handleBackupError(err, m.updateSts.FullBackup); err != nil {
 			m.setUpdateStatus(m.updateSts.FullBackup, m.Storage.GetStorageServicesKeys(), false)
-			m.Stop()
-			logger.Error(fmt.Sprintf("cannot handle full backup error: %s. -> Restarting in 2min", err.Error()))
-			time.Sleep(time.Duration(2) * time.Minute)
-			m.Start()
+			m.errCh <- err
 			return
 		}
 	}
@@ -395,7 +392,7 @@ func (m *Manager) readErrorChannel() {
 			continue
 		}
 		if err != nil {
-			logger.Error(fmt.Errorf("error reading log files: %s", err.Error()))
+			logger.Error(fmt.Sprintf("cannot handle backup error: %s. -> Restarting in 2min", err.Error()))
 			m.Stop()
 			time.Sleep(time.Duration(2) * time.Minute)
 			m.Start()
