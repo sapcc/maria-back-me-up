@@ -36,8 +36,8 @@ var opts config.Options
 
 func init() {
 	flag.StringVar(&opts.ConfigFilePath, "CONFIG_FILE", "./etc/config/config.yaml", "Path to the config file")
-	flag.StringVar(&opts.ClientID, "OAUTH_CLIENT_ID", "id", "Oauth provider client id")
-	flag.StringVar(&opts.ClientSecret, "OAUTH_CLIENT_SECRET", "secret", "Oauth provider client secret")
+	flag.StringVar(&opts.ClientID, "OAUTH_CLIENT_ID", "", "Oauth provider client id")
+	flag.StringVar(&opts.ClientSecret, "OAUTH_CLIENT_SECRET", "", "Oauth provider client secret")
 	flag.StringVar(&opts.CookieSecret, "OAUTH_COOKIE_SECRET", "secret", "OAuth session cookie secret")
 	flag.Parse()
 	log.SetFormatter(

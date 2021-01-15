@@ -22,6 +22,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 
 	"github.com/coreos/go-oidc"
@@ -42,7 +43,7 @@ var (
 	store                *sessions.CookieStore
 )
 
-func InitAPI(m *backup.Manager, opts config.Options) (err error) {
+func InitOAuth(m *backup.Manager, opts config.Options) (err error) {
 	ctx := oidc.ClientContext(context.Background(), http.DefaultClient)
 	key := make([]byte, 64)
 
@@ -60,6 +61,10 @@ func InitAPI(m *backup.Manager, opts config.Options) (err error) {
 	idTokenVerifier = provider.Verifier(&oidc.Config{ClientID: opts.ClientID})
 	if idTokenVerifier == nil {
 		log.Fatal("cannot init IDTokenVerifier")
+	}
+
+	if opts.ClientID == "" || opts.ClientSecret == "" {
+		return fmt.Errorf("cannot setup oauth provider: clientID, clientSecret not set")
 	}
 
 	oauth2Config = oauth2.Config{

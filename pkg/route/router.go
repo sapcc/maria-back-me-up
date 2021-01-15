@@ -27,8 +27,10 @@ import (
 func InitAPI(m *backup.Manager, opts config.Options) (*echo.Echo, error) {
 	e := echo.New()
 
-	if err := api.InitAPI(m, opts); err != nil {
-		return nil, err
+	if m.GetConfig().Backup.OAuth.Enabled {
+		if err := api.InitOAuth(m, opts); err != nil {
+			return nil, err
+		}
 	}
 
 	e.Static("/static", "static")
