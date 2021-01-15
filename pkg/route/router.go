@@ -24,10 +24,12 @@ import (
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 )
 
-func InitAPI(m *backup.Manager, opts config.Options) *echo.Echo {
+func InitAPI(m *backup.Manager, opts config.Options) (*echo.Echo, error) {
 	e := echo.New()
 
-	api.InitAPI(m, opts)
+	if err := api.InitAPI(m, opts); err != nil {
+		return nil, err
+	}
 
 	e.Static("/static", "static")
 
@@ -48,7 +50,7 @@ func InitAPI(m *backup.Manager, opts config.Options) *echo.Echo {
 	gb.GET("/backup/inc/create", api.CreateIncBackup(m))
 	gb.POST("/restore/download", api.PostRestoreDownload(m))
 
-	return e
+	return e, nil
 }
 
 func InitMetrics(m *backup.Manager) *echo.Echo {

@@ -65,7 +65,10 @@ func main() {
 		log.Fatal("cannot create backup handler: ", err.Error())
 	}
 
-	api := route.InitAPI(m, opts)
+	api, err := route.InitAPI(m, opts)
+	if err != nil {
+		log.Fatal(err)
+	}
 	metrics := route.InitMetrics(m)
 
 	s1 := server.NewServer(metrics)

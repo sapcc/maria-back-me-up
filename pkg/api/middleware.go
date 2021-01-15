@@ -42,11 +42,11 @@ var (
 	store                *sessions.CookieStore
 )
 
-func InitAPI(m *backup.Manager, opts config.Options) {
+func InitAPI(m *backup.Manager, opts config.Options) (err error) {
 	ctx := oidc.ClientContext(context.Background(), http.DefaultClient)
 	key := make([]byte, 64)
 
-	_, err := rand.Read(key)
+	_, err = rand.Read(key)
 	store = sessions.NewCookieStore([]byte(opts.CookieSecret)) //TODO: load via env vars
 	store.Options = &sessions.Options{
 		Path: "/",
@@ -71,7 +71,7 @@ func InitAPI(m *backup.Manager, opts config.Options) {
 
 		Scopes: []string{oidc.ScopeOpenID, "email"},
 	}
-
+	return
 }
 
 // Oauth middleware is used to start an OAuth2 flow with the dex server.
@@ -166,8 +166,8 @@ func HandleOAuth2Callback(opts config.Options) echo.HandlerFunc {
 
 		// Extract custom claims.
 		var claims struct {
-			Email    string   `json:"email"`
-			Verified bool     `json:"email_verified"`
+			Email    string `json:"email"`
+			Verified bool   `json:"email_verified"`
 			//Groups   []string `json:"groups"`
 		}
 
