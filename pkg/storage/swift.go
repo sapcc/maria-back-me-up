@@ -307,7 +307,7 @@ func (s *Swift) downloadFile(path string, obj *swift.Object) (err error) {
 			return s.handleError("", err)
 		}
 		for _, i := range objs {
-			_, err = s.connection.ObjectGet(s.cfg.ContainerName, i.Name, file, false, nil)
+			_, err = s.connection.ObjectGet(s.cfg.ContainerName+"-segments", i.Name, file, false, nil)
 			if err != nil {
 				return s.handleError("", err)
 			}
