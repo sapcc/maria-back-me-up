@@ -312,11 +312,13 @@ func (s *Swift) downloadFile(path string, obj *swift.Object) (err error) {
 				return s.handleError("", err)
 			}
 		}
+	} else {
+		_, err = s.connection.ObjectGet(s.cfg.ContainerName, obj.Name, file, false, nil)
+		if err != nil {
+			return s.handleError("", err)
+		}
 	}
-	_, err = s.connection.ObjectGet(s.cfg.ContainerName, obj.Name, file, false, nil)
-	if err != nil {
-		return s.handleError("", err)
-	}
+
 	return
 }
 
