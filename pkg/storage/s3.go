@@ -94,10 +94,10 @@ func (s *S3) WriteFolder(p string) (err error) {
 	if err != nil {
 		return s.handleError(p, err)
 	}
-	return s.WriteStream(path.Join(filepath.Base(p), "dump.tar"), "zip", r, nil)
+	return s.WriteStream(path.Join(filepath.Base(p), "dump.tar"), "zip", r, nil, false)
 }
 
-func (s *S3) WriteStream(fileName, mimeType string, body io.Reader, tags map[string]string) error {
+func (s *S3) WriteStream(fileName, mimeType string, body io.Reader, tags map[string]string, dlo bool) error {
 	uploader := s3manager.NewUploader(s.session, func(u *s3manager.Uploader) {
 		u.PartSize = 20 << 20 // 20MB
 		u.MaxUploadParts = 10000

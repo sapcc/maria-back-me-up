@@ -64,14 +64,14 @@ func (m *Manager) GetStorageServices() map[string]Storage {
 	return m.storageServices
 }
 
-func (m *Manager) WriteStreamAll(name, mimeType string, body io.Reader) (errs error) {
+func (m *Manager) WriteStreamAll(name, mimeType string, body io.Reader, dlo bool) (errs error) {
 	var eg errgroup.Group
 	readers, writer, closer := m.createIOReaders(len(m.storageServices))
 	i := 0
 	for _, s := range m.storageServices {
 		func(i int, st Storage) {
 			eg.Go(func() error {
-				return st.WriteStream(name, mimeType, readers[i], nil)
+				return st.WriteStream(name, mimeType, readers[i], nil, dlo)
 			})
 		}(i, s)
 		i++
@@ -85,12 +85,12 @@ func (m *Manager) WriteStreamAll(name, mimeType string, body io.Reader) (errs er
 	return eg.Wait()
 }
 
-func (m *Manager) WriteStream(storageService, name, mimeType string, body io.Reader, tags map[string]string) (errs error) {
+func (m *Manager) WriteStream(storageService, name, mimeType string, body io.Reader, tags map[string]string, dlo bool) (errs error) {
 	s, ok := m.storageServices[storageService]
 	if !ok {
 		return fmt.Errorf("unknown storage service")
 	}
-	return s.WriteStream(name, mimeType, body, tags)
+	return s.WriteStream(name, mimeType, body, tags, dlo)
 }
 
 func (m *Manager) WriteFolderAll(path string) (errs error) {
@@ -184,7 +184,7 @@ func (m *Manager) updateErroStatus() {
 					for k := range s.GetStatusError() {
 						fp := path.Join(k, backupIcomplete)
 						logger.Infof("Trying to save error status", k)
-						if err := m.WriteStream(svc, fp, "", bytes.NewReader([]byte("ERROR")), nil); err == nil {
+						if err := m.WriteStream(svc, fp, "", bytes.NewReader([]byte("ERROR")), nil, false); err == nil {
 							delete(s.GetStatusError(), k)
 						}
 					}

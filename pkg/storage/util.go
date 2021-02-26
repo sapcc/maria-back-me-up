@@ -57,3 +57,17 @@ func ZipFolderPath(pathToZip string) (pr *io.PipeReader, err error) {
 	}()
 	return
 }
+
+func FolderSize(path string) (size int64, err error) {
+	err = filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return err
+	})
+	size = size / 1024 / 1024
+	return size, err
+}

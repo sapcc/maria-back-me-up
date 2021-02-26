@@ -75,10 +75,25 @@ func (s *Swift) WriteFolder(p string) (err error) {
 	if err != nil {
 		return s.handleError(path.Join(filepath.Base(p), "dump.tar"), err)
 	}
-	return s.WriteStream(path.Join(filepath.Base(p), "dump.tar"), "zip", r, nil)
+	size, err := FolderSize(p)
+	if err != nil {
+		return s.handleError(path.Join(filepath.Base(p), "dump.tar"), err)
+	}
+	dlo := false
+	if s.cfg.SloSize == nil {
+		if size > 600 {
+			dlo = true
+		}
+	} else {
+		if size > *s.cfg.SloSize {
+			dlo = true
+		}
+	}
+
+	return s.WriteStream(path.Join(filepath.Base(p), "dump.tar"), "zip", r, nil, dlo)
 }
 
-func (s *Swift) WriteStream(name, mimeType string, body io.Reader, tags map[string]string) (err error) {
+func (s *Swift) WriteStream(name, mimeType string, body io.Reader, tags map[string]string, dlo bool) (err error) {
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(body)
 	backupKey := path.Join(s.serviceName, name)
@@ -86,23 +101,48 @@ func (s *Swift) WriteStream(name, mimeType string, body io.Reader, tags map[stri
 	for k, v := range tags {
 		headers["X-Object-Meta-"+k] = v
 	}
-	f, err := s.connection.ObjectCreate(s.cfg.ContainerName, backupKey, false, "", "", headers)
-	defer func() {
-		f.Close()
-		if err == nil {
-			// swift will not throw ObjectCreate error when container does not exists. check headers instead
-			// only if no other error occurred before
-			_, err = f.Headers()
+	if !dlo {
+		f, err := s.connection.ObjectCreate(s.cfg.ContainerName, backupKey, false, "", "", headers)
+		defer func() {
+			f.Close()
+			if err == nil {
+				// swift will not throw ObjectCreate error when container does not exists. check headers instead
+				// only if no other error occurred before
+				_, err = f.Headers()
+			}
+		}()
+		if err != nil {
+			return s.handleError(name, err)
 		}
-	}()
-	if err != nil {
-		return s.handleError(name, err)
+		_, err = f.Write(buf.Bytes())
+		if err != nil {
+			return s.handleError(name, err)
+		}
+	} else {
+		chunkSize := int64(200 * 1024 * 1024)
+		if s.cfg.ChunkSize != nil {
+			chunkSize = *s.cfg.ChunkSize
+		}
+		f, err := s.connection.StaticLargeObjectCreate(&swift.LargeObjectOpts{
+			Container:        s.cfg.ContainerName,
+			ObjectName:       backupKey,
+			CheckHash:        false,
+			Headers:          headers,
+			SegmentContainer: s.cfg.ContainerName + "-segments",
+			SegmentPrefix:    backupKey,
+			ChunkSize:        chunkSize,
+		})
+		if err != nil {
+			return s.handleError(name, err)
+		}
+		defer f.Close()
+		_, err = f.Write(buf.Bytes())
+		if err != nil {
+			return s.handleError(name, err)
+		}
 	}
-	_, err = f.Write(buf.Bytes())
-	if err != nil {
-		return s.handleError(name, err)
-	}
-	return err
+
+	return
 }
 
 func (s *Swift) DownloadLatestBackup() (path string, err error) {
@@ -260,7 +300,19 @@ func (s *Swift) downloadFile(path string, obj *swift.Object) (err error) {
 	}
 
 	defer file.Close()
-	// Create a downloader with the session and custom options
+	// Check if Static Large Object
+	if obj.ObjectType == 1 {
+		_, objs, err := s.connection.LargeObjectGetSegments(s.cfg.ContainerName, obj.Name)
+		if err != nil {
+			return s.handleError("", err)
+		}
+		for _, i := range objs {
+			_, err = s.connection.ObjectGet(s.cfg.ContainerName, i.Name, file, false, nil)
+			if err != nil {
+				return s.handleError("", err)
+			}
+		}
+	}
 	_, err = s.connection.ObjectGet(s.cfg.ContainerName, obj.Name, file, false, nil)
 	if err != nil {
 		return s.handleError("", err)

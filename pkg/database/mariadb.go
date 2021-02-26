@@ -293,7 +293,7 @@ func (m *MariaDB) StartIncBackup(ctx context.Context, mp LogPosition, dir string
 			binlogReader, binlogWriter = io.Pipe()
 			var eg errgroup.Group
 			eg.Go(func() error {
-				return m.storage.WriteStreamAll(path.Join(dir, binlogFile), "", binlogReader)
+				return m.storage.WriteStreamAll(path.Join(dir, binlogFile), "", binlogReader, false)
 			})
 			go m.handleWriteErrors(ctx, &eg, ch)
 

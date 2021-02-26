@@ -86,6 +86,8 @@ type Swift struct {
 	Password          string `yaml:"password"`
 	Region            string `yaml:"region"`
 	ContainerName     string `yaml:"container_name"`
+	ChunkSize         *int64 `yaml:"chunk_size"` // default 200mb
+	SloSize           *int64 `yaml:"slo_size"`   // default 600mb
 }
 
 type OAuth struct {

@@ -8,7 +8,7 @@ import (
 
 type Storage interface {
 	WriteFolder(p string) (err error)
-	WriteStream(name, mimeType string, body io.Reader, tags map[string]string) (err error)
+	WriteStream(name, mimeType string, body io.Reader, tags map[string]string, dlo bool) (err error)
 	DownloadLatestBackup() (path string, err error)
 	ListFullBackups() (bl []Backup, err error)
 	ListServices() (services []string, err error)

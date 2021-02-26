@@ -95,7 +95,7 @@ func (s *Status) UploadStatus(restoreFolder, logNameFormat, serviceName string, 
 		file = file + "/verify_fail.yaml"
 	}
 	s.logger.Debug("Uploading verify status to: ", file)
-	err = storage.WriteStream(s.StorageService, file, "", bytes.NewReader(out), nil)
+	err = storage.WriteStream(s.StorageService, file, "", bytes.NewReader(out), nil, false)
 	if err != nil {
 		s.logger.Error(fmt.Errorf("cannot upload verify status: %s", err.Error()))
 	}
@@ -119,7 +119,7 @@ func (s *Status) UploadStatus(restoreFolder, logNameFormat, serviceName string, 
 		base := path.Base(restoreFolder)
 		tags["key"] = path.Join(serviceName, base)
 		tags["binlog"] = fmt.Sprintf("%s.%d", logNameFormat, binlogNumber)
-		err = storage.WriteStream(s.StorageService, "last_successful_backup", "", strings.NewReader("latest_backup"), tags)
+		err = storage.WriteStream(s.StorageService, "last_successful_backup", "", strings.NewReader("latest_backup"), tags, false)
 		if err != nil {
 			s.logger.Error(fmt.Errorf("cannot upload verify status: %s", err.Error()))
 		}
