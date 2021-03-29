@@ -18,7 +18,7 @@ package k8s
 
 import (
 	"bytes"
-	"flag"
+
 	"fmt"
 	"html/template"
 	"io/ioutil"
@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/namsral/flag"
 	"github.com/pingcap/errors"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/constants"
@@ -71,9 +72,8 @@ func New(ns string) (m *Database, err error) {
 			kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
 		} else if &kubeconfig == nil {
 			kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-		} else {
-
 		}
+
 		flag.Parse()
 		config, err = clientcmd.BuildConfigFromFlags("", *kubeconfig)
 		if err != nil {
