@@ -17,7 +17,6 @@
 package verification
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -232,7 +231,12 @@ func (v *Verification) createTableChecksum(backupTime string) (err error) {
 	if err != nil {
 		return
 	}
-	err = v.storage.WriteStreamAll(backupTime+"/tablesChecksum.yaml", "", bytes.NewReader(out), false)
+	channel := make(chan storage.StreamEvent, 10)
+	defer close(channel)
+	err = v.storage.WriteStreamAll(backupTime+"/tablesChecksum.yaml", "", channel, false)
+
+	channel <- &storage.ByteEvent{Value: out}
+
 	if err != nil {
 		logger.Error(fmt.Errorf("cannot upload table checksums: %s", err.Error()))
 		return

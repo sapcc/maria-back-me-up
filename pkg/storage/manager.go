@@ -46,13 +46,18 @@ func NewManager(c config.StorageService, serviceName, binLog string) (m *Manager
 	}
 
 	for _, cfg := range c.Disk {
-
 		disk, err := NewDisk(cfg, serviceName, binLog)
 		if err != nil {
 			return m, err
 		}
 		stsvc[cfg.Name] = disk
 
+	for _, cfg := range c.MariaDB {
+		mariadb, err := NewMariaDBStream(cfg, serviceName, binLog)
+		if err != nil {
+			return m, err
+		}
+		stsvc[cfg.ServiceName] = mariadb
 	}
 	m = &Manager{
 		cfg:             c,
@@ -82,24 +87,59 @@ func (m *Manager) GetStorageServices() map[string]Storage {
 	return m.storageServices
 }
 
-// WriteStreamAll writes a byte stream to all available storage services
-func (m *Manager) WriteStreamAll(name, mimeType string, body io.Reader, dlo bool) (errs error) {
+// WriteStreamAll writes Events either as a byte stream or in channel to all available storage services
+func (m *Manager) WriteStreamAll(name, mimeType string, body <-chan StreamEvent, dlo bool) (errs error) {
+	//  Create IO Readers + MultiWriter for all io.Reader consumer
 	var eg errgroup.Group
-	readers, writer, closer := m.createIOReaders(len(m.storageServices))
-	i := 0
-	for _, s := range m.storageServices {
-		func(i int, st Storage) {
-			eg.Go(func() error {
-				return st.WriteStream(name, mimeType, readers[i], nil, dlo)
-			})
-		}(i, s)
-		i++
+	reader_consumer := make([]string, 0, len(m.storageServices))
+	chan_consumer := make([]string, 0, len(m.storageServices))
+
+	for k, s := range m.storageServices {
+		if s.GetSupportedStream() == CHANNEL_STREAM {
+			chan_consumer = append(chan_consumer, k)
+		} else if s.GetSupportedStream() == READER_STREAM {
+			reader_consumer = append(reader_consumer, k)
+		} else {
+			return fmt.Errorf("unsupported storage service with stream type: %v", s.GetSupportedStream())
+		}
 	}
 
-	go func() {
-		io.Copy(writer, body)
-		closer.Close()
-	}()
+	readers, writer, closer := m.createIOReaders(len(reader_consumer))
+	channels := m.createChannels(len(chan_consumer), 100)
+
+	for i, s := range reader_consumer {
+		eg.Go(func() error {
+			return m.storageServices[s].WriteStream(name, mimeType, readers[i], nil, dlo)
+		})
+	}
+
+	for i, s := range chan_consumer {
+		eg.Go(func() error {
+			return m.storageServices[s].WriteChannelStream(name, mimeType, channels[i], nil, dlo)
+		})
+	}
+
+	eg.Go(func() error {
+		for {
+			v, ok := <-body
+			if !ok {
+				// Close all Reader, Writer and channels
+				closer.Close()
+				for _, c := range channels {
+					close(c)
+				}
+				return nil
+			}
+			// Convert object to byte and write it for all reader consumers
+			if len(reader_consumer) > 0 {
+				writer.Write(v.ToByte())
+			}
+			//  Pass the object through the channel for all channel consumers
+			for _, c := range channels {
+				c <- v
+			}
+		}
+	})
 
 	return eg.Wait()
 }
@@ -186,6 +226,15 @@ func (m *Manager) createIOReaders(count int) ([]io.Reader, io.Writer, io.Closer)
 	}
 
 	return readers, io.MultiWriter(pipeWriters...), NewIOClosers(pipeClosers)
+}
+
+func (m *Manager) createChannels(count int, capacity int) []chan StreamEvent {
+	channels := make([]chan StreamEvent, 0, count)
+
+	for i := 0; i <= count; i++ {
+		channels = append(channels, make(chan StreamEvent, capacity))
+	}
+	return channels
 }
 
 func (m *Manager) updateErroStatus() {

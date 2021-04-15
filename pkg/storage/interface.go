@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"time"
+
+	"github.com/siddontang/go-mysql/replication"
 )
 
 // Storage interface
@@ -12,6 +14,7 @@ type Storage interface {
 	WriteFolder(p string) (err error)
 	// WriteStream writes a byte stream to the storage
 	WriteStream(name, mimeType string, body io.Reader, tags map[string]string, dlo bool) (err error)
+	WriteChannelStream(name, mimeType string, body <-chan StreamEvent, tags map[string]string, dlo bool) (err error)
 	// DownloadLatestBackup downloads the latest available backup from a storage
 	DownloadLatestBackup() (path string, err error)
 	// GetFullBackups lists all available full backups per storage
@@ -24,6 +27,7 @@ type Storage interface {
 	DownloadBackup(b Backup) (path string, err error)
 	// GetStorageServiceName lists all available storages from a service
 	GetStorageServiceName() (name string)
+	GetSupportedStream() (t StreamType)
 	// GetStatusError gets the backup->error map
 	GetStatusError() map[string]string
 	// GetStatusErrorByKey returns error per backup
@@ -82,4 +86,31 @@ type Error struct {
 
 func (s *Error) Error() string {
 	return fmt.Sprintf("Storage %s error: %s", s.Storage, s.message)
+}
+
+type StreamType byte
+
+const (
+	READER_STREAM StreamType = iota
+	CHANNEL_STREAM
+)
+
+type StreamEvent interface {
+	ToByte() []byte
+}
+
+type ByteEvent struct {
+	Value []byte
+}
+
+func (b *ByteEvent) ToByte() []byte {
+	return b.Value
+}
+
+type BinlogEvent struct {
+	Value *replication.BinlogEvent
+}
+
+func (b *BinlogEvent) ToByte() []byte {
+	return b.Value.RawData
 }
