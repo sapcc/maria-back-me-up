@@ -53,7 +53,7 @@ func NewManager(c config.StorageService, serviceName, binLog string) (m *Manager
 		stsvc[cfg.Name] = disk
 
 	for _, cfg := range c.MariaDB {
-		mariadb, err := NewMariaDBStream(cfg, serviceName, binLog)
+		mariadb, err := NewMariaDBStream(cfg, serviceName)
 		if err != nil {
 			return m, err
 		}
@@ -89,7 +89,7 @@ func (m *Manager) GetStorageServices() map[string]Storage {
 
 // WriteStreamAll writes Events either as a byte stream or in channel to all available storage services
 func (m *Manager) WriteStreamAll(name, mimeType string, body <-chan StreamEvent, dlo bool) (errs error) {
-	//  Create IO Readers + MultiWriter for all io.Reader consumer
+
 	var eg errgroup.Group
 	reader_consumer := make([]string, 0, len(m.storageServices))
 	chan_consumer := make([]string, 0, len(m.storageServices))
@@ -104,15 +104,16 @@ func (m *Manager) WriteStreamAll(name, mimeType string, body <-chan StreamEvent,
 		}
 	}
 
+	// connect all io.Reader consumer with a reader
 	readers, writer, closer := m.createIOReaders(len(reader_consumer))
-	channels := m.createChannels(len(chan_consumer), 100)
-
 	for i, s := range reader_consumer {
 		eg.Go(func() error {
 			return m.storageServices[s].WriteStream(name, mimeType, readers[i], nil, dlo)
 		})
 	}
 
+	// connect all channel consumer with a channel
+	channels := m.createChannels(len(chan_consumer), 50)
 	for i, s := range chan_consumer {
 		eg.Go(func() error {
 			return m.storageServices[s].WriteChannelStream(name, mimeType, channels[i], nil, dlo)
@@ -130,11 +131,11 @@ func (m *Manager) WriteStreamAll(name, mimeType string, body <-chan StreamEvent,
 				}
 				return nil
 			}
-			// Convert object to byte and write it for all reader consumers
+			// write bytes all io.Reader consumer
 			if len(reader_consumer) > 0 {
 				writer.Write(v.ToByte())
 			}
-			//  Pass the object through the channel for all channel consumers
+			// send the event as is to all channel consumer
 			for _, c := range channels {
 				c <- v
 			}

@@ -23,7 +23,7 @@ type MariaDBStream struct {
 	statusError map[string]string
 }
 
-func NewMariaDBStream(c config.MariaDBStream, serviceName string, logBin string) (m *MariaDBStream, err error) {
+func NewMariaDBStream(c config.MariaDBStream, serviceName string) (m *MariaDBStream, err error) {
 	return &MariaDBStream{
 		cfg:         c,
 		serviceName: serviceName,
@@ -36,8 +36,6 @@ func (m *MariaDBStream) WriteStream(fileName, mimeType string, body io.Reader, t
 
 func (m *MariaDBStream) WriteChannelStream(name, mimeType string, body <-chan StreamEvent, tags map[string]string, dlo bool) (err error) {
 
-	//  (Add some retry logic etc to check if the connection can be re-established)
-	//  IP or get Pod IP from k8s
 	conn, err := client.Connect(strings.Join([]string{m.cfg.Host, strconv.Itoa(m.cfg.Port)}, ":"), m.cfg.User, m.cfg.Password, "")
 
 	if err != nil {
@@ -71,20 +69,17 @@ func (m *MariaDBStream) WriteChannelStream(name, mimeType string, body <-chan St
 					}
 				}
 
-				result, err := conn.Execute(string(queryEvent.Query))
+				_, err = conn.Execute(string(queryEvent.Query))
 				if err != nil {
 					return fmt.Errorf("execution of query failed: %v", err.Error())
 				}
-
-				fmt.Printf("Affected rows %v", result.AffectedRows)
 
 			case replication.MARIADB_ANNOTATE_ROWS_EVENT:
 				annotateRowsEvent := event.Event.(*replication.MariadbAnnotateRowsEvent)
-				result, err := conn.Execute(string(annotateRowsEvent.Query))
+				_, err := conn.Execute(string(annotateRowsEvent.Query))
 				if err != nil {
 					return fmt.Errorf("execution of query failed: %v", err.Error())
 				}
-				fmt.Printf("Affected rows %v", result.AffectedRows)
 			default:
 				// Only QueryEvent and MARIADB_ANNOTATE_ROWS_EVENT contain queries which must be replicated
 				continue
@@ -117,7 +112,7 @@ func (m *MariaDBStream) GetSupportedStream() StreamType {
 }
 
 func (m *MariaDBStream) WriteFolder(p string) (err error) {
-	log.Debug("Restore path: ", p)
+	log.Debug("SQL dump path: ", p)
 
 	if m.cfg.DumpTool == nil || *m.cfg.DumpTool == "mysqldump" {
 		dump, err := os.Open(path.Join(p, "dump.sql"))

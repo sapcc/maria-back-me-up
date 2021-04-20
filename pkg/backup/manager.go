@@ -355,7 +355,7 @@ func (m *Manager) onBinlogRotation(c chan error) {
 func (m *Manager) createTableChecksum(backupTime string) (err error) {
 	if m.cfg.Database.VerifyTables == nil || len(m.cfg.Database.VerifyTables) == 0 {
 		logger.Info("no verify tables supplied. skipping table checksums")
-		return nil
+		return
 	}
 	cs, err := m.Db.GetCheckSumForTable(m.cfg.Database.VerifyTables, false)
 	if err != nil {
