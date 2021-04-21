@@ -97,6 +97,13 @@ storage_services:
       password: # os password
       region: # region name
       container_name: # name of the container the backups should be store in
+  maria_db:
+    - service_name: # name of the storage
+      host: # host of the MariaDB instance
+      port: # MariaDB port number
+      user: # MariaDB user with admin rights
+      password: # user password
+      full_dump_tool: # dump tool used to restore the full dump
   disk:
     - base_path: # root folder for the backups
       retention: # backup retention in number of full backups
