@@ -57,7 +57,7 @@ func NewManager(c config.StorageService, serviceName, binLog string) (m *Manager
 		if err != nil {
 			return m, err
 		}
-		stsvc[cfg.ServiceName] = mariadb
+		stsvc[cfg.Name] = mariadb
 	}
 	m = &Manager{
 		cfg:             c,

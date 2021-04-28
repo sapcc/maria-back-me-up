@@ -46,7 +46,7 @@ func NewMariaDBStream(c config.MariaDBStream, serviceName string) (m *MariaDBStr
 }
 
 func (m *MariaDBStream) WriteStream(fileName, mimeType string, body io.Reader, tags map[string]string, dlo bool) error {
-	return &Error{Storage: m.cfg.ServiceName, message: "method 'WriteStream' is not implemented"}
+	return &Error{Storage: m.cfg.Name, message: "method 'WriteStream' is not implemented"}
 }
 
 func (m *MariaDBStream) WriteChannelStream(name, mimeType string, body <-chan StreamEvent, tags map[string]string, dlo bool) (err error) {
@@ -108,7 +108,7 @@ func (m *MariaDBStream) WriteChannelStream(name, mimeType string, body <-chan St
 }
 
 func (m *MariaDBStream) GetStorageServiceName() (name string) {
-	return m.cfg.ServiceName
+	return m.cfg.Name
 }
 
 func (m *MariaDBStream) GetStatusError() map[string]string {
@@ -168,21 +168,21 @@ func (m *MariaDBStream) WriteFolder(p string) (err error) {
 }
 
 func (m *MariaDBStream) DownloadLatestBackup() (path string, err error) {
-	return path, &Error{Storage: m.cfg.ServiceName, message: "method 'DownloadLatestBackup' is not implemented"}
+	return path, &Error{Storage: m.cfg.Name, message: "method 'DownloadLatestBackup' is not implemented"}
 }
 
 func (m *MariaDBStream) GetFullBackups() (bl []Backup, err error) {
-	return bl, &Error{Storage: m.cfg.ServiceName, message: "method 'ListFullBackups' is not implemented"}
+	return bl, &Error{Storage: m.cfg.Name, message: "method 'ListFullBackups' is not implemented"}
 }
 
 func (m *MariaDBStream) GetIncBackupsFromDump(key string) (bl []Backup, err error) {
-	return bl, &Error{Storage: m.cfg.ServiceName, message: "method 'ListIncBackupsFor' is not implemented"}
+	return bl, &Error{Storage: m.cfg.Name, message: "method 'ListIncBackupsFor' is not implemented"}
 }
 
 func (m *MariaDBStream) DownloadBackupWithLogPosition(fullBackupPath string, binlog string) (path string, err error) {
-	return path, &Error{Storage: m.cfg.ServiceName, message: "method 'DownloadBackupFrom' is not implemented"}
+	return path, &Error{Storage: m.cfg.Name, message: "method 'DownloadBackupFrom' is not implemented"}
 }
 
 func (m *MariaDBStream) DownloadBackup(fullBackup Backup) (path string, err error) {
-	return path, &Error{Storage: m.cfg.ServiceName, message: "method 'DownloadBackup' is not implemented"}
+	return path, &Error{Storage: m.cfg.Name, message: "method 'DownloadBackup' is not implemented"}
 }

@@ -2,6 +2,7 @@ package verification
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
@@ -44,13 +45,21 @@ func NewManager(c config.Config) (m *Manager, err error) {
 		return
 	}
 
-	for _, st := range stgM.GetStorageServicesKeys() {
+	for st, svc := range stgM.GetStorageServices() {
+		if _, ok := svc.(*storage.MariaDBStream); ok {
+			logger.Warnf("cannot create verification for %s", st)
+			continue
+		}
 		v := NewVerification(c.ServiceName, st, stgM, c.Verification, db, k8sm)
 		if err != nil {
 			return m, err
 		}
 		verifications = append(verifications, v)
 		sts = append(sts, v.status)
+	}
+
+	if len(verifications) == 0 {
+		return nil, fmt.Errorf("no verifications created")
 	}
 
 	prometheus.MustRegister(NewMetricsCollector(sts))
