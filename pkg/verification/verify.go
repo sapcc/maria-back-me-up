@@ -199,7 +199,7 @@ func (v *Verification) verifyChecksums(dbcfg config.DatabaseConfig, restorePath 
 		return
 	}
 
-	csOrigin, err := db.GetCheckSumForTable(db.GetConfig().VerifyTables, false)
+	csOrigin, err := v.loadChecksums(restorePath)
 	if err != nil {
 		return err
 	}
