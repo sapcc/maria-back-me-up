@@ -126,12 +126,7 @@ func (m *Database) CreateDatabaseService(name string, c config.DatabaseConfig) (
 	svc, err = m.createService(tpl, c)
 	if err != nil {
 		if errors.IsAlreadyExists(err) {
-			if err = m.client.CoreV1().Services(m.ns).Delete(name, &metav1.DeleteOptions{
-				PropagationPolicy: &deletePolicy,
-			}); err != nil {
-				return
-			}
-			return m.CreateDatabaseService(name, c)
+			return svc, nil
 		}
 		return
 	}
@@ -197,11 +192,13 @@ func (m *Database) DeleteDatabaseResources(deploy *appsv1.Deployment, svc *v1.Se
 	}); err != nil {
 		return
 	}
-	if err = m.client.CoreV1().Services(m.ns).Delete(svc.Name, &metav1.DeleteOptions{
-		PropagationPolicy: &deletePolicy,
-	}); err != nil {
-		return
-	}
+	/*
+		if err = m.client.CoreV1().Services(m.ns).Delete(svc.Name, &metav1.DeleteOptions{
+			PropagationPolicy: &deletePolicy,
+		}); err != nil {
+			return
+		}
+	*/
 	return
 }
 
