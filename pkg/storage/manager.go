@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"path"
-	"reflect"
 	"time"
 
 	"github.com/hashicorp/go-multierror"
@@ -19,9 +18,8 @@ const backupIcomplete = "backup_incomplete"
 
 // Manager which manages the different storage services
 type Manager struct {
-	cfg                         config.StorageService
-	storageServices             map[string]Storage
-	verifyLastBackupFromService string
+	cfg             config.StorageService
+	storageServices map[string]Storage
 }
 
 func init() {
@@ -30,7 +28,7 @@ func init() {
 
 // NewManager creates a new manager instance
 func NewManager(c config.StorageService, serviceName, binLog string) (m *Manager, err error) {
-	stsvc := make(map[string]Storage, 0)
+	stsvc := make(map[string]Storage)
 	for _, cfg := range c.Swift {
 		swift, err := NewSwift(cfg, serviceName, binLog)
 		if err != nil {
@@ -60,10 +58,9 @@ func (m *Manager) AddStorage(s Storage) {
 
 // GetStorageServicesKeys returns a list of all storage names
 func (m *Manager) GetStorageServicesKeys() (svc []string) {
-	keys := reflect.ValueOf(m.storageServices).MapKeys()
-	svc = make([]string, len(keys))
-	for i := 0; i < len(keys); i++ {
-		svc[i] = keys[i].String()
+	svc = make([]string, len(m.storageServices))
+	for k := range m.storageServices {
+		svc = append(svc, k)
 	}
 	return
 }

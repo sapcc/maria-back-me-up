@@ -229,7 +229,10 @@ func (m *MariaDB) createMysqlDump(toPath string) (bp LogPosition, err error) {
 		"--master-data=1",
 	)
 	cmd.Stdout = outfile
-	cmd.Run()
+	err = cmd.Run()
+	if err != nil {
+		return bp, fmt.Errorf("could not create full backup: %v", err)
+	}
 	dump, err := os.Open(filepath.Join(toPath, "dump.sql"))
 	defer dump.Close()
 	scanner := bufio.NewScanner(dump)
@@ -397,6 +400,11 @@ func (m *MariaDB) restoreDump(backupPath string) (err error) {
 	switch m.cfg.Database.DumpTool {
 	case config.Mysqldump:
 		dump, err := os.Open(path.Join(backupPath, "dump", "dump.sql"))
+
+		if err != nil {
+			return fmt.Errorf("could not open dump file: %s", err.Error())
+		}
+
 		cmd := exec.Command(
 			"mysql",
 			"--port="+strconv.Itoa(m.cfg.Database.Port),
@@ -538,7 +546,13 @@ func (m *MariaDB) pingMariaDB(withIP bool) (err error) {
 		"-h"+m.cfg.Database.Host,
 		"-P"+strconv.Itoa(m.cfg.Database.Port),
 	).CombinedOutput(); err != nil {
-		return fmt.Errorf("mysqladmin status error: %s", string(out))
+		var msg string
+		if out != nil {
+			msg = string(out) // Stdout/Stderr
+		} else {
+			msg = err.Error() // Error message if command cannot be executed
+		}
+		return fmt.Errorf("mysqladmin status error: %s", msg)
 	}
 	return
 }
