@@ -126,7 +126,7 @@ func (m *MariaDB) Restore(path string) (err error) {
 }
 
 func (m *MariaDB) VerifyRestore(path string) (err error) {
-	if err = m.Up(5*time.Minute, false); err != nil {
+	if err = m.Up(10*time.Minute, false); err != nil {
 		return fmt.Errorf("Timed out waiting for verfiy mariadb to boot. Cant perform verification")
 	}
 	if err = m.restoreDump(path); err != nil {
