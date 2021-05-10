@@ -96,4 +96,7 @@ storage_services:
       password: # os password
       region: # region name
       container_name: # name of the container the backups should be store in
+  disk:
+    - base_path: # root folder for the backups
+      retention: # backup retention in number of full backups
 ```

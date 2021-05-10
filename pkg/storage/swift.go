@@ -156,7 +156,7 @@ func (s *Swift) WriteStream(name, mimeType string, body io.Reader, tags map[stri
 func (s *Swift) DownloadLatestBackup() (path string, err error) {
 	var b bytes.Buffer
 	wr := bufio.NewWriter(&b)
-	headers, err := s.connection.ObjectGet(s.cfg.ContainerName, s.serviceName+"/last_successful_backup", wr, true, nil)
+	headers, err := s.connection.ObjectGet(s.cfg.ContainerName, filepath.Join(s.serviceName, LastSuccessfulBackupFile), wr, true, nil)
 	meta := headers.ObjectMetadata()
 	binlog, isset := meta["binlog"]
 	if !isset {
@@ -219,7 +219,7 @@ func (s *Swift) GetIncBackupsFromDump(key string) (bl []Backup, err error) {
 			}
 			continue
 		}
-		if strings.Contains(o.Name, backupIcomplete) {
+		if strings.Contains(o.Name, backupIncomplete) {
 			v := Verify{}
 			v.VerifyError = "backup incomplete!!!"
 			v.Time = time.Now()
@@ -332,7 +332,7 @@ func (s *Swift) downloadStream(w io.Writer, obj *swift.Object) (err error) {
 func (s *Swift) handleError(backupKey string, err error) error {
 	errS := &Error{message: "", Storage: s.cfg.Name}
 	errS.message = err.Error()
-	if backupKey != "" && !strings.Contains(backupKey, backupIcomplete) {
+	if backupKey != "" && !strings.Contains(backupKey, backupIncomplete) {
 		s.statusError[path.Dir(backupKey)] = err.Error()
 	}
 	return errS

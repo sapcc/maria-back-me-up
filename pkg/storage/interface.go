@@ -30,6 +30,9 @@ type Storage interface {
 	GetStatusErrorByKey(backupKey string) string
 }
 
+// LastSuccessfulBackup name of meta file to store last successful backup
+const LastSuccessfulBackupFile = "last_successful_backup"
+
 // Verify storage struct
 type Verify struct {
 	VerifyRestore  int    `yaml:"verify_backup"`

@@ -15,7 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const backupIcomplete = "backup_incomplete"
+const backupIncomplete = "backup_incomplete"
 
 // Manager which manages the different storage services
 type Manager struct {
@@ -43,6 +43,16 @@ func NewManager(c config.StorageService, serviceName, binLog string) (m *Manager
 			return m, err
 		}
 		stsvc[cfg.Name] = s3
+	}
+
+	for _, cfg := range c.Disk {
+
+		disk, err := NewDisk(cfg, serviceName, binLog)
+		if err != nil {
+			return m, err
+		}
+		stsvc["disk"] = disk
+
 	}
 	m = &Manager{
 		cfg:             c,
@@ -186,7 +196,7 @@ func (m *Manager) updateErroStatus() {
 			case <-ticker.C:
 				for svc, s := range m.storageServices {
 					for k := range s.GetStatusError() {
-						fp := path.Join(k, backupIcomplete)
+						fp := path.Join(k, backupIncomplete)
 						logger.Infof("Trying to save error status: %s", k)
 						if err := m.WriteStream(svc, fp, "", bytes.NewReader([]byte("ERROR")), nil, false); err == nil {
 							delete(s.GetStatusError(), k)
