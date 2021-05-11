@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sapcc/maria-back-me-up/pkg/config"
+	"github.com/sapcc/maria-back-me-up/pkg/log"
 	"gopkg.in/yaml.v2"
 )
 
@@ -70,15 +71,17 @@ func (d *Disk) WriteStream(fileName, mimeType string, body io.Reader, tags map[s
 		return writeFileWithTags(fileName, tags)
 	}
 
+	if tags != nil || len(tags) > 0 {
+		log.Warn(fmt.Sprintf("disk storage does will ignore tags: %s", tags))
+	}
+
 	buffer := new(bytes.Buffer)
 	_, err := buffer.ReadFrom(body)
-
 	if err != nil {
 		return fmt.Errorf("failed to read backup content: %s", err.Error())
 	}
 
 	err = os.WriteFile(fileName, buffer.Bytes(), 0666)
-
 	if err != nil {
 		return fmt.Errorf("error writing stream to file %v: %v", fileName, err)
 	}
@@ -105,7 +108,13 @@ func (d *Disk) DownloadLatestBackup() (path string, err error) {
 // Only backups which contain a dump.tar are listed
 func (d *Disk) ListFullBackups() (bl []Backup, err error) {
 
-	err = filepath.WalkDir(d.cfg.BasePath, func(path string, entry fs.DirEntry, err error) error {
+	backupPath := filepath.Join(d.cfg.BasePath, d.serviceName)
+
+	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("backup directory for service %s does not exist: %s", d.serviceName, err.Error())
+	}
+
+	err = filepath.WalkDir(backupPath, func(path string, entry fs.DirEntry, err error) error {
 		if !entry.IsDir() {
 			fileInfo, err := entry.Info()
 			if err != nil {
@@ -132,6 +141,9 @@ func (d *Disk) ListFullBackups() (bl []Backup, err error) {
 func (d *Disk) ListServices() (services []string, err error) {
 
 	err = filepath.WalkDir(d.cfg.BasePath, func(path string, entry fs.DirEntry, err error) error {
+		if entry.Name() == filepath.Base(d.cfg.BasePath) {
+			return nil
+		}
 		if entry.IsDir() {
 			services = append(services, entry.Name())
 		}
@@ -158,7 +170,7 @@ func (d *Disk) ListIncBackupsFor(key string) (bl []Backup, err error) {
 		Key:     key,
 	}
 
-	incBackups := make([]IncBackup, 1)
+	incBackups := make([]IncBackup, 0)
 
 	err = filepath.WalkDir(backupPath, func(path string, entry fs.DirEntry, err error) error {
 		if !entry.IsDir() {
@@ -207,17 +219,23 @@ func (d *Disk) ListIncBackupsFor(key string) (bl []Backup, err error) {
 	if err != nil {
 		return nil, err
 	}
-
+	b.IncList = incBackups
+	bl = append(bl, b)
 	return bl, nil
 }
 
 // DownloadBackupFrom returns the path to the binlog file
 func (d *Disk) DownloadBackupFrom(fullBackupPath string, binlog string) (path string, err error) {
-	path = filepath.Join(fullBackupPath, binlog)
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return "", fmt.Errorf("binlog file does not exist")
+	if fullBackupPath == "" || binlog == "" {
+		return "", &NoBackupError{}
 	}
-	return filepath.Join(fullBackupPath, binlog), nil
+
+	path = filepath.Join(d.cfg.BasePath, fullBackupPath, binlog)
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return "", &NoBackupError{}
+	}
+
+	return path, nil
 }
 
 // DownloadBackup returns the folder where the backup files are written to
@@ -230,7 +248,7 @@ func (d *Disk) DownloadBackup(fullBackup Backup) (path string, err error) {
 
 // writeFileWithTags encodes the tags and writes them to the file
 func writeFileWithTags(fileName string, tags map[string]string) (err error) {
-	if len(tags) == 0 {
+	if len(tags) == 0 || tags == nil {
 		return fmt.Errorf("expected tags were not supplied for file %s", filepath.Base(fileName))
 	} else {
 		buffer := new(bytes.Buffer)
