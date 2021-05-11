@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -49,14 +50,18 @@ func (d *Disk) WriteFolder(p string) (err error) {
 	if err != nil {
 		return fmt.Errorf("error writing folder %v: %v", p, err)
 	}
-	return d.WriteStream(path.Join(filepath.Base(p), "dump.tar"), "zip", r, nil, false)
+
+	err = d.WriteStream(path.Join(filepath.Base(p), "dump.tar"), "zip", r, nil, false)
+	if err != nil {
+		return err
+	}
+	return d.enforceBackupRetention()
 }
 
 // WriteStream writes a file in the base directory set in the config.
 // If the fileName is `last_successful_backup` only the tags are written to the file
 // In all other cases the tags are ignored and the body is written to the file
 func (d *Disk) WriteStream(fileName, mimeType string, body io.Reader, tags map[string]string, dlo bool) error {
-	// TODO: delete oldest backup if older than days retention
 	fileName = path.Join(d.cfg.BasePath, d.serviceName, fileName)
 
 	if _, err := os.Stat(fileName); os.IsNotExist(err) {
@@ -244,6 +249,35 @@ func (d *Disk) DownloadBackup(fullBackup Backup) (path string, err error) {
 		return "", fmt.Errorf("directory for full backup `%s` is empty", fullBackup.Key)
 	}
 	return fullBackup.Key, nil
+}
+
+// enforceBackupRetention ensures the amount of backups does not exceed the retention
+//
+// Every backup folder more than the specified retention will be deleted
+func (d *Disk) enforceBackupRetention() error {
+
+	backups, err := d.ListFullBackups()
+	if err != nil {
+		return err
+	}
+	if len(backups) <= d.cfg.Retention {
+		return nil
+	}
+
+	sort.Sort(sort.Reverse(ByTime(backups)))
+
+	deletions := len(backups) - d.cfg.Retention
+	for i := 0; i < deletions; i++ {
+		backupKey := backups[len(backups)-1].Key
+		err := os.RemoveAll(filepath.Join(d.cfg.BasePath, backupKey))
+		if err != nil {
+			return fmt.Errorf("could not delete backup '%s': %s", backupKey, err.Error())
+		}
+		log.Info(fmt.Sprintf("deleted backup '%s'", backupKey))
+		backups = backups[:len(backups)-1]
+	}
+
+	return nil
 }
 
 // writeFileWithTags encodes the tags and writes them to the file

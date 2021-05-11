@@ -51,6 +51,11 @@ type Backup struct {
 	VerifySuccess *Verify
 	VerifyFail    *Verify
 }
+type ByTime []Backup
+
+func (b ByTime) Len() int           { return len(b) }
+func (b ByTime) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
+func (b ByTime) Less(i, j int) bool { return b[i].Time.Before(b[j].Time) }
 
 // IncBackup storage struct
 type IncBackup struct {

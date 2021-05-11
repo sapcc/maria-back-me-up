@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -11,7 +12,7 @@ import (
 )
 
 func TestWriteFolder(t *testing.T) {
-	disk := createTestDiskWithMockData(t, 2, 0)
+	disk := createTestDiskWithMockData(t, 2, 0, 7)
 
 	folder := filepath.Join(disk.cfg.BasePath, "testdb", "backup1")
 
@@ -41,7 +42,7 @@ func TestWriteStream(t *testing.T) {
 	testDir := t.TempDir()
 	testFile := "test.sql"
 
-	disk := createTestDisk(t, testDir)
+	disk := createTestDisk(t, testDir, 7)
 
 	reader := strings.NewReader("hello world")
 	err := disk.WriteStream(testFile, "", reader, nil, false)
@@ -62,7 +63,7 @@ func TestWriteStream(t *testing.T) {
 func TestWriteLastSuccessWithTags(t *testing.T) {
 
 	testFile := "last_successful_backup"
-	disk := createTestDiskWithMockData(t, 3, 0)
+	disk := createTestDiskWithMockData(t, 3, 0, 7)
 
 	reader := strings.NewReader("latest backup")
 	tags := map[string]string{
@@ -87,7 +88,7 @@ func TestWriteLastSuccessWithTags(t *testing.T) {
 
 func TestWriteLastSuccessWithoutTags(t *testing.T) {
 	testFile := "last_successful_backup"
-	disk := createTestDiskWithMockData(t, 3, 0)
+	disk := createTestDiskWithMockData(t, 3, 0, 7)
 
 	reader := strings.NewReader("latest backup")
 
@@ -104,7 +105,7 @@ func TestWriteLastSuccessWithoutTags(t *testing.T) {
 func TestListFullBackups(t *testing.T) {
 	numBackups := 5
 
-	disk := createTestDiskWithMockData(t, numBackups, 0)
+	disk := createTestDiskWithMockData(t, numBackups, 0, 7)
 
 	backups, err := disk.ListFullBackups()
 	if err != nil {
@@ -118,7 +119,7 @@ func TestListFullBackups(t *testing.T) {
 
 func TestListFullBackupsOneMissing(t *testing.T) {
 	numBackups := 5
-	disk := createTestDiskWithMockData(t, numBackups, 1)
+	disk := createTestDiskWithMockData(t, numBackups, 1, 7)
 
 	backups, err := disk.ListFullBackups()
 	if err != nil {
@@ -143,7 +144,7 @@ func TestListServices(t *testing.T) {
 		}
 	}
 
-	disk := createTestDisk(t, testDir)
+	disk := createTestDisk(t, testDir, 7)
 
 	actServices, err := disk.ListServices()
 
@@ -164,7 +165,7 @@ func TestListServices(t *testing.T) {
 }
 
 func TestListIncBackupsForSuccess(t *testing.T) {
-	disk := createTestDiskWithMockData(t, 2, 0)
+	disk := createTestDiskWithMockData(t, 2, 0, 7)
 
 	actBackups, err := disk.ListIncBackupsFor("testdb/backup_1")
 	if err != nil {
@@ -177,7 +178,7 @@ func TestListIncBackupsForSuccess(t *testing.T) {
 }
 
 func TestDownloadBackupFrom(t *testing.T) {
-	disk := createTestDiskWithMockData(t, 2, 0)
+	disk := createTestDiskWithMockData(t, 2, 0, 7)
 
 	actPath, err := disk.DownloadBackupFrom("testdb/backup_1", "mysql-bin.00001")
 	if err != nil || actPath == "" {
@@ -189,8 +190,44 @@ func TestDownloadBackupFrom(t *testing.T) {
 	}
 }
 
+func TestBackupRetention(t *testing.T) {
+	disk := createTestDiskWithMockData(t, 5, 0, 5)
+
+	beforeBackups, _ := disk.ListFullBackups()
+
+	if len(beforeBackups) < 5 {
+		t.Errorf("expected 5 mock backups, actual are %v", len(beforeBackups))
+	}
+
+	folder := filepath.Join(disk.cfg.BasePath, "testdb", "backup_6")
+
+	err := os.MkdirAll(folder, os.ModePerm)
+	if err != nil {
+		t.Errorf("could not create backup folder: %s", err.Error())
+	}
+
+	err = os.WriteFile(filepath.Join(folder, "dump.sql"), []byte{}, os.ModePerm)
+	if err != nil {
+		t.Errorf("could not create backup file: %s", err.Error())
+	}
+
+	disk.WriteFolder(folder)
+
+	afterBackups, _ := disk.ListFullBackups()
+
+	if len(afterBackups) > disk.cfg.Retention {
+		t.Errorf("expected maximum of %v backups, actual %v", disk.cfg.Retention, len(afterBackups))
+	}
+
+	sort.Sort(ByTime(afterBackups))
+	if afterBackups[0].Key != "testdb/backup_2" || afterBackups[len(afterBackups)-1].Key != "testdb/backup_6" {
+		t.Error("expected backups are not present")
+	}
+
+}
+
 // creates folder structure with 'numBackups' that contain a dump.tar and 5 binlog files and additional 'numEmptyBackups' emp
-func createTestDiskWithMockData(t *testing.T, numBackups int, numEmptyBackups int) (disk *Disk) {
+func createTestDiskWithMockData(t *testing.T, numBackups int, numEmptyBackups int, retention int) (disk *Disk) {
 	testDir := t.TempDir()
 
 	err := createDummyBackups(filepath.Join(testDir, "testdb"), numBackups, numEmptyBackups)
@@ -198,15 +235,17 @@ func createTestDiskWithMockData(t *testing.T, numBackups int, numEmptyBackups in
 		t.Error(err.Error())
 		t.FailNow()
 	}
-	return createTestDisk(t, testDir)
+	return createTestDisk(t, testDir, retention)
 }
 
-func createTestDisk(t *testing.T, testDir string) (disk *Disk) {
+// createTestDisk creates an disk object with testDir as BasePath and a Retention of 5
+func createTestDisk(t *testing.T, testDir string, retention int) (disk *Disk) {
 	if testDir == "" {
 		testDir = t.TempDir()
 	}
 	cfg := config.Disk{
-		BasePath: testDir,
+		BasePath:  testDir,
+		Retention: retention,
 	}
 	disk, err := NewDisk(cfg, "testdb", "mysql-bin")
 	if err != nil {
