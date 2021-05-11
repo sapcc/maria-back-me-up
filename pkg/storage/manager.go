@@ -58,7 +58,7 @@ func (m *Manager) AddStorage(s Storage) {
 
 // GetStorageServicesKeys returns a list of all storage names
 func (m *Manager) GetStorageServicesKeys() (svc []string) {
-	svc = make([]string, len(m.storageServices))
+	svc = make([]string, 0, len(m.storageServices))
 	for k := range m.storageServices {
 		svc = append(svc, k)
 	}
