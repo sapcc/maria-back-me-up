@@ -1,3 +1,19 @@
+/**
+ * Copyright 2021 SAP SE
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package storage
 
 import (
@@ -27,7 +43,12 @@ type Disk struct {
 }
 
 func NewDisk(cfg config.Disk, serviceName string, binLog string) (d *Disk, err error) {
-	return &Disk{name: "Disk", cfg: cfg, serviceName: serviceName, binLog: binLog}, nil
+	return &Disk{
+		name:        "Disk",
+		cfg:         cfg,
+		serviceName: serviceName,
+		binLog:      binLog,
+		statusError: make(map[string]string)}, nil
 }
 
 func (d *Disk) GetStorageServiceName() (name string) {
@@ -48,7 +69,7 @@ func (d *Disk) GetStatusErrorByKey(backupKey string) string {
 func (d *Disk) WriteFolder(p string) (err error) {
 	r, err := ZipFolderPath(p)
 	if err != nil {
-		return fmt.Errorf("error writing folder %v: %v", p, err)
+		return d.handleError(filepath.Join(filepath.Base(p), "dump.tar"), err)
 	}
 
 	err = d.WriteStream(path.Join(filepath.Base(p), "dump.tar"), "zip", r, nil, false)
@@ -68,12 +89,16 @@ func (d *Disk) WriteStream(fileName, mimeType string, body io.Reader, tags map[s
 		dir, _ := filepath.Split(fileName)
 		err = os.MkdirAll(dir, os.ModePerm)
 		if err != nil {
-			return fmt.Errorf("error creating base folder: %v", err)
+			return d.handleError(fileName, err)
 		}
 	}
 
 	if filepath.Base(fileName) == LastSuccessfulBackupFile {
-		return writeFileWithTags(fileName, tags)
+		err := writeFileWithTags(fileName, tags)
+		if err != nil {
+			return d.handleError(filepath.Join(d.serviceName, fileName), err)
+		}
+		return nil
 	}
 
 	if tags != nil || len(tags) > 0 {
@@ -83,12 +108,12 @@ func (d *Disk) WriteStream(fileName, mimeType string, body io.Reader, tags map[s
 	buffer := new(bytes.Buffer)
 	_, err := buffer.ReadFrom(body)
 	if err != nil {
-		return fmt.Errorf("failed to read backup content: %s", err.Error())
+		return d.handleError(fileName, fmt.Errorf("failed to read backup content: %s", err.Error()))
 	}
 
 	err = os.WriteFile(fileName, buffer.Bytes(), 0666)
 	if err != nil {
-		return fmt.Errorf("error writing stream to file %v: %v", fileName, err)
+		return d.handleError(fileName, fmt.Errorf("failed to write backup: %v", err))
 	}
 
 	return nil
@@ -100,7 +125,7 @@ func (d *Disk) DownloadLatestBackup() (path string, err error) {
 	fileName := filepath.Join(d.cfg.BasePath, d.serviceName, LastSuccessfulBackupFile)
 	tags, err := readFileWithTags(fileName)
 	if err != nil {
-		return "", fmt.Errorf("could not read file: %s", err.Error())
+		return "", fmt.Errorf("could not read '%s': %s", LastSuccessfulBackupFile, err.Error())
 	}
 	if v, ok := tags["key"]; ok {
 		return filepath.Join(d.cfg.BasePath, v), nil
@@ -116,7 +141,7 @@ func (d *Disk) ListFullBackups() (bl []Backup, err error) {
 	backupPath := filepath.Join(d.cfg.BasePath, d.serviceName)
 
 	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("backup directory for service %s does not exist: %s", d.serviceName, err.Error())
+		return nil, &NoBackupError{fmt.Sprintf("backup directory for service '%s' does not exist", d.serviceName)}
 	}
 
 	err = filepath.WalkDir(backupPath, func(path string, entry fs.DirEntry, err error) error {
@@ -166,7 +191,7 @@ func (d *Disk) ListIncBackupsFor(key string) (bl []Backup, err error) {
 
 	info, err := os.Stat(backupPath)
 	if os.IsNotExist(err) {
-		return nil, fmt.Errorf("backup directory `%s` does not exist", backupPath)
+		return nil, &NoBackupError{}
 	}
 
 	b := Backup{
@@ -196,12 +221,12 @@ func (d *Disk) ListIncBackupsFor(key string) (bl []Backup, err error) {
 				v := Verify{}
 				content, err := os.ReadFile(path)
 				if err != nil {
-					return fmt.Errorf("could read %s: %s", fileName, err.Error())
+					return d.handleError(key, fmt.Errorf("failed to read %s: %s", fileName, err.Error()))
 				}
 
 				err = yaml.Unmarshal(content, &v)
 				if err != nil {
-					return fmt.Errorf("failed to unmarshal %s: %s", fileName, err.Error())
+					return d.handleError(key, fmt.Errorf("failed to unmarshal %s: %s", fileName, err.Error()))
 				}
 
 				if strings.HasSuffix(fileName, "_fail") {
@@ -243,10 +268,10 @@ func (d *Disk) DownloadBackupFrom(fullBackupPath string, binlog string) (path st
 	return path, nil
 }
 
-// DownloadBackup returns the folder where the backup files are written to
+// DownloadBackup returns the folder containing the backup files
 func (d *Disk) DownloadBackup(fullBackup Backup) (path string, err error) {
 	if _, err := os.Stat(fullBackup.Key); os.IsNotExist(err) {
-		return "", fmt.Errorf("directory for full backup `%s` is empty", fullBackup.Key)
+		return "", d.handleError(fullBackup.Key, fmt.Errorf("directory for full backup is empty"))
 	}
 	return fullBackup.Key, nil
 }
@@ -258,9 +283,9 @@ func (d *Disk) enforceBackupRetention() error {
 
 	backups, err := d.ListFullBackups()
 	if err != nil {
-		return err
+		return &NoBackupError{}
 	}
-	if len(backups) <= d.cfg.Retention {
+	if len(backups) <= d.cfg.Retention || len(backups) == 0 {
 		return nil
 	}
 
@@ -271,13 +296,22 @@ func (d *Disk) enforceBackupRetention() error {
 		backupKey := backups[len(backups)-1].Key
 		err := os.RemoveAll(filepath.Join(d.cfg.BasePath, backupKey))
 		if err != nil {
-			return fmt.Errorf("could not delete backup '%s': %s", backupKey, err.Error())
+			return d.handleError(backupKey, fmt.Errorf("failed to delete backup folder:%s", err.Error()))
 		}
 		log.Info(fmt.Sprintf("deleted backup '%s'", backupKey))
 		backups = backups[:len(backups)-1]
 	}
 
 	return nil
+}
+
+func (d *Disk) handleError(backupKey string, err error) error {
+	errS := &StorageError{message: "", Storage: d.name}
+	errS.message = err.Error()
+	if backupKey != "" && !strings.Contains(backupKey, backupIncomplete) {
+		d.statusError[path.Dir(backupKey)] = err.Error()
+	}
+	return errS
 }
 
 // writeFileWithTags encodes the tags and writes them to the file
