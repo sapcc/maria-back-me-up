@@ -83,18 +83,18 @@ func (d *Disk) WriteFolder(p string) (err error) {
 // If the fileName is `last_successful_backup` only the tags are written to the file
 // In all other cases the tags are ignored and the body is written to the file
 func (d *Disk) WriteStream(fileName, mimeType string, body io.Reader, tags map[string]string, dlo bool) error {
-	fileName = path.Join(d.cfg.BasePath, d.serviceName, fileName)
+	filePath := path.Join(d.cfg.BasePath, d.serviceName, fileName)
 
-	if _, err := os.Stat(fileName); os.IsNotExist(err) {
-		dir, _ := filepath.Split(fileName)
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		dir, _ := filepath.Split(filePath)
 		err = os.MkdirAll(dir, os.ModePerm)
 		if err != nil {
-			return d.handleError(fileName, err)
+			return d.handleError(filepath.Join(d.serviceName, fileName), err)
 		}
 	}
 
-	if filepath.Base(fileName) == LastSuccessfulBackupFile {
-		err := writeFileWithTags(fileName, tags)
+	if fileName == LastSuccessfulBackupFile {
+		err := writeFileWithTags(filePath, tags)
 		if err != nil {
 			return d.handleError(filepath.Join(d.serviceName, fileName), err)
 		}
@@ -102,18 +102,18 @@ func (d *Disk) WriteStream(fileName, mimeType string, body io.Reader, tags map[s
 	}
 
 	if tags != nil || len(tags) > 0 {
-		log.Warn(fmt.Sprintf("disk storage does will ignore tags: %s", tags))
+		log.Info(fmt.Sprintf("disk ignores tags for : %s", filepath.Join(d.serviceName, fileName)))
 	}
 
 	buffer := new(bytes.Buffer)
 	_, err := buffer.ReadFrom(body)
 	if err != nil {
-		return d.handleError(fileName, fmt.Errorf("failed to read backup content: %s", err.Error()))
+		return d.handleError(filepath.Join(d.serviceName, fileName), fmt.Errorf("failed to read backup content: %s", err.Error()))
 	}
 
-	err = os.WriteFile(fileName, buffer.Bytes(), 0666)
+	err = os.WriteFile(filePath, buffer.Bytes(), 0666)
 	if err != nil {
-		return d.handleError(fileName, fmt.Errorf("failed to write backup: %v", err))
+		return d.handleError(filepath.Join(d.serviceName, fileName), fmt.Errorf("failed to write backup: %v", err))
 	}
 
 	return nil
