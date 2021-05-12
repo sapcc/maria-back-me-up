@@ -85,6 +85,7 @@ func (d *Disk) WriteFolder(p string) (err error) {
 func (d *Disk) WriteStream(fileName, mimeType string, body io.Reader, tags map[string]string, dlo bool) error {
 	filePath := path.Join(d.cfg.BasePath, d.serviceName, fileName)
 
+	// check if backupfolder exists, create if not
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		dir, _ := filepath.Split(filePath)
 		err = os.MkdirAll(dir, os.ModePerm)
@@ -93,6 +94,7 @@ func (d *Disk) WriteStream(fileName, mimeType string, body io.Reader, tags map[s
 		}
 	}
 
+	// handle special 'last_successful_backup' meta file
 	if fileName == LastSuccessfulBackupFile {
 		err := writeFileWithTags(filePath, tags)
 		if err != nil {
@@ -144,6 +146,8 @@ func (d *Disk) ListFullBackups() (bl []Backup, err error) {
 		return nil, &NoBackupError{fmt.Sprintf("backup directory for service '%s' does not exist", d.serviceName)}
 	}
 
+	// adds the folder that contains a 'dump.tar' file as a backup.
+	// empty folders or folders without 'dump.tar' are ignored
 	err = filepath.WalkDir(backupPath, func(path string, entry fs.DirEntry, err error) error {
 		if !entry.IsDir() {
 			fileInfo, err := entry.Info()
@@ -202,9 +206,12 @@ func (d *Disk) ListIncBackupsFor(key string) (bl []Backup, err error) {
 
 	incBackups := make([]IncBackup, 0)
 
+	// find all incremental backup files in the backups folder
 	err = filepath.WalkDir(backupPath, func(path string, entry fs.DirEntry, err error) error {
 		if !entry.IsDir() {
 			fileName := filepath.Base(path)
+
+			// adds incremental backup for file which name contains the binlog prefix 'Disk.binLog'
 			if strings.Contains(fileName, d.binLog) {
 				info, err := entry.Info()
 				if err != nil {
@@ -217,6 +224,7 @@ func (d *Disk) ListIncBackupsFor(key string) (bl []Backup, err error) {
 				incBackups = append(incBackups, incBackup)
 			}
 
+			// handle verification status (success and fail)
 			if strings.HasPrefix(fileName, "verify_") {
 				v := Verify{}
 				content, err := os.ReadFile(path)
@@ -236,6 +244,7 @@ func (d *Disk) ListIncBackupsFor(key string) (bl []Backup, err error) {
 				}
 			}
 
+			// handle incomplete backup error file
 			if strings.EqualFold(fileName, backupIncomplete) {
 				v := Verify{}
 				v.VerifyError = "backup incomplete!!!"
@@ -270,10 +279,11 @@ func (d *Disk) DownloadBackupFrom(fullBackupPath string, binlog string) (path st
 
 // DownloadBackup returns the folder containing the backup files
 func (d *Disk) DownloadBackup(fullBackup Backup) (path string, err error) {
-	if _, err := os.Stat(fullBackup.Key); os.IsNotExist(err) {
+	backupPath := filepath.Join(d.cfg.BasePath, fullBackup.Key)
+	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
 		return "", d.handleError(fullBackup.Key, fmt.Errorf("directory for full backup is empty"))
 	}
-	return fullBackup.Key, nil
+	return backupPath, nil
 }
 
 // enforceBackupRetention ensures the amount of backups does not exceed the retention
@@ -291,6 +301,7 @@ func (d *Disk) enforceBackupRetention() error {
 
 	sort.Sort(sort.Reverse(ByTime(backups)))
 
+	// delete all backups that are more than the retention allow, starting with the oldest
 	deletions := len(backups) - d.cfg.Retention
 	for i := 0; i < deletions; i++ {
 		backupKey := backups[len(backups)-1].Key

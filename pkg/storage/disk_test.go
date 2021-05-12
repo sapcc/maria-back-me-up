@@ -201,8 +201,24 @@ func TestDownloadBackupFrom(t *testing.T) {
 		t.Error("failed to find binlog file")
 	}
 
-	if strings.EqualFold(actPath, filepath.Join(disk.cfg.BasePath, "testdb", "backup_1", "backup_1")) {
+	if strings.EqualFold(actPath, filepath.Join(disk.cfg.BasePath, "testdb", "backup_1")) {
 		t.Errorf("unexpected actual path: '%s'", actPath)
+	}
+}
+
+func TestDownloadBackup(t *testing.T) {
+	disk := createTestDiskWithMockData(t, 2, 0, 7)
+
+	bl, _ := disk.ListFullBackups()
+	act, err := disk.DownloadBackup(bl[0])
+	if err != nil {
+		t.Error("failed to download backup")
+		t.FailNow()
+	}
+	exp := filepath.Join(disk.cfg.BasePath, bl[0].Key)
+
+	if !strings.EqualFold(exp, act) {
+		t.Errorf("expected: %s, actual: %s", exp, act)
 	}
 }
 
