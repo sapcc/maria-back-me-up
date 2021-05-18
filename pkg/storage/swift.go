@@ -18,6 +18,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// Swift struct is ...
 type Swift struct {
 	cfg           config.Swift
 	connection    *swift.Connection
@@ -28,6 +29,7 @@ type Swift struct {
 	statusError   map[string]string
 }
 
+// NewSwift creates a swift storage instance
 func NewSwift(c config.Swift, serviceName string, logBin string) (s *Swift, err error) {
 	conn := &swift.Connection{
 		AuthVersion:  c.AuthVersion,
@@ -55,14 +57,17 @@ func NewSwift(c config.Swift, serviceName string, logBin string) (s *Swift, err 
 	}, err
 }
 
+// GetStorageServiceName implements interface
 func (s *Swift) GetStorageServiceName() (storages string) {
 	return s.cfg.Name
 }
 
+// GetStatusError implements interface
 func (s *Swift) GetStatusError() map[string]string {
 	return s.statusError
 }
 
+// GetStatusErrorByKey implements interface
 func (s *Swift) GetStatusErrorByKey(backupKey string) string {
 	if st, ok := s.statusError[path.Dir(backupKey)]; ok {
 		return st
@@ -70,6 +75,7 @@ func (s *Swift) GetStatusErrorByKey(backupKey string) string {
 	return ""
 }
 
+// WriteFolder implements interface
 func (s *Swift) WriteFolder(p string) (err error) {
 	r, err := ZipFolderPath(p)
 	if err != nil {
@@ -93,6 +99,7 @@ func (s *Swift) WriteFolder(p string) (err error) {
 	return s.WriteStream(path.Join(filepath.Base(p), "dump.tar"), "zip", r, nil, dlo)
 }
 
+// WriteStream implements interface
 func (s *Swift) WriteStream(name, mimeType string, body io.Reader, tags map[string]string, dlo bool) (err error) {
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(body)
@@ -145,6 +152,7 @@ func (s *Swift) WriteStream(name, mimeType string, body io.Reader, tags map[stri
 	return
 }
 
+// DownloadLatestBackup implements interface
 func (s *Swift) DownloadLatestBackup() (path string, err error) {
 	var b bytes.Buffer
 	wr := bufio.NewWriter(&b)
@@ -161,6 +169,7 @@ func (s *Swift) DownloadLatestBackup() (path string, err error) {
 	return s.DownloadBackupFrom(key, binlog)
 }
 
+// ListFullBackups implements interface
 func (s *Swift) ListFullBackups() (b []Backup, err error) {
 	b = make([]Backup, 0)
 	objs, err := s.connection.ObjectsAll(s.cfg.ContainerName, &swift.ObjectsOpts{Prefix: s.serviceName + "/", Delimiter: 'y'})
@@ -180,6 +189,7 @@ func (s *Swift) ListFullBackups() (b []Backup, err error) {
 	return
 }
 
+// ListServices implements interface
 func (s *Swift) ListServices() (services []string, err error) {
 	services = make([]string, 0)
 	objs, err := s.connection.ObjectsAll(s.cfg.ContainerName, &swift.ObjectsOpts{Prefix: "", Delimiter: '/'})
@@ -194,6 +204,7 @@ func (s *Swift) ListServices() (services []string, err error) {
 	return
 }
 
+// ListIncBackupsFor implements interface
 func (s *Swift) ListIncBackupsFor(key string) (bl []Backup, err error) {
 	b := Backup{
 		Storage: s.cfg.Name,
@@ -236,6 +247,8 @@ func (s *Swift) ListIncBackupsFor(key string) (bl []Backup, err error) {
 	bl = append(bl, b)
 	return
 }
+
+// DownloadBackupFrom implements interface
 func (s *Swift) DownloadBackupFrom(fullBackupPath string, binlog string) (path string, err error) {
 	if fullBackupPath == "" || binlog == "" {
 		return path, &NoBackupError{}
@@ -272,6 +285,7 @@ func (s *Swift) DownloadBackupFrom(fullBackupPath string, binlog string) (path s
 	return
 }
 
+// DownloadBackup implements interface
 func (s *Swift) DownloadBackup(fullBackup Backup) (path string, err error) {
 	objs, err := s.connection.ObjectsAll(s.cfg.ContainerName, &swift.ObjectsOpts{Prefix: strings.Replace(fullBackup.Key, "dump.tar", "", -1)})
 	if err != nil {
@@ -331,7 +345,7 @@ func (s *Swift) downloadStream(w io.Writer, obj *swift.Object) (err error) {
 }
 
 func (s *Swift) handleError(backupKey string, err error) error {
-	errS := &StorageError{message: "", Storage: s.cfg.Name}
+	errS := &Error{message: "", Storage: s.cfg.Name}
 	errS.message = err.Error()
 	if backupKey != "" && !strings.Contains(backupKey, backupIcomplete) {
 		s.statusError[path.Dir(backupKey)] = err.Error()

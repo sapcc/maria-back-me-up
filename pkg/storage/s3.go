@@ -41,6 +41,7 @@ import (
 var logger *logrus.Entry
 
 type (
+	// S3 struct is ...
 	S3 struct {
 		cfg           config.S3
 		session       *session.Session
@@ -52,6 +53,7 @@ type (
 	}
 )
 
+// NewS3 creates a s3 storage instance
 func NewS3(c config.S3, serviceName, binLog string) (s3 *S3, err error) {
 	s, err := session.NewSession(&aws.Config{
 		Endpoint:         aws.String(c.AwsEndpoint),
@@ -74,14 +76,17 @@ func NewS3(c config.S3, serviceName, binLog string) (s3 *S3, err error) {
 	}, err
 }
 
+// GetStorageServiceName implements interface
 func (s *S3) GetStorageServiceName() (name string) {
 	return s.cfg.Name
 }
 
+// GetStatusError implements interface
 func (s *S3) GetStatusError() map[string]string {
 	return s.statusError
 }
 
+// GetStatusErrorByKey implements interface
 func (s *S3) GetStatusErrorByKey(backupKey string) string {
 	if st, ok := s.statusError[path.Dir(backupKey)]; ok {
 		return st
@@ -89,6 +94,7 @@ func (s *S3) GetStatusErrorByKey(backupKey string) string {
 	return ""
 }
 
+// WriteFolder implements interface
 func (s *S3) WriteFolder(p string) (err error) {
 	r, err := ZipFolderPath(p)
 	if err != nil {
@@ -97,6 +103,7 @@ func (s *S3) WriteFolder(p string) (err error) {
 	return s.WriteStream(path.Join(filepath.Base(p), "dump.tar"), "zip", r, nil, false)
 }
 
+// WriteStream implements interface
 func (s *S3) WriteStream(fileName, mimeType string, body io.Reader, tags map[string]string, dlo bool) error {
 	uploader := s3manager.NewUploader(s.session, func(u *s3manager.Uploader) {
 		u.PartSize = 20 << 20 // 20MB
@@ -122,6 +129,8 @@ func (s *S3) WriteStream(fileName, mimeType string, body io.Reader, tags map[str
 	}
 	return nil
 }
+
+// DownloadBackupFrom implements interface
 func (s *S3) DownloadBackupFrom(fullBackupPath, binlog string) (path string, err error) {
 	if fullBackupPath == "" || binlog == "" {
 		return path, &NoBackupError{}
@@ -162,6 +171,7 @@ func (s *S3) DownloadBackupFrom(fullBackupPath, binlog string) (path string, err
 	return
 }
 
+// ListIncBackupsFor implements interface
 func (s *S3) ListIncBackupsFor(key string) (bl []Backup, err error) {
 	svc := s3.New(s.session)
 	b := Backup{
@@ -204,6 +214,7 @@ func (s *S3) ListIncBackupsFor(key string) (bl []Backup, err error) {
 	return
 }
 
+// ListFullBackups implements interface
 func (s *S3) ListFullBackups() (bl []Backup, err error) {
 	svc := s3.New(s.session)
 	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(s.serviceName + "/"), Delimiter: aws.String("y")})
@@ -230,6 +241,7 @@ func (s *S3) ListFullBackups() (bl []Backup, err error) {
 	return
 }
 
+// ListServices implements interface
 func (s *S3) ListServices() (services []string, err error) {
 	services = make([]string, 0)
 	svc := s3.New(s.session)
@@ -243,6 +255,7 @@ func (s *S3) ListServices() (services []string, err error) {
 	return
 }
 
+// DownloadBackup implements interface
 func (s *S3) DownloadBackup(fullBackup Backup) (path string, err error) {
 	svc := s3.New(s.session)
 	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.Replace(fullBackup.Key, "dump.tar", "", -1))})
@@ -262,6 +275,7 @@ func (s *S3) DownloadBackup(fullBackup Backup) (path string, err error) {
 	return
 }
 
+// DownloadLatestBackup implements interface
 func (s *S3) DownloadLatestBackup() (path string, err error) {
 	svc := s3.New(s.session)
 	tag, err := svc.GetObjectTagging(&s3.GetObjectTaggingInput{Bucket: aws.String(s.cfg.BucketName), Key: aws.String(s.serviceName + "/last_successful_backup")})
@@ -332,7 +346,7 @@ func (s *S3) downloadStream(w io.WriterAt, obj *s3.Object) error {
 }
 
 func (s *S3) handleError(backupKey string, err error) error {
-	errS := &StorageError{message: "", Storage: s.cfg.Name}
+	errS := &Error{message: "", Storage: s.cfg.Name}
 	errS.message = err.Error()
 	if backupKey != "" && !strings.Contains(backupKey, backupIcomplete) {
 		s.statusError[path.Dir(backupKey)] = err.Error()

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 )
 
+// ZipFolderPath zips a folder
 func ZipFolderPath(pathToZip string) (pr *io.PipeReader, err error) {
 	dir, err := os.Open(pathToZip)
 	if err != nil {
@@ -58,6 +59,7 @@ func ZipFolderPath(pathToZip string) (pr *io.PipeReader, err error) {
 	return
 }
 
+// FolderSize calcs a folders size
 func FolderSize(path string) (size int64, err error) {
 	err = filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
 		if err != nil {

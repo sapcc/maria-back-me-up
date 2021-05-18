@@ -27,12 +27,14 @@ import (
 
 var logger = New()
 
+// Logger struct is ...
 type Logger struct {
 	sync.RWMutex
 	entry *logrus.Entry
 	log   *logrus.Logger
 }
 
+// New creates new Logger instance
 func New() (log *Logger) {
 	logger := logrus.New()
 	return &Logger{
@@ -41,6 +43,7 @@ func New() (log *Logger) {
 	}
 }
 
+// WithFields adds additional log fields
 func WithFields(fields logrus.Fields) *logrus.Entry {
 	entry := logger.entry.WithFields(fields)
 	if logger.log.Level >= logrus.DebugLevel {

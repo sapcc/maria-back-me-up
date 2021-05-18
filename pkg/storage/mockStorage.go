@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package storage
 
 import (
@@ -21,6 +22,7 @@ import (
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 )
 
+// MockStorage struct for testing
 type MockStorage struct {
 	cfg           config.Config
 	serviceName   string
@@ -29,6 +31,7 @@ type MockStorage struct {
 	withError     bool
 }
 
+// NewMockStorage creates a mock storage instance
 func NewMockStorage(c config.Config, serviceName, binLog string) (m *MockStorage) {
 	m = &MockStorage{}
 	m.binLog = binLog
@@ -39,45 +42,68 @@ func NewMockStorage(c config.Config, serviceName, binLog string) (m *MockStorage
 	return
 }
 
+// WithError implements interface
 func (s *MockStorage) WithError(e bool) {
 	s.withError = e
 }
+
+// ListIncBackupsFor implements interface
 func (s *MockStorage) ListIncBackupsFor(key string) (bl []Backup, err error) {
 	return
 }
+
+// ListServices implements interface
 func (s *MockStorage) ListServices() (services []string, err error) {
 	return
 }
+
+// ListFullBackups implements interface
 func (s *MockStorage) ListFullBackups() (bl []Backup, err error) {
 	return
 }
+
+// DownloadLatestBackup implements interface
 func (s *MockStorage) DownloadLatestBackup() (path string, err error) {
 	return
 }
+
+// WriteStream implements interface
 func (s *MockStorage) WriteStream(name, mimeType string, body io.Reader, tags map[string]string, dlo bool) (err error) {
 	if s.withError {
-		return &StorageError{message: "doh", Storage: s.serviceName}
+		return &Error{message: "doh", Storage: s.serviceName}
 	}
 	return
 }
+
+// WriteFolder implements interface
 func (s *MockStorage) WriteFolder(p string) (err error) {
 	if s.withError {
-		return &StorageError{message: "doh", Storage: s.serviceName}
+		return &Error{message: "doh", Storage: s.serviceName}
 	}
 	return
 }
+
+// GetStorageServiceName implements interface
 func (s *MockStorage) GetStorageServiceName() (name string) {
 	return s.serviceName
 }
+
+// GetStatusErrorByKey implements interface
 func (s *MockStorage) GetStatusErrorByKey(backupKey string) string {
 	return ""
 }
+
+// GetStatusError implements interface
 func (s *MockStorage) GetStatusError() (m map[string]string) {
 	return m
 }
+
+// DownloadBackup implements interface
 func (s *MockStorage) DownloadBackup(fullBackup Backup) (path string, err error) {
 	return
 }
+
+// DownloadBackupFrom implements interface
 func (s *MockStorage) DownloadBackupFrom(fullBackupPath string, binlog string) (path string, err error) {
 	return
 }

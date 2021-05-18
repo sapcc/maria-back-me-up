@@ -17,6 +17,7 @@ import (
 
 const backupIcomplete = "backup_incomplete"
 
+// Manager which manages the different storage services
 type Manager struct {
 	cfg                         config.StorageService
 	storageServices             map[string]Storage
@@ -27,6 +28,7 @@ func init() {
 	logger = log.WithFields(logrus.Fields{"component": "storage"})
 }
 
+// NewManager creates a new manager instance
 func NewManager(c config.StorageService, serviceName, binLog string) (m *Manager, err error) {
 	stsvc := make(map[string]Storage, 0)
 	for _, cfg := range c.Swift {
@@ -51,10 +53,12 @@ func NewManager(c config.StorageService, serviceName, binLog string) (m *Manager
 	return
 }
 
+// AddStorage can add a specific storage service
 func (m *Manager) AddStorage(s Storage) {
 	m.storageServices[s.GetStorageServiceName()] = s
 }
 
+// GetStorageServicesKeys returns a list of all storage names
 func (m *Manager) GetStorageServicesKeys() (svc []string) {
 	keys := reflect.ValueOf(m.storageServices).MapKeys()
 	svc = make([]string, len(keys))
@@ -64,10 +68,12 @@ func (m *Manager) GetStorageServicesKeys() (svc []string) {
 	return
 }
 
+// GetStorageServices returns all storage services handled by this manager
 func (m *Manager) GetStorageServices() map[string]Storage {
 	return m.storageServices
 }
 
+// WriteStreamAll writes a byte stream to all available storage services
 func (m *Manager) WriteStreamAll(name, mimeType string, body io.Reader, dlo bool) (errs error) {
 	var eg errgroup.Group
 	readers, writer, closer := m.createIOReaders(len(m.storageServices))
@@ -89,6 +95,7 @@ func (m *Manager) WriteStreamAll(name, mimeType string, body io.Reader, dlo bool
 	return eg.Wait()
 }
 
+// WriteStream writes a byte stream to a specific storage service
 func (m *Manager) WriteStream(storageService, name, mimeType string, body io.Reader, tags map[string]string, dlo bool) (errs error) {
 	s, ok := m.storageServices[storageService]
 	if !ok {
@@ -97,16 +104,18 @@ func (m *Manager) WriteStream(storageService, name, mimeType string, body io.Rea
 	return s.WriteStream(name, mimeType, body, tags, dlo)
 }
 
+// WriteFolderAll writes a folder to all storages
 func (m *Manager) WriteFolderAll(path string) (errs error) {
 	for k, s := range m.storageServices {
 		if err := s.WriteFolder(path); err != nil {
-			errs = multierror.Append(errs, &StorageError{message: err.Error(), Storage: k})
+			errs = multierror.Append(errs, &Error{message: err.Error(), Storage: k})
 		}
 	}
 
 	return
 }
 
+// DownloadLatestBackup from a specific storage
 func (m *Manager) DownloadLatestBackup(storageService string) (path string, err error) {
 	s, ok := m.storageServices[storageService]
 	if !ok {
@@ -115,6 +124,7 @@ func (m *Manager) DownloadLatestBackup(storageService string) (path string, err 
 	return s.DownloadLatestBackup()
 }
 
+// DownloadBackup from a specific storage
 func (m *Manager) DownloadBackup(storageService string, fullBackup Backup) (path string, err error) {
 	s, ok := m.storageServices[storageService]
 	if !ok {
@@ -123,6 +133,7 @@ func (m *Manager) DownloadBackup(storageService string, fullBackup Backup) (path
 	return s.DownloadBackup(fullBackup)
 }
 
+// ListFullBackups lists all available full backups from a specific storage
 func (m *Manager) ListFullBackups(storageService string) (bl []Backup, err error) {
 	s, ok := m.storageServices[storageService]
 	if !ok {
@@ -131,6 +142,7 @@ func (m *Manager) ListFullBackups(storageService string) (bl []Backup, err error
 	return s.ListFullBackups()
 }
 
+// ListServices lists all available the serivces storages
 func (m *Manager) ListServices() (s map[string][]string, err error) {
 	s = make(map[string][]string, 0)
 	for n, svc := range m.storageServices {
@@ -143,6 +155,7 @@ func (m *Manager) ListServices() (s map[string][]string, err error) {
 	return
 }
 
+// ListIncBackupsFor lists all available inc backups from a specific storage
 func (m *Manager) ListIncBackupsFor(storageService, key string) (bl []Backup, err error) {
 	s, ok := m.storageServices[storageService]
 	if !ok {
@@ -155,6 +168,7 @@ func (m *Manager) ListIncBackupsFor(storageService, key string) (bl []Backup, er
 	return s.ListIncBackupsFor(key)
 }
 
+// DownloadBackupFrom from a specific storage and specifig timestamp
 func (m *Manager) DownloadBackupFrom(storageService, fullBackupPath string, binlog string) (path string, err error) {
 	s, ok := m.storageServices[storageService]
 	if !ok {
@@ -198,16 +212,19 @@ func (m *Manager) updateErroStatus() {
 	}()
 }
 
+// IOClosers holds all io closers
 type IOClosers struct {
 	closers []io.Closer
 }
 
+// NewIOClosers creates a list of io closers
 func NewIOClosers(closers []io.Closer) *IOClosers {
 	return &IOClosers{
 		closers: closers,
 	}
 }
 
+// Close closes all io closers
 func (m *IOClosers) Close() (err error) {
 	for _, c := range m.closers {
 		if err = c.Close(); err != nil {

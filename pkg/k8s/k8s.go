@@ -39,6 +39,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
+
+	// golint needed
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -50,12 +52,14 @@ var k8sDatabase = map[string]string{
 	constants.MARIADB: constants.MARIADEPLOYMENT,
 }
 
+// Database a k8s database representation
 type Database struct {
 	client *kubernetes.Clientset
 	ns     string
 	ys     *json.Serializer
 }
 
+// New creates a new database instance
 func New(ns string) (m *Database, err error) {
 	var config *rest.Config
 	var kubeconfig *string
@@ -93,6 +97,7 @@ func New(ns string) (m *Database, err error) {
 	}, err
 }
 
+// CreateDatabaseDeployment creates a k8s database deployment, based on a yaml file
 func (m *Database) CreateDatabaseDeployment(name string, c config.DatabaseConfig) (deploy *appsv1.Deployment, err error) {
 	var tpl string
 	if c.Type == constants.MARIADB {
@@ -116,6 +121,7 @@ func (m *Database) CreateDatabaseDeployment(name string, c config.DatabaseConfig
 	return
 }
 
+// CreateDatabaseService creates a k8s database service, based on a yaml file
 func (m *Database) CreateDatabaseService(name string, c config.DatabaseConfig) (svc *v1.Service, err error) {
 	var tpl string
 	if c.Type == constants.MARIADB {
@@ -149,6 +155,7 @@ func (m *Database) createService(p string, cfg interface{}) (svc *v1.Service, er
 	return m.client.CoreV1().Services(m.ns).Create(svc)
 }
 
+// GetPodIP returns the pods actual ip based on as lable selector
 func (m *Database) GetPodIP(labelSelector string) (ip string, err error) {
 	p, err := m.client.CoreV1().Pods(m.ns).List(metav1.ListOptions{LabelSelector: labelSelector})
 	if err != nil {
@@ -160,6 +167,7 @@ func (m *Database) GetPodIP(labelSelector string) (ip string, err error) {
 	return p.Items[0].Status.PodIP, nil
 }
 
+// CheckPodNotReady checks if a pod is in state NotReady
 func (m *Database) CheckPodNotReady(labelSelector string) (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
 		p, err := m.client.CoreV1().Pods(m.ns).List(metav1.ListOptions{LabelSelector: labelSelector})
@@ -186,6 +194,7 @@ func (m *Database) CheckPodNotReady(labelSelector string) (err error) {
 	return
 }
 
+// DeleteDatabaseResources deletes k8s db resources
 func (m *Database) DeleteDatabaseResources(deploy *appsv1.Deployment, svc *v1.Service) (err error) {
 	if err = m.client.AppsV1beta1().Deployments(m.ns).Delete(deploy.Name, &metav1.DeleteOptions{
 		PropagationPolicy: &deletePolicy,

@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+// Storage interface
 type Storage interface {
 	WriteFolder(p string) (err error)
 	WriteStream(name, mimeType string, body io.Reader, tags map[string]string, dlo bool) (err error)
@@ -20,6 +21,7 @@ type Storage interface {
 	GetStatusErrorByKey(backupKey string) string
 }
 
+// Verify storage struct
 type Verify struct {
 	VerifyRestore  int    `yaml:"verify_backup"`
 	VerifyChecksum int    `yaml:"verify_checksum"`
@@ -28,6 +30,7 @@ type Verify struct {
 	Time           time.Time
 }
 
+// Backup storage struct
 type Backup struct {
 	Storage       string
 	Time          time.Time
@@ -37,11 +40,13 @@ type Backup struct {
 	VerifyFail    *Verify
 }
 
+// IncBackup storage struct
 type IncBackup struct {
 	Key          string
 	LastModified time.Time
 }
 
+// NoBackupError error when no backups are stored
 type NoBackupError struct {
 	message string
 }
@@ -50,11 +55,12 @@ func (d *NoBackupError) Error() string {
 	return "No backup found for this service"
 }
 
-type StorageError struct {
+// Error with storage name and error message
+type Error struct {
 	message string
 	Storage string
 }
 
-func (s *StorageError) Error() string {
+func (s *Error) Error() string {
 	return fmt.Sprintf("Storage %s error: %s", s.Storage, s.message)
 }

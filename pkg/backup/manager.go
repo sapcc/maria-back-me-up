@@ -283,7 +283,7 @@ func (m *Manager) handleBackupError(err error, backup map[string]int) error {
 	//backups cant be written to all storages
 	m.setUpdateStatus(backup, svc, true)
 	for _, e := range merr.Errors {
-		err, ok := e.(*storage.StorageError)
+		err, ok := e.(*storage.Error)
 		if !ok {
 			return fmt.Errorf("unknown error: %s", err.Error())
 		}
@@ -341,7 +341,7 @@ func (m *Manager) onBinlogRotation(c chan error) {
 			if len(merr.Errors) > 0 {
 				for i := 0; i < len(merr.Errors); i++ {
 					switch e := merr.Errors[i].(type) {
-					case *storage.StorageError:
+					case *storage.Error:
 						stsError = append(stsError, e.Storage)
 						logger.Errorf("error writing log to storage %s. error: %s", e.Storage, merr.Error())
 					default:

@@ -24,6 +24,7 @@ import (
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 )
 
+// InitAPI inits the api routes
 func InitAPI(m *backup.Manager, opts config.Options) (*echo.Echo, error) {
 	e := echo.New()
 
@@ -55,6 +56,7 @@ func InitAPI(m *backup.Manager, opts config.Options) (*echo.Echo, error) {
 	return e, nil
 }
 
+// InitMetrics inits the metrics routes
 func InitMetrics(m *backup.Manager) *echo.Echo {
 	e := echo.New()
 	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
@@ -63,6 +65,7 @@ func InitMetrics(m *backup.Manager) *echo.Echo {
 	return e
 }
 
+// InitVerificationMetrics inits the verficiation metrics routes
 func InitVerificationMetrics() *echo.Echo {
 	e := echo.New()
 	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
