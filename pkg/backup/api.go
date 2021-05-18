@@ -8,6 +8,7 @@ import (
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 )
 
+// CreateIncBackup creates inc backups
 func (m *Manager) CreateIncBackup() (err error) {
 	if m.cronBackup == nil {
 		return fmt.Errorf("no backup running")
@@ -24,10 +25,12 @@ func (m *Manager) CreateIncBackup() (err error) {
 	return fmt.Errorf("no backup running")
 }
 
+// GetConfig returns the config
 func (m *Manager) GetConfig() config.Config {
 	return m.cfg
 }
 
+// GetBackupActive returns if a backup is currently active
 func (m *Manager) GetBackupActive() bool {
 	if m.cronBackup == nil {
 		return false
@@ -35,12 +38,14 @@ func (m *Manager) GetBackupActive() bool {
 	return true
 }
 
-func (m *Manager) GetHealthStatus() *updateStatus {
+// GetHealthStatus returns the current backup health status
+func (m *Manager) GetHealthStatus() *UpdateStatus {
 	m.updateSts.RLock()
 	defer m.updateSts.RUnlock()
 	return m.updateSts
 }
 
+// Restore triggers a restore
 func (m *Manager) Restore(p string) (err error) {
 	logger.Info("starting restore")
 	m.Health.Lock()

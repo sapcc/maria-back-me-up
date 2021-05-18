@@ -11,15 +11,16 @@ import (
 )
 
 type (
+	// Status holds database status info
 	Status struct {
 		Ok      bool
 		Details map[string]string
 	}
-
+	// Checksum holds database table checksums
 	Checksum struct {
 		TablesChecksum map[string]int64 `yaml:"tables_checksum"`
 	}
-
+	// LogPosition holds database log position
 	LogPosition struct {
 		Format string
 		Name   string
@@ -27,6 +28,7 @@ type (
 	}
 )
 
+// Database interface for database implementation
 type Database interface {
 	GetLogPosition() LogPosition
 	GetConfig() config.DatabaseConfig
@@ -41,6 +43,7 @@ type Database interface {
 	GetDatabaseDiff(c1, c2 config.DatabaseConfig) (out []byte, err error)
 }
 
+// NewDatabase creates a new database based on the chose type
 func NewDatabase(c config.Config, s *storage.Manager) (Database, error) {
 	if c.SideCar == nil || *c.SideCar {
 		c.Database.Host = "127.0.0.1"

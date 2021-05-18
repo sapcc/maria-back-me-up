@@ -52,7 +52,7 @@ func main() {
 	metrics := route.InitVerificationMetrics()
 
 	s := server.NewServer(metrics)
-	go s.Start(constants.PORT_METRICS)
+	go s.Start(constants.PORTMETRICS)
 
 	v.Start(ctx)
 

@@ -126,7 +126,7 @@ func TestManagerIncbackErrorHandling(t *testing.T) {
 	if m.updateSts.IncBackup["s2"] != 0 {
 		t.Errorf("expected incBackup status to be 0, but got: %d.", m.updateSts.IncBackup["s2"])
 	}
-	prometheus.Unregister(NewMetricsCollector(&updateStatus{}))
+	prometheus.Unregister(NewMetricsCollector(&UpdateStatus{}))
 	os.Remove(backupDir)
 }
 
@@ -191,6 +191,6 @@ func setup(t *testing.T) (m *Manager, db *database.MockDB, cfg config.Config) {
 }
 
 func cleanup() {
-	prometheus.Unregister(NewMetricsCollector(&updateStatus{}))
+	prometheus.Unregister(NewMetricsCollector(&UpdateStatus{}))
 	os.Remove(backupDir)
 }

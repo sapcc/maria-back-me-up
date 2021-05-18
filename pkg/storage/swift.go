@@ -31,7 +31,7 @@ type Swift struct {
 func NewSwift(c config.Swift, serviceName string, logBin string) (s *Swift, err error) {
 	conn := &swift.Connection{
 		AuthVersion:  c.AuthVersion,
-		AuthUrl:      c.AuthUrl,
+		AuthUrl:      c.AuthURL,
 		UserName:     c.UserName,
 		Domain:       c.UserDomainName,
 		Tenant:       c.ProjectName,

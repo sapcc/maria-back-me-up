@@ -23,11 +23,15 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// DumpTools iota
 type DumpTools int
 
 const (
+	// Mysqldump available database dump tool
 	Mysqldump DumpTools = iota
+	// MyDumper available database dump tool
 	MyDumper
+	// Dummy available database dump tool
 	Dummy
 )
 
@@ -35,6 +39,7 @@ func (m DumpTools) String() string {
 	return [...]string{"mysqldump", "myDumper", "dummy"}[m]
 }
 
+// Config passed via a yaml file
 type Config struct {
 	ServiceName  string              `yaml:"service_name"`
 	SideCar      *bool               `yaml:"sidecar"`
@@ -45,6 +50,7 @@ type Config struct {
 	Verification VerificationService `yaml:"verification"`
 }
 
+// BackupService holds info for the backup service
 type BackupService struct {
 	Version                    string `yaml:"version"`
 	OAuth                      OAuth  `yaml:"oauth"`
@@ -55,6 +61,7 @@ type BackupService struct {
 	EnableRestoreOnDBFailure   bool   `yaml:"enable_restore_on_db_failure"`
 }
 
+// DatabaseConfig holds info for the database to back up
 type DatabaseConfig struct {
 	Type          string    `yaml:"type"`
 	DumpTool      DumpTools `yaml:"full_dump_tool"`
@@ -70,11 +77,13 @@ type DatabaseConfig struct {
 	VerifyTables  []string  `yaml:"verify_tables"`
 }
 
+// StorageService list of available storage services
 type StorageService struct {
 	S3    []S3    `yaml:"s3"`
 	Swift []Swift `yaml:"swift"`
 }
 
+// S3 hols info for the AWS S3 storage service
 type S3 struct {
 	Name                 string  `yaml:"name"`
 	AwsAccessKeyID       string  `yaml:"aws_access_key_id"`
@@ -87,10 +96,11 @@ type S3 struct {
 	BucketName           string  `yaml:"bucket_name"`
 }
 
+// Swift holds info for the OS swift storage service
 type Swift struct {
 	Name              string `yaml:"name"`
 	AuthVersion       int    `yaml:"auth_version"`
-	AuthUrl           string `yaml:"auth_url"`
+	AuthURL           string `yaml:"auth_url"`
 	UserName          string `yaml:"user_name"`
 	UserDomainName    string `yaml:"user_domain_name"`
 	ProjectName       string `yaml:"project_name"`
@@ -102,17 +112,20 @@ type Swift struct {
 	SloSize           *int64 `yaml:"slo_size"`   // default 600mb
 }
 
+// OAuth holds info for the api oauth middleware
 type OAuth struct {
 	Enabled     bool   `yaml:"enabled"`
 	ProviderURL string `yaml:"provider_url"`
 	RedirectURL string `yaml:"redirect_url"`
 }
 
+// VerificationService holds info for the backup verification service
 type VerificationService struct {
 	IntervalInMinutes int `yaml:"interval_in_minutes"`
 	MariaDBVersion    string
 }
 
+// GetConfig returns the config struct from a yaml file
 func GetConfig(opts Options) (cfg Config, err error) {
 	if opts.ConfigFilePath == "" {
 		return cfg, fmt.Errorf("no config file provided")

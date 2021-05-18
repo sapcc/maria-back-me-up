@@ -52,20 +52,23 @@ var (
 )
 
 type (
+	// Health backup health status
 	Health struct {
 		sync.Mutex
 		Ready bool
 	}
+	// ChecksumStatus backup checksum struct
 	ChecksumStatus struct {
 		timestamp int64            `yaml:"timestamp"`
 		Checksums map[string]int64 `yaml:"checksums"`
 	}
+	// Manager that handles the backup cycle
 	Manager struct {
 		cfg             config.Config
 		Db              database.Database
 		k8sDB           *k8s.Database
 		Storage         *storage.Manager
-		updateSts       *updateStatus
+		updateSts       *UpdateStatus
 		Health          *Health
 		cronSch         cron.Schedule
 		lastBackupTime  string
@@ -79,8 +82,9 @@ func init() {
 	logger = log.WithFields(logrus.Fields{"component": "manager"})
 }
 
+// NewManager returns a manager instance
 func NewManager(s *storage.Manager, db database.Database, c config.Config) (m *Manager, err error) {
-	us := updateStatus{
+	us := UpdateStatus{
 		FullBackup: make(map[string]int, 0),
 		IncBackup:  make(map[string]int, 0),
 	}
@@ -113,6 +117,7 @@ func NewManager(s *storage.Manager, db database.Database, c config.Config) (m *M
 	}, err
 }
 
+// Start a backup cycle
 func (m *Manager) Start() (err error) {
 	if m.cronBackup != nil {
 		return fmt.Errorf("backup already running")
@@ -125,6 +130,7 @@ func (m *Manager) Start() (err error) {
 	return m.startBackup(ctx)
 }
 
+// Stop the backup cycle
 func (m *Manager) Stop() (ctx context.Context) {
 	backupCancel()
 	m.stopIncBackup()

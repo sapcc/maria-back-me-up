@@ -36,6 +36,7 @@ import (
 	"golang.org/x/net/websocket"
 )
 
+//TemplateRenderer is
 type TemplateRenderer struct {
 	templates *template.Template
 }
@@ -108,6 +109,7 @@ var funcMap = template.FuncMap{
 	"getVerifyBackupState": getVerifyBackupState,
 }
 
+//GetRoot renders the index.html
 func GetRoot(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		var tmpl = template.New("index.html").Funcs(funcMap)
@@ -124,6 +126,7 @@ func GetRoot(m *backup.Manager) echo.HandlerFunc {
 	}
 }
 
+//GetBackup renders the backup.html
 func GetBackup(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		s := c.QueryParam("storage")
@@ -147,6 +150,7 @@ func GetBackup(m *backup.Manager) echo.HandlerFunc {
 	}
 }
 
+//GetRestore renders the restore.html
 func GetRestore(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		k := c.QueryParam("key")
@@ -171,6 +175,7 @@ func GetRestore(m *backup.Manager) echo.HandlerFunc {
 	}
 }
 
+//PostRestoreDownload handles restore download requests
 func PostRestoreDownload(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		os.RemoveAll(constants.RESTOREFOLDER)
@@ -202,6 +207,7 @@ func PostRestoreDownload(m *backup.Manager) echo.HandlerFunc {
 	}
 }
 
+//PostRestore handles backup restore requests
 func PostRestore(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -263,6 +269,7 @@ func PostRestore(m *backup.Manager) echo.HandlerFunc {
 	}
 }
 
+//GetBackupStatus handles backup status requests
 func GetBackupStatus(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		websocket.Handler(func(ws *websocket.Conn) {
@@ -292,6 +299,7 @@ func GetBackupStatus(m *backup.Manager) echo.HandlerFunc {
 	}
 }
 
+//StartStopBackup handles stop backup requests
 func StartStopBackup(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		if c.Path() == "/api/backup/stop" {
@@ -309,6 +317,7 @@ func StartStopBackup(m *backup.Manager) echo.HandlerFunc {
 	}
 }
 
+//CreateIncBackup handles create inc backup requests
 func CreateIncBackup(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		if err := m.CreateIncBackup(); err != nil {
@@ -318,6 +327,7 @@ func CreateIncBackup(m *backup.Manager) echo.HandlerFunc {
 	}
 }
 
+//GetReadiness handles readiness pod requests
 func GetReadiness(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		if c.Path() == "/health/readiness" {

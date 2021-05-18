@@ -28,6 +28,7 @@ import (
 )
 
 type (
+	// MariaDB databse struct
 	MariaDB struct {
 		cfg         config.Config
 		storage     *storage.Manager
@@ -45,6 +46,7 @@ type (
 	}
 )
 
+// NewMariaDB creates a mariadb databse instance
 func NewMariaDB(c config.Config, sm *storage.Manager) (Database, error) {
 	k, err := k8s.New(c.Namespace)
 	if err != nil {
@@ -57,6 +59,7 @@ func NewMariaDB(c config.Config, sm *storage.Manager) (Database, error) {
 	}, nil
 }
 
+// CreateFullBackup creates a mariadb full backup
 func (m *MariaDB) CreateFullBackup(path string) (bp LogPosition, err error) {
 	if path == "" {
 		return bp, fmt.Errorf("no path given")
@@ -78,14 +81,17 @@ func (m *MariaDB) CreateFullBackup(path string) (bp LogPosition, err error) {
 	return
 }
 
+// GetLogPosition returns the current mariadb log position
 func (m *MariaDB) GetLogPosition() LogPosition {
 	return m.logPosition
 }
 
+// GetConfig returns the database config
 func (m *MariaDB) GetConfig() config.DatabaseConfig {
 	return m.cfg.Database
 }
 
+// Restore runs a restore on the mariadb
 func (m *MariaDB) Restore(path string) (err error) {
 	old := m.cfg.Database.Host
 	ip, err := m.kub.GetPodIP(fmt.Sprintf("app=%s-mariadb", m.cfg.ServiceName))
@@ -131,6 +137,7 @@ func (m *MariaDB) Restore(path string) (err error) {
 	return
 }
 
+// VerifyRestore runs a restore on the mariadb for verification
 func (m *MariaDB) VerifyRestore(path string) (err error) {
 	if err = m.Up(10*time.Minute, false); err != nil {
 		return fmt.Errorf("Timed out waiting for verfiy mariadb to boot. Cant perform verification")
@@ -146,6 +153,7 @@ func (m *MariaDB) VerifyRestore(path string) (err error) {
 	return
 }
 
+// GetCheckSumForTable returns tables checksums
 func (m *MariaDB) GetCheckSumForTable(verifyTables []string, withIP bool) (cs Checksum, err error) {
 	cs.TablesChecksum = make(map[string]int64)
 	conn, err := client.Connect(fmt.Sprintf("%s:%s", m.cfg.Database.Host, strconv.Itoa(m.cfg.Database.Port)), m.cfg.Database.User, m.cfg.Database.Password, "")
@@ -177,6 +185,7 @@ func (m *MariaDB) GetCheckSumForTable(verifyTables []string, withIP bool) (cs Ch
 	return
 }
 
+// HealthCheck returns the mariadb databases healthcheck
 func (m *MariaDB) HealthCheck() (status Status, err error) {
 	return mariaHealthCheck(m.cfg.Database)
 }
@@ -243,6 +252,7 @@ func (m *MariaDB) createMysqlDump(toPath string) (bp LogPosition, err error) {
 	return bp, m.storage.WriteFolderAll(toPath)
 }
 
+// StartIncBackup creates an incremental backup
 func (m *MariaDB) StartIncBackup(ctx context.Context, mp LogPosition, dir string, ch chan error) (err error) {
 	var binlogFile string
 	cfg := replication.BinlogSyncerConfig{
@@ -328,6 +338,7 @@ func (m *MariaDB) StartIncBackup(ctx context.Context, mp LogPosition, dir string
 	}
 }
 
+// FlushIncBackup resets the inc backup timer
 func (m *MariaDB) FlushIncBackup() (err error) {
 	if m.flushTimer != nil {
 		if !m.flushTimer.Stop() {
@@ -469,6 +480,7 @@ func (m *MariaDB) checkBackupDirExistsAndCreate() (p string, err error) {
 	return
 }
 
+// Up checks if the mariadb is up and recieving requests
 func (m *MariaDB) Up(timeout time.Duration, withIP bool) (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
 		err = m.pingMariaDB(withIP)
@@ -604,6 +616,7 @@ func getMysqlDumpBinlog(s string) (mp mysql.Position, err error) {
 	return
 }
 
+// GetDatabaseDiff returns the database diff between two mariadbs
 func (m *MariaDB) GetDatabaseDiff(c1, c2 config.DatabaseConfig) (out []byte, err error) {
 	//mysqldiff --server1=root:pw@localhost:3306 --server2=root:pw@db_backup:3306 test:test
 	s1 := fmt.Sprintf("%s:%s@%s:%s", c1.User, c1.Password, c1.Host, strconv.Itoa(c1.Port))

@@ -83,7 +83,7 @@ func main() {
 
 	s1 := server.NewServer(metrics)
 	s2 := server.NewServer(api)
-	go s1.Start(constants.PORT_METRICS)
+	go s1.Start(constants.PORTMETRICS)
 	go s2.Start(constants.PORT)
 
 	if err = m.Start(); err != nil {

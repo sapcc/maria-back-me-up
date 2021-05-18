@@ -17,9 +17,6 @@
 package api
 
 import (
-	"fmt"
-	"io/ioutil"
-
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
 )
 
@@ -29,15 +26,6 @@ const (
 	verifyNotCompleteState = "#6c757d" // grey
 	verifyCompleteState    = "#28a745" // green
 )
-
-func ReadFile(path string) (d string, err error) {
-	fBytes, err := ioutil.ReadFile(path)
-	if err != nil {
-		return d, fmt.Errorf("read file: %s", err.Error())
-	}
-
-	return string(fBytes), nil
-}
 
 func calcVerifyState(v *storage.Verify, showError bool) string {
 	verifyState := verifyNotCompleteState

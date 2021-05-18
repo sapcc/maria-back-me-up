@@ -43,6 +43,7 @@ var (
 	store                *sessions.CookieStore
 )
 
+//InitOAuth inits oauth config
 func InitOAuth(m *backup.Manager, opts config.Options) (err error) {
 	ctx := oidc.ClientContext(context.Background(), http.DefaultClient)
 	key := make([]byte, 64)
@@ -79,7 +80,7 @@ func InitOAuth(m *backup.Manager, opts config.Options) (err error) {
 	return
 }
 
-// Oauth middleware is used to start an OAuth2 flow with the dex server.
+//Oauth middleware is used to start an OAuth2 flow with the dex server.
 func Oauth(enabled bool, opts config.Options) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) (err error) {
@@ -101,7 +102,7 @@ func Oauth(enabled bool, opts config.Options) echo.MiddlewareFunc {
 	}
 }
 
-// Oauth middleware is used to start an OAuth2 flow with the dex server.
+//Restore middleware is used to start an OAuth2 flow with the dex server.
 func Restore(m *backup.Manager) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) (err error) {
@@ -139,6 +140,7 @@ func updateSessionStore(w http.ResponseWriter, r *http.Request, token string, us
 	return session.Save(r, w)
 }
 
+//HandleOAuth2Callback handles oauth callbacks
 func HandleOAuth2Callback(opts config.Options) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		ctx := c.Request().Context()

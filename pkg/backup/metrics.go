@@ -23,23 +23,27 @@ import (
 )
 
 type (
-	updateStatus struct {
+	// UpdateStatus holds current status of backups
+	UpdateStatus struct {
 		sync.RWMutex `yaml:"-"`
 		IncBackup    map[string]int
 		FullBackup   map[string]int
 	}
 
+	// MetricsCollector collects metrics fort the backup and verification status
 	MetricsCollector struct {
 		backup    *prometheus.Desc
 		verify    *prometheus.Desc
-		updateSts *updateStatus
+		updateSts *UpdateStatus
 	}
 )
 
+// Describe implements the exporter interface function
 func (c *MetricsCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.backup
 }
 
+// Collect implements the exporter interface function
 func (c *MetricsCollector) Collect(ch chan<- prometheus.Metric) {
 	c.updateSts.RLock()
 	defer c.updateSts.RUnlock()
@@ -63,7 +67,8 @@ func (c *MetricsCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 }
 
-func NewMetricsCollector(u *updateStatus) *MetricsCollector {
+// NewMetricsCollector create a prometheus collector instance
+func NewMetricsCollector(u *UpdateStatus) *MetricsCollector {
 	m := MetricsCollector{
 		updateSts: u,
 		backup: prometheus.NewDesc(
