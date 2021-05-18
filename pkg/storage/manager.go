@@ -51,6 +51,10 @@ func NewManager(c config.StorageService, serviceName, binLog string) (m *Manager
 	return
 }
 
+func (m *Manager) AddStorage(s Storage) {
+	m.storageServices[s.GetStorageServiceName()] = s
+}
+
 func (m *Manager) GetStorageServicesKeys() (svc []string) {
 	keys := reflect.ValueOf(m.storageServices).MapKeys()
 	svc = make([]string, len(keys))

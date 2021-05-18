@@ -79,16 +79,7 @@ func init() {
 	logger = log.WithFields(logrus.Fields{"component": "manager"})
 }
 
-func NewManager(c config.Config) (m *Manager, err error) {
-	s, err := storage.NewManager(c.Storages, c.ServiceName, c.Database.LogNameFormat)
-	if err != nil {
-		return
-	}
-
-	db, err := database.NewDatabase(c, s)
-	if err != nil {
-		return
-	}
+func NewManager(s *storage.Manager, db database.Database, c config.Config) (m *Manager, err error) {
 	us := updateStatus{
 		FullBackup: make(map[string]int, 0),
 		IncBackup:  make(map[string]int, 0),
@@ -173,7 +164,6 @@ func (m *Manager) scheduleBackup(ctx context.Context) {
 	}
 	// Stop binlog
 	m.stopIncBackup()
-
 	log.Debug("check if db is up and runnging")
 	if err := m.Db.Up(2*time.Minute, false); err != nil {
 		log.Error("cannot connect to database")
@@ -181,7 +171,6 @@ func (m *Manager) scheduleBackup(ctx context.Context) {
 		m.Start()
 		return
 	}
-
 	m.lastBackupTime = time.Now().Format(time.RFC3339)
 	if err := m.createTableChecksum(m.lastBackupTime); err != nil {
 		logger.Error("cannot create checksum", err)
@@ -348,7 +337,7 @@ func (m *Manager) onBinlogRotation(c chan error) {
 					switch e := merr.Errors[i].(type) {
 					case *storage.StorageError:
 						stsError = append(stsError, e.Storage)
-						logger.Errorf("error writing log to storage %s. error: ", e.Storage, merr.Error())
+						logger.Errorf("error writing log to storage %s. error: %s", e.Storage, merr.Error())
 					default:
 						log.Error(merr.Errors[i])
 					}

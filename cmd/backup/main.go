@@ -26,9 +26,11 @@ import (
 	"github.com/sapcc/maria-back-me-up/pkg/backup"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/constants"
+	"github.com/sapcc/maria-back-me-up/pkg/database"
 	log "github.com/sapcc/maria-back-me-up/pkg/log"
 	"github.com/sapcc/maria-back-me-up/pkg/route"
 	"github.com/sapcc/maria-back-me-up/pkg/server"
+	"github.com/sapcc/maria-back-me-up/pkg/storage"
 	"github.com/sirupsen/logrus"
 )
 
@@ -60,7 +62,15 @@ func main() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGSTOP)
 
-	m, err := backup.NewManager(cfg)
+	sm, err := storage.NewManager(cfg.Storages, cfg.ServiceName, cfg.Database.LogNameFormat)
+	if err != nil {
+		log.Fatal(err)
+	}
+	db, err := database.NewDatabase(cfg, sm)
+	if err != nil {
+		log.Fatal(err)
+	}
+	m, err := backup.NewManager(sm, db, cfg)
 	if err != nil {
 		log.Fatal("cannot create backup handler: ", err.Error())
 	}

@@ -50,5 +50,6 @@ func NewDatabase(c config.Config, s *storage.Manager) (Database, error) {
 	} else if c.Database.Type == constants.POSTGRES {
 		return NewPostgres(c, s)
 	}
+
 	return nil, fmt.Errorf("unsupported database")
 }

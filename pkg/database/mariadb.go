@@ -58,16 +58,22 @@ func NewMariaDB(c config.Config, sm *storage.Manager) (Database, error) {
 }
 
 func (m *MariaDB) CreateFullBackup(path string) (bp LogPosition, err error) {
-	if m.cfg.Database.DumpTool == nil || *m.cfg.Database.DumpTool == "mysqldump" {
+	if path == "" {
+		return bp, fmt.Errorf("no path given")
+	}
+	switch m.cfg.Database.DumpTool {
+	case config.Mysqldump:
 		bp, err = m.createMysqlDump(path)
 		if err != nil {
 			return bp, err
 		}
-	} else {
+	case config.MyDumper:
 		bp, err = m.createMyDump(path)
 		if err != nil {
 			return bp, err
 		}
+	default:
+		return bp, fmt.Errorf("unsupported dump tool: %s", m.cfg.Database.DumpTool.String())
 	}
 	return
 }
@@ -381,7 +387,8 @@ func (m *MariaDB) restoreDump(backupPath string) (err error) {
 	).Run(); err != nil {
 		return
 	}
-	if m.cfg.Database.DumpTool == nil || *m.cfg.Database.DumpTool == "mysqldump" {
+	switch m.cfg.Database.DumpTool {
+	case config.Mysqldump:
 		dump, err := os.Open(path.Join(backupPath, "dump", "dump.sql"))
 		cmd := exec.Command(
 			"mysql",
@@ -393,9 +400,10 @@ func (m *MariaDB) restoreDump(backupPath string) (err error) {
 		cmd.Stdin = dump
 		b, err := cmd.CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("myloader error: %s", string(b))
+			return fmt.Errorf("%s error: %s", config.Mysqldump.String(), string(b))
 		}
-	} else {
+		log.Debug(fmt.Sprintf("%s restore finished", config.Mysqldump.String()))
+	case config.MyDumper:
 		b, err := exec.Command(
 			"myloader",
 			"--port="+strconv.Itoa(m.cfg.Database.Port),
@@ -406,11 +414,10 @@ func (m *MariaDB) restoreDump(backupPath string) (err error) {
 			"--overwrite-tables",
 		).CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("myloader error: %s", string(b))
+			return fmt.Errorf("%s error: %s", config.MyDumper.String(), string(b))
 		}
+		log.Debug(fmt.Sprintf("%s restore finished", config.MyDumper.String()))
 	}
-
-	log.Debug("myloader restore finished")
 	return
 }
 
@@ -466,7 +473,7 @@ func (m *MariaDB) Up(timeout time.Duration, withIP bool) (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
 		err = m.pingMariaDB(withIP)
 		if err != nil {
-			log.Error("Error Pinging mariadb. error: ", err.Error())
+			log.Error("Error pinging mariadb. error: ", err.Error())
 			return false, nil
 		}
 		log.Debug("Pinging mariadb successful")

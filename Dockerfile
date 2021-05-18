@@ -1,9 +1,8 @@
 FROM keppel.eu-de-1.cloud.sap/ccloud-dockerhub-mirror/library/golang:1.13.4-alpine3.10 as builder
 WORKDIR /go/src/github.com/sapcc/maria-back-me-up
 RUN apk add --no-cache make git
-COPY . .
-ARG VERSION
-RUN make all
+COPY . /src
+RUN make -C /src install PREFIX=/pkg GO_BUILDFLAGS='-mod vendor'
 
 FROM keppel.eu-de-1.cloud.sap/ccloud-dockerhub-mirror/library/alpine:3.12
 LABEL maintainer="Stefan Hipfel <stefan.hipfel@sap.com>"
@@ -41,8 +40,9 @@ WORKDIR /
 RUN curl -Lo /bin/dumb-init https://github.com/Yelp/dumb-init/releases/download/v1.2.2/dumb-init_1.2.2_amd64 \
 	&& chmod +x /bin/dumb-init \
 	&& dumb-init -V
-COPY --from=builder /go/src/github.com/sapcc/maria-back-me-up/bin/linux/backup /go/src/github.com/sapcc/maria-back-me-up/bin/linux/verification /usr/local/bin/
+
+COPY --from=builder /pkg/ /usr/
 COPY static /static/
 COPY k8s_templates /k8s_templates/
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["backup"]
+CMD ["/usr/bin/backup"]

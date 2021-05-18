@@ -20,18 +20,15 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/siddontang/go-mysql v0.0.0-20190913034749-818e04340bba
 	github.com/sirupsen/logrus v1.4.2
-	github.com/slack-go/slack v0.6.6 // indirect
-	golang.org/x/crypto v0.0.0-20190820162420-60c769a6c586 // indirect
 	golang.org/x/net v0.0.0-20191004110552-13f9640d40b9
 	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58
 	golang.org/x/time v0.0.0-20190921001708-c4c64cad1fd0 // indirect
 	gopkg.in/square/go-jose.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v2 v2.2.8
+	gopkg.in/yaml.v2 v2.3.0
 	k8s.io/api v0.17.3
 	k8s.io/apimachinery v0.17.3
 	k8s.io/client-go v0.17.0
-	k8s.io/utils v0.0.0-20191114184206-e782cd3c129f // indirect
 )
 
 replace github.com/docker/docker => github.com/docker/engine v0.0.0-20190717161051-705d9623b7c1

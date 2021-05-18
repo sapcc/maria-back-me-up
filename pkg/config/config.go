@@ -23,6 +23,18 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+type DumpTools int
+
+const (
+	Mysqldump DumpTools = iota
+	MyDumper
+	Dummy
+)
+
+func (m DumpTools) String() string {
+	return [...]string{"mysqldump", "myDumper", "dummy"}[m]
+}
+
 type Config struct {
 	ServiceName  string              `yaml:"service_name"`
 	SideCar      *bool               `yaml:"sidecar"`
@@ -44,18 +56,18 @@ type BackupService struct {
 }
 
 type DatabaseConfig struct {
-	Type          string   `yaml:"type"`
-	DumpTool      *string  `yaml:"full_dump_tool"`
-	Flavor        string   `yaml:"flavor"`
-	LogNameFormat string   `yaml:"log_name_format"`
-	Version       string   `yaml:"version"`
-	Host          string   `yaml:"host"`
-	Port          int      `yaml:"port"`
-	User          string   `yaml:"user"`
-	Password      string   `yaml:"password"`
-	DataDir       string   `yaml:"data_dir"`
-	Databases     []string `yaml:"databases"`
-	VerifyTables  []string `yaml:"verify_tables"`
+	Type          string    `yaml:"type"`
+	DumpTool      DumpTools `yaml:"full_dump_tool"`
+	Flavor        string    `yaml:"flavor"`
+	LogNameFormat string    `yaml:"log_name_format"`
+	Version       string    `yaml:"version"`
+	Host          string    `yaml:"host"`
+	Port          int       `yaml:"port"`
+	User          string    `yaml:"user"`
+	Password      string    `yaml:"password"`
+	DataDir       string    `yaml:"data_dir"`
+	Databases     []string  `yaml:"databases"`
+	VerifyTables  []string  `yaml:"verify_tables"`
 }
 
 type StorageService struct {

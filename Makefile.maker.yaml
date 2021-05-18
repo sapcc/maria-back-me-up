@@ -1,0 +1,19 @@
+# Configuration file for <https://github.com/sapcc/go-makefile-maker>
+
+binaries:
+  - name:        backup
+    fromPackage: ./cmd/backup
+    installTo:   bin/
+  - name:        verification
+    fromPackage: ./cmd/verification
+    installTo:   bin/
+
+coverageTest:
+  only: '/pkg'
+  except: '/test'
+
+variables:
+  GO_LDFLAGS: '-X github.com/sapcc/maria-back-me-up/pkg/maria-back-me-up.VERSION=$(shell git rev-parse --verify HEAD | head -c 8)'
+
+vendoring:
+  enabled: true
