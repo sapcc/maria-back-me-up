@@ -15,6 +15,7 @@
  */
 
 //Setup sets up a keppel.Configuration and database connection for a unit test.
+
 package test
 
 import (
