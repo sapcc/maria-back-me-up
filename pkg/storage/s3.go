@@ -130,8 +130,8 @@ func (s *S3) WriteStream(fileName, mimeType string, body io.Reader, tags map[str
 	return nil
 }
 
-// DownloadBackupFrom implements interface
-func (s *S3) DownloadBackupFrom(fullBackupPath, binlog string) (path string, err error) {
+// DownloadBackupWithLogPosition implements interface
+func (s *S3) DownloadBackupWithLogPosition(fullBackupPath, binlog string) (path string, err error) {
 	if fullBackupPath == "" || binlog == "" {
 		return path, &NoBackupError{}
 	}
@@ -171,8 +171,8 @@ func (s *S3) DownloadBackupFrom(fullBackupPath, binlog string) (path string, err
 	return
 }
 
-// ListIncBackupsFor implements interface
-func (s *S3) ListIncBackupsFor(key string) (bl []Backup, err error) {
+// GetIncBackupsFromDump implements interface
+func (s *S3) GetIncBackupsFromDump(key string) (bl []Backup, err error) {
 	svc := s3.New(s.session)
 	b := Backup{
 		Storage: s.cfg.Name,
@@ -214,8 +214,8 @@ func (s *S3) ListIncBackupsFor(key string) (bl []Backup, err error) {
 	return
 }
 
-// ListFullBackups implements interface
-func (s *S3) ListFullBackups() (bl []Backup, err error) {
+// GetFullBackups implements interface
+func (s *S3) GetFullBackups() (bl []Backup, err error) {
 	svc := s3.New(s.session)
 	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(s.serviceName + "/"), Delimiter: aws.String("y")})
 	if err != nil {
@@ -237,20 +237,6 @@ func (s *S3) ListFullBackups() (bl []Backup, err error) {
 			}
 			bl = append(bl, b)
 		}
-	}
-	return
-}
-
-// ListServices implements interface
-func (s *S3) ListServices() (services []string, err error) {
-	services = make([]string, 0)
-	svc := s3.New(s.session)
-	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Delimiter: aws.String("/")})
-	if err != nil {
-		return services, s.handleError("", err)
-	}
-	for _, pr := range listRes.CommonPrefixes {
-		services = append(services, strings.ReplaceAll(*pr.Prefix, "/", ""))
 	}
 	return
 }
@@ -295,7 +281,7 @@ func (s *S3) DownloadLatestBackup() (path string, err error) {
 			}
 		}
 
-		return s.DownloadBackupFrom(key, binlog)
+		return s.DownloadBackupWithLogPosition(key, binlog)
 	}
 
 	return path, &NoBackupError{}

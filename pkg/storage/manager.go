@@ -133,30 +133,17 @@ func (m *Manager) DownloadBackup(storageService string, fullBackup Backup) (path
 	return s.DownloadBackup(fullBackup)
 }
 
-// ListFullBackups lists all available full backups from a specific storage
-func (m *Manager) ListFullBackups(storageService string) (bl []Backup, err error) {
+// GetFullBackups lists all available full backups from a specific storage
+func (m *Manager) GetFullBackups(storageService string) (bl []Backup, err error) {
 	s, ok := m.storageServices[storageService]
 	if !ok {
 		return bl, fmt.Errorf("unknown storage service")
 	}
-	return s.ListFullBackups()
+	return s.GetFullBackups()
 }
 
-// ListServices lists all available the serivces storages
-func (m *Manager) ListServices() (s map[string][]string, err error) {
-	s = make(map[string][]string, 0)
-	for n, svc := range m.storageServices {
-		ls, err := svc.ListServices()
-		if err != nil {
-			return s, err
-		}
-		s[n] = ls
-	}
-	return
-}
-
-// ListIncBackupsFor lists all available inc backups from a specific storage
-func (m *Manager) ListIncBackupsFor(storageService, key string) (bl []Backup, err error) {
+// GetIncBackupsFromDump lists all available incremental backups belonging to the full backup from a specific storage
+func (m *Manager) GetIncBackupsFromDump(storageService, key string) (bl []Backup, err error) {
 	s, ok := m.storageServices[storageService]
 	if !ok {
 		return bl, fmt.Errorf("unknown storage service")
@@ -165,16 +152,16 @@ func (m *Manager) ListIncBackupsFor(storageService, key string) (bl []Backup, er
 		return bl, fmt.Errorf("backup is incomplete, due to: %s", st)
 	}
 
-	return s.ListIncBackupsFor(key)
+	return s.GetIncBackupsFromDump(key)
 }
 
-// DownloadBackupFrom from a specific storage and timestamp
-func (m *Manager) DownloadBackupFrom(storageService, fullBackupPath string, binlog string) (path string, err error) {
+// DownloadBackupWithLogPosition from a specific storage and timestamp
+func (m *Manager) DownloadBackupWithLogPosition(storageService, fullBackupPath string, binlog string) (path string, err error) {
 	s, ok := m.storageServices[storageService]
 	if !ok {
 		return path, fmt.Errorf("unknown storage service")
 	}
-	return s.DownloadBackupFrom(fullBackupPath, binlog)
+	return s.DownloadBackupWithLogPosition(fullBackupPath, binlog)
 }
 
 func (m *Manager) createIOReaders(count int) ([]io.Reader, io.Writer, io.Closer) {

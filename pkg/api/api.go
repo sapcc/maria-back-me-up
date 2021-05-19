@@ -136,7 +136,7 @@ func GetBackup(m *backup.Manager) echo.HandlerFunc {
 		var tmpl = template.New("backup.html").Funcs(funcMap)
 		t, err := tmpl.ParseFiles(constants.BACKUP)
 		var backups backupSlice
-		backups, err = m.Storage.ListFullBackups(s)
+		backups, err = m.Storage.GetFullBackups(s)
 		sort.Stable(backups)
 		d := map[string]interface{}{
 			"backups": backups,
@@ -162,7 +162,7 @@ func GetRestore(m *backup.Manager) echo.HandlerFunc {
 		t, err := tmpl.ParseFiles(constants.RESTORE)
 
 		var incBackups incBackupSlice
-		incBackups, err = m.Storage.ListIncBackupsFor(s, k)
+		incBackups, err = m.Storage.GetIncBackupsFromDump(s, k)
 		sort.Stable(incBackups)
 		d := map[string]interface{}{
 			"incBackups": incBackups,
@@ -192,7 +192,7 @@ func PostRestoreDownload(m *backup.Manager) echo.HandlerFunc {
 		if st == "" {
 			return sendJSONResponse(c, "Error parsing storage param", err.Error())
 		}
-		backupPath, err := m.Storage.DownloadBackupFrom(st, path, binlog)
+		backupPath, err := m.Storage.DownloadBackupWithLogPosition(st, path, binlog)
 		if err != nil {
 			return sendJSONResponse(c, "Error downloading backup", err.Error())
 		}
@@ -247,7 +247,7 @@ func PostRestore(m *backup.Manager) echo.HandlerFunc {
 		if st == "" {
 			return sendJSONResponse(c, "Error parsing storage param", err.Error())
 		}
-		backupPath, err := m.Storage.DownloadBackupFrom(st, path, binlog)
+		backupPath, err := m.Storage.DownloadBackupWithLogPosition(st, path, binlog)
 		if err != nil {
 			return sendJSONResponse(c, "Error downloading backup", err.Error())
 		}

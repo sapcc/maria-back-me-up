@@ -47,18 +47,13 @@ func (s *MockStorage) WithError(e bool) {
 	s.withError = e
 }
 
-// ListIncBackupsFor implements interface
-func (s *MockStorage) ListIncBackupsFor(key string) (bl []Backup, err error) {
+// GetIncBackupsFromDump implements interface
+func (s *MockStorage) GetIncBackupsFromDump(key string) (bl []Backup, err error) {
 	return
 }
 
-// ListServices implements interface
-func (s *MockStorage) ListServices() (services []string, err error) {
-	return
-}
-
-// ListFullBackups implements interface
-func (s *MockStorage) ListFullBackups() (bl []Backup, err error) {
+// GetFullBackups implements interface
+func (s *MockStorage) GetFullBackups() (bl []Backup, err error) {
 	return
 }
 
@@ -103,7 +98,7 @@ func (s *MockStorage) DownloadBackup(fullBackup Backup) (path string, err error)
 	return
 }
 
-// DownloadBackupFrom implements interface
-func (s *MockStorage) DownloadBackupFrom(fullBackupPath string, binlog string) (path string, err error) {
+// DownloadBackupWithLogPosition implements interface
+func (s *MockStorage) DownloadBackupWithLogPosition(fullBackupPath string, binlog string) (path string, err error) {
 	return
 }

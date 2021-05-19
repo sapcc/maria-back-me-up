@@ -166,11 +166,11 @@ func (s *Swift) DownloadLatestBackup() (path string, err error) {
 	if !isset {
 		return path, &NoBackupError{}
 	}
-	return s.DownloadBackupFrom(key, binlog)
+	return s.DownloadBackupWithLogPosition(key, binlog)
 }
 
-// ListFullBackups implements interface
-func (s *Swift) ListFullBackups() (b []Backup, err error) {
+// GetFullBackups implements interface
+func (s *Swift) GetFullBackups() (b []Backup, err error) {
 	b = make([]Backup, 0)
 	objs, err := s.connection.ObjectsAll(s.cfg.ContainerName, &swift.ObjectsOpts{Prefix: s.serviceName + "/", Delimiter: 'y'})
 	if err != nil {
@@ -189,23 +189,8 @@ func (s *Swift) ListFullBackups() (b []Backup, err error) {
 	return
 }
 
-// ListServices implements interface
-func (s *Swift) ListServices() (services []string, err error) {
-	services = make([]string, 0)
-	objs, err := s.connection.ObjectsAll(s.cfg.ContainerName, &swift.ObjectsOpts{Prefix: "", Delimiter: '/'})
-	if err != nil {
-		return services, s.handleError("", err)
-	}
-	for _, o := range objs {
-		if len(o.Name) > 1 {
-			services = append(services, strings.ReplaceAll(o.Name, "/", ""))
-		}
-	}
-	return
-}
-
-// ListIncBackupsFor implements interface
-func (s *Swift) ListIncBackupsFor(key string) (bl []Backup, err error) {
+// GetIncBackupsFromDump implements interface
+func (s *Swift) GetIncBackupsFromDump(key string) (bl []Backup, err error) {
 	b := Backup{
 		Storage: s.cfg.Name,
 		IncList: make([]IncBackup, 0),
@@ -248,8 +233,8 @@ func (s *Swift) ListIncBackupsFor(key string) (bl []Backup, err error) {
 	return
 }
 
-// DownloadBackupFrom implements interface
-func (s *Swift) DownloadBackupFrom(fullBackupPath string, binlog string) (path string, err error) {
+// DownloadBackupWithLogPosition implements interface
+func (s *Swift) DownloadBackupWithLogPosition(fullBackupPath string, binlog string) (path string, err error) {
 	if fullBackupPath == "" || binlog == "" {
 		return path, &NoBackupError{}
 	}

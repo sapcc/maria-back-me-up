@@ -82,7 +82,7 @@ func (v *Verification) Start(ctx context.Context) (err error) {
 func (v *Verification) verifyLatestBackup() (err error) {
 	v.status.Reset()
 	var restoreFolder string
-	bs, err := v.storage.ListFullBackups(v.storageServiceName)
+	bs, err := v.storage.GetFullBackups(v.storageServiceName)
 	if err != nil {
 		return
 	}
