@@ -168,7 +168,7 @@ func (m *Manager) ListIncBackupsFor(storageService, key string) (bl []Backup, er
 	return s.ListIncBackupsFor(key)
 }
 
-// DownloadBackupFrom from a specific storage and specifig timestamp
+// DownloadBackupFrom from a specific storage and timestamp
 func (m *Manager) DownloadBackupFrom(storageService, fullBackupPath string, binlog string) (path string, err error) {
 	s, ok := m.storageServices[storageService]
 	if !ok {

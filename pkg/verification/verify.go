@@ -37,6 +37,7 @@ import (
 
 const podName = "mariadb"
 
+// Verification struct for the verification process
 type Verification struct {
 	storage            *storage.Manager
 	k8sDb              *k8s.Database
@@ -49,6 +50,7 @@ type Verification struct {
 	logger             *logrus.Entry
 }
 
+// NewVerification creates a verification instance
 func NewVerification(serviceName, storageServiceName string, s *storage.Manager, cv config.VerificationService, db database.Database, kd *k8s.Database) *Verification {
 	return &Verification{
 		serviceName:        serviceName,
@@ -62,6 +64,7 @@ func NewVerification(serviceName, storageServiceName string, s *storage.Manager,
 	}
 }
 
+// Start a verification process
 func (v *Verification) Start(ctx context.Context) (err error) {
 	for c := time.Tick(time.Duration(v.cfg.IntervalInMinutes) * time.Minute); ; {
 		if err := v.verifyLatestBackup(); err != nil {
@@ -135,7 +138,7 @@ func (v *Verification) verifyBackup(restoreFolder string) {
 	v.logger.Infof("Start verifying backup for service %s", v.serviceName)
 	dbCfg := v.db.GetConfig()
 	defer func() {
-		v.status.UploadStatus(restoreFolder, dbCfg.LogNameFormat, v.serviceName, v.storage)
+		v.status.Upload(restoreFolder, dbCfg.LogNameFormat, v.serviceName, v.storage)
 		if err = os.RemoveAll(restoreFolder); err != nil {
 			v.logger.Error(err)
 		}

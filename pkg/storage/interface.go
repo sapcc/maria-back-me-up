@@ -8,16 +8,27 @@ import (
 
 // Storage interface
 type Storage interface {
+	// WriteFolder writes a folder to the storage
 	WriteFolder(p string) (err error)
+	// WriteStream writes a byte stream to the storage
 	WriteStream(name, mimeType string, body io.Reader, tags map[string]string, dlo bool) (err error)
+	// DownloadLatestBackup downloads the latest available backup from a storage
 	DownloadLatestBackup() (path string, err error)
+	// ListFullBackups lists all available full backups per storage
 	ListFullBackups() (bl []Backup, err error)
+	// ListServices lists all available storages from a storage
 	ListServices() (services []string, err error)
+	// ListIncBackupsFor lists all available incremental backups that belong to a full backup from a storage
 	ListIncBackupsFor(key string) (bl []Backup, err error)
+	// DownloadBackupFrom downloads a specific backup until given binlog position from a storage
 	DownloadBackupFrom(fullBackupPath string, binlog string) (path string, err error)
+	// DownloadBackup downloads a specific backup from a storage
 	DownloadBackup(fullBackup Backup) (path string, err error)
+	// GetStorageServiceName lists all available storages from a service
 	GetStorageServiceName() (name string)
+	// GetStatusError gets the backup->error map
 	GetStatusError() map[string]string
+	// GetStatusErrorByKey returns error per backup
 	GetStatusErrorByKey(backupKey string) string
 }
 

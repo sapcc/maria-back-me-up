@@ -38,6 +38,7 @@ type SetupOptions struct {
 	DumpTool         config.DumpTools
 }
 
+// Setup the manager and database for testing
 func Setup(t *testing.T, opts *SetupOptions) (m *backup.Manager, cfg config.Config) {
 	cfg = config.Config{
 		Namespace: "test",
@@ -74,6 +75,7 @@ func Setup(t *testing.T, opts *SetupOptions) (m *backup.Manager, cfg config.Conf
 	return
 }
 
+// Cleanup after a test
 func Cleanup(t *testing.T) {
 	os.Remove(backupDir)
 }

@@ -16,6 +16,7 @@ var (
 	logger *logrus.Entry
 )
 
+// Manager struct for the verification process
 type Manager struct {
 	cfg           config.Config
 	verifications []*Verification
@@ -25,6 +26,7 @@ func init() {
 	logger = log.WithFields(logrus.Fields{"component": "verification"})
 }
 
+// NewManager creates a verification manager instance
 func NewManager(c config.Config) (m *Manager, err error) {
 	verifications := make([]*Verification, 0)
 	sts := make([]*Status, 0)
@@ -58,6 +60,7 @@ func NewManager(c config.Config) (m *Manager, err error) {
 	}, err
 }
 
+// Start a verification routine per storage
 func (m *Manager) Start(ctx context.Context) {
 	for _, v := range m.verifications {
 		logger.Debugf("Starting verification service %s", v.serviceName)

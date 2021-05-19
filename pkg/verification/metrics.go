@@ -21,16 +21,19 @@ import (
 )
 
 type (
+	// MetricsCollector struct for prometheus metrics
 	MetricsCollector struct {
 		verify *prometheus.Desc
 		status []*Status
 	}
 )
 
+// Describe implements the exporter interface function
 func (c *MetricsCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.verify
 }
 
+// Collect implements the exporter interface function
 func (c *MetricsCollector) Collect(ch chan<- prometheus.Metric) {
 	for _, s := range c.status {
 		s.RLock()
@@ -63,6 +66,7 @@ func (c *MetricsCollector) Collect(ch chan<- prometheus.Metric) {
 
 }
 
+// NewMetricsCollector creates a metricsCollector instance
 func NewMetricsCollector(s []*Status) *MetricsCollector {
 	m := MetricsCollector{
 		status: s,

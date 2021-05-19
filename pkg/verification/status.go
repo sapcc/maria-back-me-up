@@ -15,6 +15,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// Status struct holds the current info of a verifiction process
 type Status struct {
 	sync.RWMutex   `yaml:"-"`
 	VerifyRestore  int           `yaml:"verify_backup"`
@@ -26,6 +27,7 @@ type Status struct {
 	logger         *logrus.Entry `yaml:"-"`
 }
 
+// NewStatus creates verification status instance
 func NewStatus(backupService, storageService string) *Status {
 	return &Status{
 		VerifyRestore:  0,
@@ -38,6 +40,7 @@ func NewStatus(backupService, storageService string) *Status {
 	}
 }
 
+// SetVerifyRestore updates the verify status
 func (s *Status) SetVerifyRestore(i int, err error) {
 	s.Lock()
 	defer s.Unlock()
@@ -53,6 +56,7 @@ func (s *Status) SetVerifyRestore(i int, err error) {
 	}
 }
 
+// SetVerifyDiff updates the restore diff status
 func (s *Status) SetVerifyDiff(i int, err error) {
 	s.Lock()
 	defer s.Unlock()
@@ -62,6 +66,7 @@ func (s *Status) SetVerifyDiff(i int, err error) {
 	}
 }
 
+// SetVerifyChecksum updates the checksum status
 func (s *Status) SetVerifyChecksum(i int, err error) {
 	s.Lock()
 	defer s.Unlock()
@@ -71,6 +76,7 @@ func (s *Status) SetVerifyChecksum(i int, err error) {
 	}
 }
 
+// Reset the verify status info
 func (s *Status) Reset() {
 	s.Lock()
 	defer s.Unlock()
@@ -80,7 +86,8 @@ func (s *Status) Reset() {
 	s.VerifyError = ""
 }
 
-func (s *Status) UploadStatus(restoreFolder, logNameFormat, serviceName string, storage *storage.Manager) {
+// Upload the status info to the specified storage service
+func (s *Status) Upload(restoreFolder, logNameFormat, serviceName string, storage *storage.Manager) {
 	s.RLock()
 	out, err := yaml.Marshal(s)
 	s.RUnlock()
