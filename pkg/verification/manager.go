@@ -34,7 +34,7 @@ func NewManager(c config.Config) (m *Manager, err error) {
 	if err != nil {
 		return
 	}
-	db, err := database.NewDatabase(c, nil)
+	db, err := database.NewDatabase(c, nil, k8sm)
 	if err != nil {
 		return
 	}

@@ -62,7 +62,7 @@ func Setup(t *testing.T, opts *SetupOptions) (m *backup.Manager, cfg config.Conf
 		return
 	}
 
-	db, err := database.NewDatabase(cfg, s)
+	db, err := database.NewDatabase(cfg, s, nil)
 	if err != nil {
 		t.Errorf("expected database instance, but got error: %s.", err.Error())
 	}

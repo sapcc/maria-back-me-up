@@ -7,6 +7,7 @@ import (
 
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/constants"
+	"github.com/sapcc/maria-back-me-up/pkg/k8s"
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
 )
 
@@ -44,12 +45,12 @@ type Database interface {
 }
 
 // NewDatabase creates a new database based on the chose type
-func NewDatabase(c config.Config, s *storage.Manager) (Database, error) {
+func NewDatabase(c config.Config, s *storage.Manager, k *k8s.Database) (Database, error) {
 	if c.SideCar == nil || *c.SideCar {
 		c.Database.Host = "127.0.0.1"
 	}
 	if c.Database.Type == constants.MARIADB {
-		return NewMariaDB(c, s)
+		return NewMariaDB(c, s, k)
 	} else if c.Database.Type == constants.POSTGRES {
 		return NewPostgres(c, s)
 	}

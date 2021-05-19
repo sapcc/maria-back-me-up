@@ -27,6 +27,7 @@ import (
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/constants"
 	"github.com/sapcc/maria-back-me-up/pkg/database"
+	"github.com/sapcc/maria-back-me-up/pkg/k8s"
 	log "github.com/sapcc/maria-back-me-up/pkg/log"
 	"github.com/sapcc/maria-back-me-up/pkg/route"
 	"github.com/sapcc/maria-back-me-up/pkg/server"
@@ -66,7 +67,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	db, err := database.NewDatabase(cfg, sm)
+	k, err := k8s.New(cfg.Namespace)
+	if err != nil {
+		log.Fatal(err)
+	}
+	db, err := database.NewDatabase(cfg, sm, k)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -47,11 +47,7 @@ type (
 )
 
 // NewMariaDB creates a mariadb databse instance
-func NewMariaDB(c config.Config, sm *storage.Manager) (Database, error) {
-	k, err := k8s.New(c.Namespace)
-	if err != nil {
-		return nil, err
-	}
+func NewMariaDB(c config.Config, sm *storage.Manager, k *k8s.Database) (Database, error) {
 	return &MariaDB{
 		cfg:     c,
 		storage: sm,

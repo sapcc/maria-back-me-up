@@ -26,7 +26,7 @@ import (
 func TestMariaDBUp(t *testing.T) {
 	cfg := config.Config{}
 
-	mdb, err := NewMariaDB(cfg, nil)
+	mdb, err := NewMariaDB(cfg, nil, nil)
 	if err != nil {
 		t.Errorf("expected mariadb instance,but got error: %s.", err.Error())
 	}
@@ -43,7 +43,7 @@ func TestMariaDBDumpTool(t *testing.T) {
 		},
 	}
 
-	mdb, err := NewMariaDB(cfg, nil)
+	mdb, err := NewMariaDB(cfg, nil, nil)
 	if err != nil {
 		t.Errorf("expected mariadb instance,but got error: %s.", err.Error())
 	}
