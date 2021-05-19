@@ -206,7 +206,7 @@ func (v *Verification) verifyChecksums(dbcfg config.DatabaseConfig, restorePath 
 	if err != nil {
 		return err
 	}
-	v.logger.Debugf("successfully loaded checksum %s", csOrigin)
+	v.logger.Debugf("successfully loaded checksum %+v", csOrigin)
 
 	if len(csOrigin.TablesChecksum) == 0 {
 		return fmt.Errorf("no checksums found")

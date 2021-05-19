@@ -72,7 +72,7 @@ func Debug(args ...interface{}) {
 		logger.Lock()
 		defer logger.Unlock()
 		logger.entry.Data["file"] = fileInfo(2)
-		logger.entry.Debug(args)
+		logger.entry.Debug(args...)
 	}
 }
 

@@ -201,7 +201,7 @@ func (m *Manager) updateErroStatus() {
 				for svc, s := range m.storageServices {
 					for k := range s.GetStatusError() {
 						fp := path.Join(k, backupIcomplete)
-						logger.Infof("Trying to save error status", k)
+						logger.Infof("Trying to save error status: %s", k)
 						if err := m.WriteStream(svc, fp, "", bytes.NewReader([]byte("ERROR")), nil, false); err == nil {
 							delete(s.GetStatusError(), k)
 						}
