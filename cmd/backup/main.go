@@ -75,7 +75,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	m, err := backup.NewManager(sm, db, cfg)
+	m, err := backup.NewManager(sm, db, k, cfg)
 	if err != nil {
 		log.Fatal("cannot create backup handler: ", err.Error())
 	}

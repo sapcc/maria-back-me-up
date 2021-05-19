@@ -83,7 +83,7 @@ func init() {
 }
 
 // NewManager returns a manager instance
-func NewManager(s *storage.Manager, db database.Database, c config.Config) (m *Manager, err error) {
+func NewManager(s *storage.Manager, db database.Database, k *k8s.Database, c config.Config) (m *Manager, err error) {
 	us := UpdateStatus{
 		FullBackup: make(map[string]int, 0),
 		IncBackup:  make(map[string]int, 0),
@@ -92,12 +92,6 @@ func NewManager(s *storage.Manager, db database.Database, c config.Config) (m *M
 		us.IncBackup[v] = 0
 		us.FullBackup[v] = 0
 	}
-
-	mr, err := k8s.New(c.Namespace)
-	if err != nil {
-		return
-	}
-
 	p := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
 	cronSch, err := p.Parse(c.Backup.FullBackupCronSchedule)
 	if err != nil {
@@ -108,7 +102,7 @@ func NewManager(s *storage.Manager, db database.Database, c config.Config) (m *M
 	return &Manager{
 		Db:              db,
 		cfg:             c,
-		k8sDB:           mr,
+		k8sDB:           k,
 		Storage:         s,
 		updateSts:       &us,
 		Health:          &Health{Ready: true},

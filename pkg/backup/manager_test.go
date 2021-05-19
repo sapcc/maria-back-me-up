@@ -183,7 +183,7 @@ func setup(t *testing.T) (m *Manager, db *database.MockDB, cfg config.Config) {
 	if err != nil {
 		return
 	}
-	m, err = NewManager(sm, db, cfg)
+	m, err = NewManager(sm, db, nil, cfg)
 	if err != nil {
 		t.Errorf("expected manager instance, but got error: %s.", err.Error())
 	}
