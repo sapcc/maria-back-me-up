@@ -52,45 +52,48 @@ e.g. an update to a table column of 1000 rows will create 1000 row changes.
 With STATEMENT only the update statement will be recorded in the binlog.
 
 ## Config
-`service_name:` Name of your MariaDB (also used as the s3 folder name)\
-`namespace:` k8s namespace name\
-`backup_service:`\
- &ensp;`full_backup_interval_in_hours:` Interval for full MariaDB dumps in hours\
- &ensp;`incremental_backup_interval_in_minutes:` Interval for saving incremental backups\
- &ensp;`enable_init_restore:` Enables a automatic restore if one of the databases (in MariaDB.databases) are missing.\
- &ensp;`enable_restore_on_db_failure`: Enables automatic restore if the db is unhealthy.\
- &ensp;`outh:`\
-    &emsp;`enabled:` enables OAuth to access the API (openID)\
-    &emsp;`provider_url:` Url of the openID provider (e.g. Dex)\
-    &emsp;`redirect_url:` OAuth redirect url (this is the url of your mariabackup service)\
- &ensp;`maria_db:` MariaDB config\
-    &emsp;`user:` user with admin rights (to drop and restart MariaDB)\
-    &emsp;`version:` MariaDB version e.g.: "10.4.0"\
-    &emsp;`password:` user password\
-    &emsp;`host:` host of the MariaDB instance. If running as a sidecar within the MariaDB pod: 127.0.0.1\
-    &emsp;`port:` MariaDB port number\
-    &emsp;`data_dir:` data directory of the MariaDB instance\
-    &emsp;`databases:` list of databases (used for healthy checks and restores)\
-       &ensp;&emsp;- database_name\
-       &ensp;&emsp;- ... \
-     &emsp;`verify_tables:` list of tables for the backup verification check. If none are provided the checksum verification is skipped!\
-       &ensp;&emsp;- database_name.table_name\
-       &ensp;&emsp;- ... \
-`storage_services:`\
-  &ensp;`s3:`\
-    &emsp;- `name:` name of the storage\
-    &emsp;`aws_access_key_id:` s3 access key\
-    &emsp;`aws_secret_access_key:` s3 secret access key\
-    &emsp;`region:` s3 region\
-    &emsp;`bucket_name:` bucket name to save the backup to\
-  &ensp;`swift:`\
-    &emsp;- `name:` name of the storage\
-    &emsp;`auth_version:` OpenStack auth version\
-    &emsp;`auth_url:` OpenStack auth url (keystone url)\
-    &emsp;`user_name:` os user name\
-    &emsp;`user_domain_name:` os user domain name\
-    &emsp;`project_name:` os project name\
-    &emsp;`project_domain_name:` os project domain name\
-    &emsp;`password:` os password\
-    &emsp;`region:` region name\
-    &emsp;`container_name:` name of the container the backups should be store in\
+
+``` yaml
+service_name: # Name of your MariaDB (also used as the s3 folder name)
+namespace: # k8s namespace name
+backup_service:
+  full_backup_interval_in_hours: # Interval for full MariaDB dumps in hours
+  incremental_backup_interval_in_minutes: # Interval for saving incremental backups
+  enable_init_restore: # Enables a automatic restore if one of the databases (in MariaDB.databases) are missing.
+  enable_restore_on_db_failure: # Enables automatic restore if the db is unhealthy.\
+  outh:
+    enabled: # enables OAuth to access the API (openID)\
+    provider_url: # Url of the openID provider (e.g. Dex)\
+    redirect_url: # OAuth redirect url (this is the url of your mariabackup service)\
+  maria_db: # MariaDB config\
+    user: # user with admin rights (to drop and restart MariaDB)
+    version: # MariaDB version e.g.: "10.4.0"
+    password: # user password
+    host: # host of the MariaDB instance. If running as a sidecar within the MariaDB pod: 127.0.0.1
+    port: # MariaDB port number
+    data_dir: # data directory of the MariaDB instance
+    databases: # list of databases (used for healthy checks and restores)
+      - database_name
+      - ... 
+      verify_tables: # list of tables for the backup verification check. If none are provided the checksum verification is skipped!
+      - database_name.table_name
+      - ...
+storage_services:
+  s3:
+    - name: # name of the storage
+      aws_access_key_id: # s3 access key
+      aws_secret_access_key: # s3 secret access key
+      region: # s3 region
+      bucket_name: # bucket name to save the backup to
+  swift:
+    - name: # name of the storage
+      auth_version: # OpenStack auth version
+      auth_url: # OpenStack auth url (keystone url)
+      user_name: # os user name
+      user_domain_name: # os user domain name
+      project_name: # os project name
+      project_domain_name: # os project domain name
+      password: # os password
+      region: # region name
+      container_name: # name of the container the backups should be store in
+```
