@@ -19,9 +19,8 @@ const backupIcomplete = "backup_incomplete"
 
 // Manager which manages the different storage services
 type Manager struct {
-	cfg                         config.StorageService
-	storageServices             map[string]Storage
-	verifyLastBackupFromService string
+	cfg             config.StorageService
+	storageServices map[string]Storage
 }
 
 func init() {
@@ -30,7 +29,7 @@ func init() {
 
 // NewManager creates a new manager instance
 func NewManager(c config.StorageService, serviceName, binLog string) (m *Manager, err error) {
-	stsvc := make(map[string]Storage, 0)
+	stsvc := make(map[string]Storage)
 	for _, cfg := range c.Swift {
 		swift, err := NewSwift(cfg, serviceName, binLog)
 		if err != nil {
