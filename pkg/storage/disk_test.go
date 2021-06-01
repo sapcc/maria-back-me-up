@@ -123,7 +123,7 @@ func TestListFullBackups(t *testing.T) {
 
 	disk := createTestDiskWithMockData(t, numBackups, 0, 7)
 
-	backups, err := disk.ListFullBackups()
+	backups, err := disk.GetFullBackups()
 	if err != nil {
 		t.Errorf("failed to list backups: %s", err.Error())
 	}
@@ -137,7 +137,7 @@ func TestListFullBackupsOneMissing(t *testing.T) {
 	numBackups := 5
 	disk := createTestDiskWithMockData(t, numBackups, 1, 7)
 
-	backups, err := disk.ListFullBackups()
+	backups, err := disk.GetFullBackups()
 	if err != nil {
 		t.Errorf("failed to list backups: %s", err.Error())
 	}
@@ -183,7 +183,7 @@ func TestListServices(t *testing.T) {
 func TestListIncBackupsForSuccess(t *testing.T) {
 	disk := createTestDiskWithMockData(t, 2, 0, 7)
 
-	actBackups, err := disk.ListIncBackupsFor("testdb/backup_1")
+	actBackups, err := disk.GetIncBackupsFromDump("testdb/backup_1")
 	if err != nil {
 		t.Errorf("failed retrieve incremental backups: %s", err.Error())
 	}
@@ -196,7 +196,7 @@ func TestListIncBackupsForSuccess(t *testing.T) {
 func TestDownloadBackupFrom(t *testing.T) {
 	disk := createTestDiskWithMockData(t, 2, 0, 7)
 
-	actPath, err := disk.DownloadBackupFrom("testdb/backup_1", "mysql-bin.00001")
+	actPath, err := disk.DownloadBackupWithLogPosition("testdb/backup_1", "mysql-bin.00001")
 	if err != nil || actPath == "" {
 		t.Error("failed to find binlog file")
 	}
@@ -209,7 +209,7 @@ func TestDownloadBackupFrom(t *testing.T) {
 func TestDownloadBackup(t *testing.T) {
 	disk := createTestDiskWithMockData(t, 2, 0, 7)
 
-	bl, _ := disk.ListFullBackups()
+	bl, _ := disk.GetFullBackups()
 	act, err := disk.DownloadBackup(bl[0])
 	if err != nil {
 		t.Error("failed to download backup")
@@ -225,7 +225,7 @@ func TestDownloadBackup(t *testing.T) {
 func TestBackupRetention(t *testing.T) {
 	disk := createTestDiskWithMockData(t, 5, 0, 5)
 
-	beforeBackups, _ := disk.ListFullBackups()
+	beforeBackups, _ := disk.GetFullBackups()
 
 	if len(beforeBackups) < 5 {
 		t.Errorf("expected 5 mock backups, actual are %v", len(beforeBackups))
@@ -245,7 +245,7 @@ func TestBackupRetention(t *testing.T) {
 
 	disk.WriteFolder(folder)
 
-	afterBackups, _ := disk.ListFullBackups()
+	afterBackups, _ := disk.GetFullBackups()
 
 	if len(afterBackups) > disk.cfg.Retention {
 		t.Errorf("expected maximum of %v backups, actual %v", disk.cfg.Retention, len(afterBackups))

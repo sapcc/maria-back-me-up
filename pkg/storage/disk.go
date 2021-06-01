@@ -135,10 +135,10 @@ func (d *Disk) DownloadLatestBackup() (path string, err error) {
 	return path, &NoBackupError{}
 }
 
-// ListFullBackups walks the backup basepath and list all full backups.
+// GetFullBackups walks the backup basepath and list all full backups.
 //
 // Only backups which contain a dump.tar are listed
-func (d *Disk) ListFullBackups() (bl []Backup, err error) {
+func (d *Disk) GetFullBackups() (bl []Backup, err error) {
 
 	backupPath := filepath.Join(d.cfg.BasePath, d.serviceName)
 
@@ -189,7 +189,7 @@ func (d *Disk) ListServices() (services []string, err error) {
 	return services, nil
 }
 
-func (d *Disk) ListIncBackupsFor(key string) (bl []Backup, err error) {
+func (d *Disk) GetIncBackupsFromDump(key string) (bl []Backup, err error) {
 
 	backupPath := filepath.Join(d.cfg.BasePath, key)
 
@@ -263,8 +263,8 @@ func (d *Disk) ListIncBackupsFor(key string) (bl []Backup, err error) {
 	return bl, nil
 }
 
-// DownloadBackupFrom returns the path to the binlog file
-func (d *Disk) DownloadBackupFrom(fullBackupPath string, binlog string) (path string, err error) {
+// DownloadBackupWithLogPosition returns the path to the binlog file
+func (d *Disk) DownloadBackupWithLogPosition(fullBackupPath string, binlog string) (path string, err error) {
 	if fullBackupPath == "" || binlog == "" {
 		return "", &NoBackupError{}
 	}
@@ -291,7 +291,7 @@ func (d *Disk) DownloadBackup(fullBackup Backup) (path string, err error) {
 // Every backup folder more than the specified retention will be deleted
 func (d *Disk) enforceBackupRetention() error {
 
-	backups, err := d.ListFullBackups()
+	backups, err := d.GetFullBackups()
 	if err != nil {
 		return &NoBackupError{}
 	}
@@ -317,7 +317,7 @@ func (d *Disk) enforceBackupRetention() error {
 }
 
 func (d *Disk) handleError(backupKey string, err error) error {
-	errS := &StorageError{message: "", Storage: d.name}
+	errS := &Error{message: "", Storage: d.name}
 	errS.message = err.Error()
 	if backupKey != "" && !strings.Contains(backupKey, backupIncomplete) {
 		d.statusError[path.Dir(backupKey)] = err.Error()
