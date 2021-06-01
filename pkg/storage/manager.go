@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"path"
+	"reflect"
 	"time"
 
 	"github.com/hashicorp/go-multierror"
@@ -58,9 +59,10 @@ func (m *Manager) AddStorage(s Storage) {
 
 // GetStorageServicesKeys returns a list of all storage names
 func (m *Manager) GetStorageServicesKeys() (svc []string) {
-	svc = make([]string, 0, len(m.storageServices))
-	for k := range m.storageServices {
-		svc = append(svc, k)
+	keys := reflect.ValueOf(m.storageServices).MapKeys()
+	svc = make([]string, len(keys))
+	for i := 0; i < len(keys); i++ {
+		svc[i] = keys[i].String()
 	}
 	return
 }
