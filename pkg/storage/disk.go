@@ -171,24 +171,6 @@ func (d *Disk) GetFullBackups() (bl []Backup, err error) {
 	return bl, err
 }
 
-// ListServices returns all services which are backed up on disk
-func (d *Disk) ListServices() (services []string, err error) {
-
-	err = filepath.WalkDir(d.cfg.BasePath, func(path string, entry fs.DirEntry, err error) error {
-		if entry.Name() == filepath.Base(d.cfg.BasePath) {
-			return nil
-		}
-		if entry.IsDir() {
-			services = append(services, entry.Name())
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return services, nil
-}
-
 func (d *Disk) GetIncBackupsFromDump(key string) (bl []Backup, err error) {
 
 	backupPath := filepath.Join(d.cfg.BasePath, key)

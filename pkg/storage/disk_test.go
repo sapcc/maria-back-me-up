@@ -17,14 +17,17 @@
 package storage
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sapcc/maria-back-me-up/pkg/config"
+	"gopkg.in/yaml.v2"
 )
 
 func TestWriteFolder(t *testing.T) {
@@ -118,7 +121,7 @@ func TestWriteLastSuccessWithoutTags(t *testing.T) {
 	}
 }
 
-func TestListFullBackups(t *testing.T) {
+func TestGetFullBackups(t *testing.T) {
 	numBackups := 5
 
 	disk := createTestDiskWithMockData(t, numBackups, 0, 7)
@@ -133,7 +136,7 @@ func TestListFullBackups(t *testing.T) {
 	}
 }
 
-func TestListFullBackupsOneMissing(t *testing.T) {
+func TestGetFullBackupsOneMissing(t *testing.T) {
 	numBackups := 5
 	disk := createTestDiskWithMockData(t, numBackups, 1, 7)
 
@@ -146,41 +149,67 @@ func TestListFullBackupsOneMissing(t *testing.T) {
 		t.Errorf("expected %v backups, actual %v backups", numBackups, len(backups))
 	}
 }
+func TestGetBackupIncomplete(t *testing.T) {
+	disk := createTestDiskWithMockData(t, 1, 0, 7)
 
-func TestListServices(t *testing.T) {
-	testDir := t.TempDir()
-
-	expServices := []string{"service1", "service2", "service3"}
-
-	for _, s := range expServices {
-		err := os.Mkdir(filepath.Join(testDir, s), os.ModePerm)
-		if err != nil {
-			t.Error("failed to create testfolders")
-			t.FailNow()
-		}
-	}
-
-	disk := createTestDisk(t, testDir, 7)
-
-	actServices, err := disk.ListServices()
-
+	err := disk.WriteStream("backup_1/backup_incomplete", "", bytes.NewReader([]byte("ERROR")), nil, false)
 	if err != nil {
-		t.Error("failed to list services")
+		t.Errorf("failed to write backup_incomplete status")
 	}
 
-	if len(actServices) != len(expServices) {
-		t.Errorf("expected # services: %v, actual # services: %v", len(expServices), len(actServices))
-		t.FailNow()
+	backups, err := disk.GetIncBackupsFromDump("testdb/backup_1")
+	if err != nil {
+		t.Errorf("failed to load incremental backups")
 	}
-	for i := range expServices {
-		if expServices[i] != actServices[i] {
-			t.Errorf("expected service '%s' is missing", expServices[i])
-			t.FailNow()
-		}
+
+	if backups[0].VerifyFail == nil || backups[0].VerifyFail.VerifyError != "backup incomplete!!!" {
+		t.Errorf("expected incomplete backup")
 	}
 }
 
-func TestListIncBackupsForSuccess(t *testing.T) {
+func TestGetBackupVerifySuccess(t *testing.T) {
+	disk := createTestDiskWithMockData(t, 1, 0, 7)
+
+	v := Verify{VerifyChecksum: 1, Time: time.Now()}
+	out, _ := yaml.Marshal(v)
+
+	err := disk.WriteStream("backup_1/verify_success", "", bytes.NewReader(out), nil, false)
+	if err != nil {
+		t.Errorf("failed to write verify_success status")
+	}
+
+	backups, err := disk.GetIncBackupsFromDump("testdb/backup_1")
+	if err != nil {
+		t.Errorf("failed to load incremental backups")
+	}
+
+	if backups[0].VerifySuccess == nil || backups[0].VerifySuccess.VerifyChecksum != 1 {
+		t.Errorf("expected verify success")
+	}
+}
+
+func TestGetBackupVerifyFail(t *testing.T) {
+	disk := createTestDiskWithMockData(t, 1, 0, 7)
+
+	v := Verify{VerifyError: "TestError", Time: time.Now()}
+	out, _ := yaml.Marshal(v)
+
+	err := disk.WriteStream("backup_1/verify_fail", "", bytes.NewReader(out), nil, false)
+	if err != nil {
+		t.Errorf("failed to write verify_fail status")
+	}
+
+	backups, err := disk.GetIncBackupsFromDump("testdb/backup_1")
+	if err != nil {
+		t.Errorf("failed to load incremental backups")
+	}
+
+	if backups[0].VerifyFail == nil || backups[0].VerifyFail.VerifyError != "TestError" {
+		t.Errorf("expected verify fail")
+	}
+}
+
+func TestGetIncBackupsFromDump(t *testing.T) {
 	disk := createTestDiskWithMockData(t, 2, 0, 7)
 
 	actBackups, err := disk.GetIncBackupsFromDump("testdb/backup_1")
@@ -193,7 +222,7 @@ func TestListIncBackupsForSuccess(t *testing.T) {
 	}
 }
 
-func TestDownloadBackupFrom(t *testing.T) {
+func TestDownloadBackupWithLogPosition(t *testing.T) {
 	disk := createTestDiskWithMockData(t, 2, 0, 7)
 
 	actPath, err := disk.DownloadBackupWithLogPosition("testdb/backup_1", "mysql-bin.00001")
