@@ -34,6 +34,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// Disk struct is ...
 type Disk struct {
 	name        string
 	serviceName string
@@ -42,6 +43,7 @@ type Disk struct {
 	statusError map[string]string
 }
 
+// NewDisk creates a new disk storage object
 func NewDisk(cfg config.Disk, serviceName string, binLog string) (d *Disk, err error) {
 	return &Disk{
 		name:        "Disk",
@@ -51,14 +53,17 @@ func NewDisk(cfg config.Disk, serviceName string, binLog string) (d *Disk, err e
 		statusError: make(map[string]string)}, nil
 }
 
+// GetStorageServiceName implements interface
 func (d *Disk) GetStorageServiceName() (name string) {
 	return d.name
 }
 
+// GetStatusError implements interface
 func (d *Disk) GetStatusError() map[string]string {
 	return d.statusError
 }
 
+// GetStatusErrorByKey implements interface
 func (d *Disk) GetStatusErrorByKey(backupKey string) string {
 	if st, ok := d.statusError[path.Dir(backupKey)]; ok {
 		return st
@@ -66,6 +71,7 @@ func (d *Disk) GetStatusErrorByKey(backupKey string) string {
 	return ""
 }
 
+// WriteFolder implements interface
 func (d *Disk) WriteFolder(p string) (err error) {
 	r, err := ZipFolderPath(p)
 	if err != nil {
@@ -79,8 +85,10 @@ func (d *Disk) WriteFolder(p string) (err error) {
 	return d.enforceBackupRetention()
 }
 
-// WriteStream writes a file in the base directory set in the config.
-// If the fileName is `last_successful_backup` only the tags are written to the file
+// WriteStream implements interface.
+//
+// Writes a file in the base directory defined in the config.
+// If the fileName is `last_successful_backup` only the tags are written to the file but not its actual content
 // In all other cases the tags are ignored and the body is written to the file
 func (d *Disk) WriteStream(fileName, mimeType string, body io.Reader, tags map[string]string, dlo bool) error {
 	filePath := path.Join(d.cfg.BasePath, d.serviceName, fileName)
@@ -121,7 +129,7 @@ func (d *Disk) WriteStream(fileName, mimeType string, body io.Reader, tags map[s
 	return nil
 }
 
-// DownloadLatestBackup returns the path of the last backup that was verified successfully
+// DownloadLatestBackup implements interface
 func (d *Disk) DownloadLatestBackup() (path string, err error) {
 
 	fileName := filepath.Join(d.cfg.BasePath, d.serviceName, LastSuccessfulBackupFile)
@@ -135,8 +143,9 @@ func (d *Disk) DownloadLatestBackup() (path string, err error) {
 	return path, &NoBackupError{}
 }
 
-// GetFullBackups walks the backup basepath and list all full backups.
+// GetFullBackups implements interface
 //
+// Walks the backup basepath and list all full backups.
 // Only backups which contain a dump.tar are listed
 func (d *Disk) GetFullBackups() (bl []Backup, err error) {
 
@@ -171,6 +180,7 @@ func (d *Disk) GetFullBackups() (bl []Backup, err error) {
 	return bl, err
 }
 
+// GetIncBackupsFromDump implements interface
 func (d *Disk) GetIncBackupsFromDump(key string) (bl []Backup, err error) {
 
 	backupPath := filepath.Join(d.cfg.BasePath, key)
@@ -245,7 +255,7 @@ func (d *Disk) GetIncBackupsFromDump(key string) (bl []Backup, err error) {
 	return bl, nil
 }
 
-// DownloadBackupWithLogPosition returns the path to the binlog file
+// DownloadBackupWithLogPosition implements interface
 func (d *Disk) DownloadBackupWithLogPosition(fullBackupPath string, binlog string) (path string, err error) {
 	if fullBackupPath == "" || binlog == "" {
 		return "", &NoBackupError{}
@@ -259,7 +269,7 @@ func (d *Disk) DownloadBackupWithLogPosition(fullBackupPath string, binlog strin
 	return path, nil
 }
 
-// DownloadBackup returns the folder containing the backup files
+// DownloadBackup implements interface
 func (d *Disk) DownloadBackup(fullBackup Backup) (path string, err error) {
 	backupPath := filepath.Join(d.cfg.BasePath, fullBackup.Key)
 	if _, err := os.Stat(backupPath); os.IsNotExist(err) {

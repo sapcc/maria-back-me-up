@@ -30,7 +30,7 @@ type Storage interface {
 	GetStatusErrorByKey(backupKey string) string
 }
 
-// LastSuccessfulBackup name of meta file to store last successful backup
+// LastSuccessfulBackupFile name of meta file that contains the information of the last successful backup
 const LastSuccessfulBackupFile = "last_successful_backup"
 
 // Verify storage struct
@@ -51,6 +51,8 @@ type Backup struct {
 	VerifySuccess *Verify
 	VerifyFail    *Verify
 }
+
+// ByTime implements the sort of a backup slice by time
 type ByTime []Backup
 
 func (b ByTime) Len() int           { return len(b) }
