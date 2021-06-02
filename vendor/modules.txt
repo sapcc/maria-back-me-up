@@ -1,4 +1,5 @@
 # github.com/aws/aws-sdk-go v1.23.21
+## explicit
 github.com/aws/aws-sdk-go/aws
 github.com/aws/aws-sdk-go/aws/awserr
 github.com/aws/aws-sdk-go/aws/awsutil
@@ -41,10 +42,12 @@ github.com/aws/aws-sdk-go/service/sts/stsiface
 # github.com/beorn7/perks v1.0.0
 github.com/beorn7/perks/quantile
 # github.com/coreos/go-oidc v2.1.0+incompatible
+## explicit
 github.com/coreos/go-oidc
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
 # github.com/gogo/protobuf v1.3.0
+## explicit
 github.com/gogo/protobuf/proto
 github.com/gogo/protobuf/sortkeys
 # github.com/golang/protobuf v1.3.2
@@ -56,16 +59,19 @@ github.com/golang/protobuf/ptypes/timestamp
 # github.com/google/gofuzz v1.0.0
 github.com/google/gofuzz
 # github.com/googleapis/gnostic v0.3.1
+## explicit
 github.com/googleapis/gnostic/OpenAPIv2
 github.com/googleapis/gnostic/compiler
 github.com/googleapis/gnostic/extensions
 # github.com/gorilla/securecookie v1.1.1
 github.com/gorilla/securecookie
 # github.com/gorilla/sessions v1.2.0
+## explicit
 github.com/gorilla/sessions
 # github.com/hashicorp/errwrap v1.0.0
 github.com/hashicorp/errwrap
 # github.com/hashicorp/go-multierror v1.0.0
+## explicit
 github.com/hashicorp/go-multierror
 # github.com/imdario/mergo v0.3.5
 github.com/imdario/mergo
@@ -76,8 +82,10 @@ github.com/json-iterator/go
 # github.com/konsorten/go-windows-terminal-sequences v1.0.1
 github.com/konsorten/go-windows-terminal-sequences
 # github.com/labstack/echo v3.3.10+incompatible
+## explicit
 github.com/labstack/echo
 # github.com/labstack/gommon v0.3.0
+## explicit
 github.com/labstack/gommon/color
 github.com/labstack/gommon/log
 # github.com/mattn/go-colorable v0.1.2
@@ -91,21 +99,27 @@ github.com/modern-go/concurrent
 # github.com/modern-go/reflect2 v1.0.1
 github.com/modern-go/reflect2
 # github.com/namsral/flag v1.7.4-pre
+## explicit
 github.com/namsral/flag
 # github.com/ncw/swift v1.0.50
+## explicit
 github.com/ncw/swift
 # github.com/pingcap/errors v0.11.0
+## explicit
 github.com/pingcap/errors
 # github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35
+## explicit
 github.com/pquerna/cachecontrol
 github.com/pquerna/cachecontrol/cacheobject
 # github.com/prometheus/client_golang v1.0.0
+## explicit
 github.com/prometheus/client_golang/prometheus
 github.com/prometheus/client_golang/prometheus/internal
 github.com/prometheus/client_golang/prometheus/promhttp
 # github.com/prometheus/client_model v0.0.0-20190129233127-fd36f4220a90
 github.com/prometheus/client_model/go
 # github.com/prometheus/common v0.7.0
+## explicit
 github.com/prometheus/common/expfmt
 github.com/prometheus/common/internal/bitbucket.org/ww/goautoneg
 github.com/prometheus/common/model
@@ -113,6 +127,7 @@ github.com/prometheus/common/model
 github.com/prometheus/procfs
 github.com/prometheus/procfs/internal/fs
 # github.com/robfig/cron/v3 v3.0.1
+## explicit
 github.com/robfig/cron/v3
 # github.com/satori/go.uuid v1.2.0
 github.com/satori/go.uuid
@@ -124,11 +139,13 @@ github.com/siddontang/go/hack
 github.com/siddontang/go-log/log
 github.com/siddontang/go-log/loggers
 # github.com/siddontang/go-mysql v0.0.0-20190913034749-818e04340bba
+## explicit
 github.com/siddontang/go-mysql/client
 github.com/siddontang/go-mysql/mysql
 github.com/siddontang/go-mysql/packet
 github.com/siddontang/go-mysql/replication
 # github.com/sirupsen/logrus v1.4.2
+## explicit
 github.com/sirupsen/logrus
 # github.com/spf13/pflag v1.0.5
 github.com/spf13/pflag
@@ -144,6 +161,7 @@ golang.org/x/crypto/ed25519/internal/edwards25519
 golang.org/x/crypto/pbkdf2
 golang.org/x/crypto/ssh/terminal
 # golang.org/x/net v0.0.0-20191004110552-13f9640d40b9
+## explicit
 golang.org/x/net/context
 golang.org/x/net/context/ctxhttp
 golang.org/x/net/http/httpguts
@@ -152,9 +170,11 @@ golang.org/x/net/http2/hpack
 golang.org/x/net/idna
 golang.org/x/net/websocket
 # golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45
+## explicit
 golang.org/x/oauth2
 golang.org/x/oauth2/internal
 # golang.org/x/sync v0.0.0-20190423024810-112230192c58
+## explicit
 golang.org/x/sync/errgroup
 # golang.org/x/sys v0.0.0-20190826190057-c7b8b68b1456
 golang.org/x/sys/unix
@@ -165,6 +185,7 @@ golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
 # golang.org/x/time v0.0.0-20190921001708-c4c64cad1fd0
+## explicit
 golang.org/x/time/rate
 # google.golang.org/appengine v1.5.0
 google.golang.org/appengine/internal
@@ -177,12 +198,15 @@ google.golang.org/appengine/urlfetch
 # gopkg.in/inf.v0 v0.9.1
 gopkg.in/inf.v0
 # gopkg.in/square/go-jose.v2 v2.4.0
+## explicit
 gopkg.in/square/go-jose.v2
 gopkg.in/square/go-jose.v2/cipher
 gopkg.in/square/go-jose.v2/json
 # gopkg.in/yaml.v2 v2.3.0
+## explicit
 gopkg.in/yaml.v2
 # k8s.io/api v0.17.3
+## explicit
 k8s.io/api/admissionregistration/v1
 k8s.io/api/admissionregistration/v1beta1
 k8s.io/api/apps/v1
@@ -224,6 +248,7 @@ k8s.io/api/storage/v1
 k8s.io/api/storage/v1alpha1
 k8s.io/api/storage/v1beta1
 # k8s.io/apimachinery v0.17.3
+## explicit
 k8s.io/apimachinery/pkg/api/errors
 k8s.io/apimachinery/pkg/api/meta
 k8s.io/apimachinery/pkg/api/resource
@@ -260,6 +285,7 @@ k8s.io/apimachinery/pkg/version
 k8s.io/apimachinery/pkg/watch
 k8s.io/apimachinery/third_party/forked/golang/reflect
 # k8s.io/client-go v0.17.0
+## explicit
 k8s.io/client-go/discovery
 k8s.io/client-go/kubernetes
 k8s.io/client-go/kubernetes/scheme
@@ -330,3 +356,4 @@ k8s.io/klog
 k8s.io/utils/integer
 # sigs.k8s.io/yaml v1.1.0
 sigs.k8s.io/yaml
+# github.com/docker/docker => github.com/docker/engine v0.0.0-20190717161051-705d9623b7c1

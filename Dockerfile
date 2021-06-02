@@ -1,4 +1,4 @@
-FROM keppel.eu-de-1.cloud.sap/ccloud-dockerhub-mirror/library/golang:1.13.4-alpine3.10 as builder
+FROM keppel.eu-de-1.cloud.sap/ccloud-dockerhub-mirror/library/golang:1.16-alpine as builder
 WORKDIR /go/src/github.com/sapcc/maria-back-me-up
 RUN apk add --no-cache make git
 COPY . /src
