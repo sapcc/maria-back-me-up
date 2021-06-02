@@ -321,20 +321,20 @@ func (d *Disk) handleError(backupKey string, err error) error {
 func writeFileWithTags(fileName string, tags map[string]string) (err error) {
 	if len(tags) == 0 || tags == nil {
 		return fmt.Errorf("expected tags were not supplied for file %s", filepath.Base(fileName))
-	} else {
-		buffer := new(bytes.Buffer)
-		encoder := gob.NewEncoder(buffer)
-		err := encoder.Encode(tags)
-		if err != nil {
-			return fmt.Errorf("error encoding tags: %s", err.Error())
-		}
-		err = os.WriteFile(fileName, buffer.Bytes(), os.ModePerm)
-
-		if err != nil {
-			return fmt.Errorf("could not write file with tags: %s", err.Error())
-		}
-		return nil
 	}
+
+	buffer := new(bytes.Buffer)
+	encoder := gob.NewEncoder(buffer)
+	err = encoder.Encode(tags)
+	if err != nil {
+		return fmt.Errorf("error encoding tags: %s", err.Error())
+	}
+	err = os.WriteFile(fileName, buffer.Bytes(), os.ModePerm)
+
+	if err != nil {
+		return fmt.Errorf("could not write file with tags: %s", err.Error())
+	}
+	return nil
 }
 
 // readFileWithTags decodes the file content to a map[string]string
