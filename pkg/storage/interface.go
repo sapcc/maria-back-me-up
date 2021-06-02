@@ -30,6 +30,9 @@ type Storage interface {
 	GetStatusErrorByKey(backupKey string) string
 }
 
+// LastSuccessfulBackup name of meta file to store last successful backup
+const LastSuccessfulBackupFile = "last_successful_backup"
+
 // Verify storage struct
 type Verify struct {
 	VerifyRestore  int    `yaml:"verify_backup"`
@@ -48,6 +51,11 @@ type Backup struct {
 	VerifySuccess *Verify
 	VerifyFail    *Verify
 }
+type ByTime []Backup
+
+func (b ByTime) Len() int           { return len(b) }
+func (b ByTime) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
+func (b ByTime) Less(i, j int) bool { return b[i].Time.Before(b[j].Time) }
 
 // IncBackup storage struct
 type IncBackup struct {

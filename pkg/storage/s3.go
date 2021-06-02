@@ -200,7 +200,7 @@ func (s *S3) GetIncBackupsFromDump(key string) (bl []Backup, err error) {
 			}
 			continue
 		}
-		if strings.Contains(*incObj.Key, backupIcomplete) {
+		if strings.Contains(*incObj.Key, backupIncomplete) {
 			v := Verify{}
 			v.VerifyError = "backup incomplete!!!"
 			v.Time = time.Now()
@@ -264,7 +264,7 @@ func (s *S3) DownloadBackup(fullBackup Backup) (path string, err error) {
 // DownloadLatestBackup implements interface
 func (s *S3) DownloadLatestBackup() (path string, err error) {
 	svc := s3.New(s.session)
-	tag, err := svc.GetObjectTagging(&s3.GetObjectTaggingInput{Bucket: aws.String(s.cfg.BucketName), Key: aws.String(s.serviceName + "/last_successful_backup")})
+	tag, err := svc.GetObjectTagging(&s3.GetObjectTaggingInput{Bucket: aws.String(s.cfg.BucketName), Key: aws.String(filepath.Join(s.serviceName, LastSuccessfulBackupFile))})
 	if err != nil {
 		return path, s.handleError("", err)
 	}
@@ -334,7 +334,7 @@ func (s *S3) downloadStream(w io.WriterAt, obj *s3.Object) error {
 func (s *S3) handleError(backupKey string, err error) error {
 	errS := &Error{message: "", Storage: s.cfg.Name}
 	errS.message = err.Error()
-	if backupKey != "" && !strings.Contains(backupKey, backupIcomplete) {
+	if backupKey != "" && !strings.Contains(backupKey, backupIncomplete) {
 		s.statusError[path.Dir(backupKey)] = err.Error()
 	}
 	return errS

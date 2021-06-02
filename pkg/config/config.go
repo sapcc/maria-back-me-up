@@ -81,6 +81,7 @@ type DatabaseConfig struct {
 type StorageService struct {
 	S3    []S3    `yaml:"s3"`
 	Swift []Swift `yaml:"swift"`
+	Disk  []Disk  `yaml:"disk"`
 }
 
 // S3 hols info for the AWS S3 storage service
@@ -110,6 +111,12 @@ type Swift struct {
 	ContainerName     string `yaml:"container_name"`
 	ChunkSize         *int64 `yaml:"chunk_size"` // default 200mb
 	SloSize           *int64 `yaml:"slo_size"`   // default 600mb
+}
+
+// Disk holds info for the local backup storage
+type Disk struct {
+	BasePath  string `yaml:"base_path"`
+	Retention int    `yaml:"retention"`
 }
 
 // OAuth holds info for the api oauth middleware

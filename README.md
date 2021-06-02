@@ -8,6 +8,7 @@ List of features currently available:
 - Supported backup storage
   - S3
   - Swift
+  - Disk
 - Automatic verification of existing backups (can be run as separate service)
 - UI to see and select an available backup to restore to
 - UI shows status of backup verification
@@ -96,4 +97,7 @@ storage_services:
       password: # os password
       region: # region name
       container_name: # name of the container the backups should be store in
+  disk:
+    - base_path: # root folder for the backups
+      retention: # backup retention in number of full backups
 ```
