@@ -45,6 +45,7 @@ type SetupOptions struct {
 func Setup(t *testing.T, opts *SetupOptions) (m *backup.Manager, cfg config.Config) {
 	cfg = config.Config{
 		Namespace: "test",
+		SideCar:   func(b bool) *bool { return &b }(false),
 		Backup: config.BackupService{
 			BackupDir:              backupDir,
 			FullBackupCronSchedule: "*/20 * * * *",
