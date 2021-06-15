@@ -16,7 +16,7 @@ mysql_install_db --user=mysql --datadir=/var/lib/mysql --basedir=/usr
 echo 'Database initialized'
 
 mysqld_safe --skip-networking --nowatch
-mysql_options='--protocol=socket -uroot --log-bin=mysqld-bin --binlog-format=MIXED'
+mysql_options='--protocol=socket -uroot'
 
 execute() {
     statement="$1"
@@ -27,7 +27,7 @@ execute() {
     fi
 }
 
-for i in `seq 90 -1 0`; do
+for i in `seq 30 -1 0`; do
     if execute 'SELECT 1' &> /dev/null; then
         break
     fi
