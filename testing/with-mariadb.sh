@@ -39,6 +39,10 @@ if [ "$i" = 0 ]; then
     exit 1
 fi
 
+echo "Setting root password..."
+
+sudo mysql -e "SET PASSWORD FOR 'root'@'localhost' = PASSWORD('test');"
+
 echo "Creating test database..."
  
 sudo mysql -e "CREATE DATABASE IF NOT EXISTS test"
