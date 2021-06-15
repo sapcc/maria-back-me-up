@@ -10,11 +10,8 @@ fi
 # set working directory to repo root
 cd "$(dirname "$(dirname "$(readlink -f "$0")")")"
 
-mkdir -p testing/mysql/
-#chown mysql: testing/mysql
-
 echo 'Initializing database'
-mysql_install_db --user=mysql --datadir=./testing/mysql/data --rpm
+mysql_install_db --user=mysql --datadir=/var/lib/mysql --basedir=/usr
 #chown -R mysql: testing/mysql/
 echo 'Database initialized'
 
