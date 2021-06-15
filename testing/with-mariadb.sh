@@ -39,11 +39,6 @@ if [ "$i" = 0 ]; then
     exit 1
 fi
 
-root_password=mypass
- 
-# Make sure that NOBODY can access the server without a password
-sudo mysql -e "UPDATE mysql.user SET Password = PASSWORD('$root_password') WHERE User = 'root'"
-
 echo "Creating test database..."
  
 sudo mysql -e "CREATE DATABASE IF NOT EXISTS test"
