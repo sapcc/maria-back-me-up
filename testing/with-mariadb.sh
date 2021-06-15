@@ -14,7 +14,7 @@ mkdir -p testing/mysql/
 #chown mysql: testing/mysql
 
 echo 'Initializing database'
-mysql_install_db --user=mysql --datadir=testing/mysql/ --rpm
+mysql_install_db --user=mysql --datadir=./testing/mysql/ --rpm
 #chown -R mysql: testing/mysql/
 echo 'Database initialized'
 
