@@ -3,11 +3,18 @@
 set -eo pipefail
 # set -x
 
-mkdir -p "mysql"
-chown mysql: "mysql"
+if hash greadlink &>/dev/null; then
+  readlink() { greadlink "$@"; }
+fi
+
+# set working directory to repo root
+cd "$(dirname "$(dirname "$(readlink -f "$0")")")"
+
+mkdir -p testing/mysql
+chown mysql: testing/mysql
 
 echo 'Initializing database'
-mysql_install_db --user=mysql --datadir="$DATA_DIR" --rpm
+mysql_install_db --user=mysql --datadir=testing/mysql --rpm
 chown -R mysql: "$DATA_DIR"
 echo 'Database initialized'
 
