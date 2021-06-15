@@ -282,8 +282,6 @@ func TestBackupRetention(t *testing.T) {
 
 	sort.Sort(ByTime(afterBackups))
 
-	fmt.Println(afterBackups)
-
 	if afterBackups[0].Key != "testdb/backup_2" || afterBackups[len(afterBackups)-1].Key != "testdb/backup_6" {
 		t.Error("expected backups are not present")
 	}
@@ -338,6 +336,7 @@ func createDummyBackups(path string, numberBackups int, numberEmptyBackups int) 
 				return fmt.Errorf("could not create binlog file: %s", err.Error())
 			}
 		}
+		time.Sleep(time.Second * 1)
 	}
 	for i := 1; i <= numberEmptyBackups; i++ {
 		dir := filepath.Join(path, fmt.Sprintf("backup_%v", i))
