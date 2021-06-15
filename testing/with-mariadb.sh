@@ -82,3 +82,11 @@ sudo mysql -e "$insert4"
  
  
 echo "Inserting dummy data into tasks table finished"
+
+echo "Running command: $@"
+set +e
+"$@"
+EXIT_CODE=$?
+set -e
+
+exit "${EXIT_CODE}"
