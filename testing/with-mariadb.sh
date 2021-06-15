@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 mysqld_safe --skip-networking --nowatch
 mysql_options='--protocol=socket -uroot --log-bin=mysqld-bin --binlog-format=MIXED'
