@@ -1,5 +1,16 @@
 #!/bin/sh
 
+set -eo pipefail
+# set -x
+
+mkdir -p "mysql"
+chown mysql: "mysql"
+
+echo 'Initializing database'
+mysql_install_db --user=mysql --datadir="$DATA_DIR" --rpm
+chown -R mysql: "$DATA_DIR"
+echo 'Database initialized'
+
 mysqld_safe --skip-networking --nowatch
 mysql_options='--protocol=socket -uroot --log-bin=mysqld-bin --binlog-format=MIXED'
 
