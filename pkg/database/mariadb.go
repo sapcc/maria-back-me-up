@@ -89,20 +89,25 @@ func (m *MariaDB) GetConfig() config.DatabaseConfig {
 
 // Restore runs a restore on the mariadb
 func (m *MariaDB) Restore(path string) (err error) {
-	old := m.cfg.Database.Host
-	ip, err := m.kub.GetPodIP(fmt.Sprintf("app=%s-mariadb", m.cfg.ServiceName))
-	if err != nil {
-		return
+	withIP := false
+
+	if m.kub != nil {
+		withIP = true
+		old := m.cfg.Database.Host
+		ip, err := m.kub.GetPodIP(fmt.Sprintf("app=%s-mariadb", m.cfg.ServiceName))
+		if err != nil {
+			return err
+		}
+		m.cfg.Database.Host = ip
+		defer func() {
+			m.cfg.Database.Host = old
+		}()
 	}
-	m.cfg.Database.Host = ip
-	defer func() {
-		m.cfg.Database.Host = old
-	}()
 	if err = m.restartMariaDB(); err != nil {
 		//Cant shutdown database. Lets try restore anyway
 		log.Error(fmt.Errorf("Timed out trying to shutdown database, %s", err.Error()))
 	}
-	err = m.Up(5*time.Minute, true)
+	err = m.Up(5*time.Minute, withIP)
 	if err != nil {
 		log.Error(fmt.Errorf("Timed out waiting for mariadb to boot. Delete data dir"))
 		if err := m.deleteMariaDBDataDir(); err != nil {
@@ -112,7 +117,7 @@ func (m *MariaDB) Restore(path string) (err error) {
 		m.dropMariaDBDatabases()
 	}
 
-	if err = m.Up(1*time.Minute, true); err != nil {
+	if err = m.Up(1*time.Minute, withIP); err != nil {
 		return fmt.Errorf("Timed out waiting for mariadb to boot. Cant perform restore")
 	}
 

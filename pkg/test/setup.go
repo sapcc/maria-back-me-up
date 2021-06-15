@@ -30,10 +30,12 @@ import (
 )
 
 const backupDir = "./backupDirTest"
+const backupDirDisk = "./backupDirDiskTest"
 
 //SetupOptions contains optional arguments for test.Setup().
 type SetupOptions struct {
 	DBType           string
+	WithDiskStorage  bool
 	WithSwiftStorage bool
 	WithK8s          bool
 	DumpTool         config.DumpTools
@@ -50,12 +52,19 @@ func Setup(t *testing.T, opts *SetupOptions) (m *backup.Manager, cfg config.Conf
 		Database: config.DatabaseConfig{
 			Type:          opts.DBType,
 			Host:          "127.0.0.1",
-			Port:          3306,
+			Port:          3307,
 			User:          "root",
 			Password:      "test",
-			LogNameFormat: "",
+			LogNameFormat: "mysqld-bin",
 			DumpTool:      opts.DumpTool,
+			Databases:     []string{"service"},
 		},
+	}
+	if opts.WithDiskStorage {
+		cfg.Storages.Disk = []config.Disk{{
+			BasePath:  backupDirDisk,
+			Retention: 1,
+		}}
 	}
 	s, err := storage.NewManager(cfg.Storages, cfg.ServiceName, cfg.Database.LogNameFormat)
 	if err != nil {
