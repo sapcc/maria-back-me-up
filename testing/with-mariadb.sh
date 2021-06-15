@@ -30,7 +30,7 @@ execute() {
     fi
 }
 
-for i in `seq 30 -1 0`; do
+for i in `seq 90 -1 0`; do
     if execute 'SELECT 1' &> /dev/null; then
         break
     fi
