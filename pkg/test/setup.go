@@ -52,7 +52,7 @@ func Setup(t *testing.T, opts *SetupOptions) (m *backup.Manager, cfg config.Conf
 			Host:          "127.0.0.1",
 			Port:          3306,
 			User:          "root",
-			Password:      "test",
+			Password:      "",
 			LogNameFormat: "",
 			DumpTool:      opts.DumpTool,
 		},
