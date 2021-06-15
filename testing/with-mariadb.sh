@@ -1,7 +1,22 @@
-#!/bin/bash
+#!/bin/sh
+
+set -eo pipefail
+# set -x
+
+if hash greadlink &>/dev/null; then
+  readlink() { greadlink "$@"; }
+fi
+
+# set working directory to repo root
+cd "$(dirname "$(dirname "$(readlink -f "$0")")")"
+
+echo 'Initializing database'
+mysql_install_db --user=mysql --datadir=/var/lib/mysql --basedir=/usr
+#chown -R mysql: testing/mysql/
+echo 'Database initialized'
 
 mysqld_safe --skip-networking --nowatch
-mysql_options='--protocol=socket -uroot --log-bin=mysqld-bin --binlog-format=MIXED'
+mysql_options='--protocol=socket -uroot'
 
 execute() {
     statement="$1"
@@ -24,11 +39,6 @@ if [ "$i" = 0 ]; then
     exit 1
 fi
 
-root_password=mypass
- 
-# Make sure that NOBODY can access the server without a password
-sudo mysql -e "UPDATE mysql.user SET Password = PASSWORD('$root_password') WHERE User = 'root'"
-
 echo "Creating test database..."
  
 sudo mysql -e "CREATE DATABASE IF NOT EXISTS test"
@@ -39,7 +49,7 @@ sudo mysql -e "CREATE DATABASE IF NOT EXISTS service"
  
 echo "Creating table tasks in service database"
  
-sudo mysql -e "use staging;CREATE TABLE IF NOT EXISTS tasks ( \
+sudo mysql -e "CREATE TABLE IF NOT EXISTS service.tasks ( \
     task_id INT AUTO_INCREMENT PRIMARY KEY, \
     title VARCHAR(255) NOT NULL, \
     start_date DATE, \
@@ -50,20 +60,20 @@ sudo mysql -e "use staging;CREATE TABLE IF NOT EXISTS tasks ( \
 echo "Inserting data into tasks table..."
  
  
-insert1="use staging; INSERT INTO tasks (title, start_date, due_date, description) \
-        VALUES('task1', '2021-05-02', '2022-05-02', 'task info 1')"
+insert1="INSERT INTO service.tasks (title, start_date, due_date, description) \
+        VALUES('task1', '2021-05-02', '2022-05-02', 'task info 1');"
  
  
-insert2="use staging; INSERT INTO tasks (title, start_date, due_date, description) \
-        VALUES('task2', '2021-05-02', '2022-05-02', 'task info 2')"
+insert2="INSERT INTO service.tasks (title, start_date, due_date, description) \
+        VALUES('task2', '2021-05-02', '2022-05-02', 'task info 2');"
  
  
-inser3="use staging; INSERT INTO tasks (title, start_date, due_date, description) \
-        VALUES('task3', '2021-05-02', '2022-05-02' 'task info 3)"
+insert3="INSERT INTO service.tasks (title, start_date, due_date, description) \
+        VALUES('task3', '2021-05-02', '2022-05-02', 'task info 3');"
  
  
-insert4="use staging; INSERT INTO tasks (title, start_date, due_date, description) \
-        VALUES('task4', '2021-05-02', '2022-05-02', 'task info 4')"
+insert4="INSERT INTO service.tasks (title, start_date, due_date, description) \
+        VALUES('task4', '2021-05-02', '2022-05-02', 'task info 4');"
 
 sudo mysql -e "$insert1"
 sudo mysql -e "$insert2"
@@ -72,3 +82,11 @@ sudo mysql -e "$insert4"
  
  
 echo "Inserting dummy data into tasks table finished"
+
+echo "Running command: $@"
+set +e
+"$@"
+EXIT_CODE=$?
+set -e
+
+exit "${EXIT_CODE}"
