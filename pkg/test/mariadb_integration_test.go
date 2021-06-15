@@ -74,10 +74,6 @@ func TestRestoreFullBackupDisk(t *testing.T) {
 		t.Errorf("could not write backup to disk storage")
 	}
 
-	// Create DB client
-	conn := createConnection(t, cfg)
-	defer conn.Close()
-
 	// Restore full backup
 	backups, err := m.Storage.GetFullBackups("disk")
 	if err != nil {
@@ -98,7 +94,7 @@ func TestRestoreFullBackupDisk(t *testing.T) {
 	}
 
 	// Create DB client
-	conn = createConnection(t, cfg)
+	conn := createConnection(t, cfg)
 	defer conn.Close()
 	// Query from DB to see if all test entries are present
 	result, err := conn.Execute("select count(*) from service.tasks;")
