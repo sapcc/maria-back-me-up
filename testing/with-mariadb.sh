@@ -39,7 +39,7 @@ sudo mysql -e "CREATE DATABASE IF NOT EXISTS service"
  
 echo "Creating table tasks in service database"
  
-sudo mysql -e "use staging;CREATE TABLE IF NOT EXISTS tasks ( \
+sudo mysql -e "CREATE TABLE IF NOT EXISTS service.tasks ( \
     task_id INT AUTO_INCREMENT PRIMARY KEY, \
     title VARCHAR(255) NOT NULL, \
     start_date DATE, \
@@ -50,20 +50,20 @@ sudo mysql -e "use staging;CREATE TABLE IF NOT EXISTS tasks ( \
 echo "Inserting data into tasks table..."
  
  
-insert1="use staging; INSERT INTO tasks (title, start_date, due_date, description) \
-        VALUES('task1', '2021-05-02', '2022-05-02', 'task info 1')"
+insert1="INSERT INTO service.tasks (title, start_date, due_date, description) \
+        VALUES('task1', '2021-05-02', '2022-05-02', 'task info 1');"
  
  
-insert2="use staging; INSERT INTO tasks (title, start_date, due_date, description) \
-        VALUES('task2', '2021-05-02', '2022-05-02', 'task info 2')"
+insert2="INSERT INTO service.tasks (title, start_date, due_date, description) \
+        VALUES('task2', '2021-05-02', '2022-05-02', 'task info 2');"
  
  
-inser3="use staging; INSERT INTO tasks (title, start_date, due_date, description) \
-        VALUES('task3', '2021-05-02', '2022-05-02' 'task info 3)"
+insert3="INSERT INTO service.tasks (title, start_date, due_date, description) \
+        VALUES('task3', '2021-05-02', '2022-05-02', 'task info 3');"
  
  
-insert4="use staging; INSERT INTO tasks (title, start_date, due_date, description) \
-        VALUES('task4', '2021-05-02', '2022-05-02', 'task info 4')"
+insert4="INSERT INTO service.tasks (title, start_date, due_date, description) \
+        VALUES('task4', '2021-05-02', '2022-05-02', 'task info 4');"
 
 sudo mysql -e "$insert1"
 sudo mysql -e "$insert2"
