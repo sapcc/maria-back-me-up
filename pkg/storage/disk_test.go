@@ -281,6 +281,9 @@ func TestBackupRetention(t *testing.T) {
 	}
 
 	sort.Sort(ByTime(afterBackups))
+
+	fmt.Println(afterBackups)
+
 	if afterBackups[0].Key != "testdb/backup_2" || afterBackups[len(afterBackups)-1].Key != "testdb/backup_6" {
 		t.Error("expected backups are not present")
 	}
