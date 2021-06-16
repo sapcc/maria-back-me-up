@@ -92,12 +92,13 @@ while :
   do
     mysqladmin -h localhost -uroot -ptest ping > /dev/null
     if [ $? -eq 0 ]
-      then
-        echo "mariadb is up"
-        sleep 5
-      else
-        echo "starting mariadb"
-        mysqld_safe --skip-networking --nowatch --log-bin=mysqld-bin
+    then
+      echo "mariadb is up"
+      sleep 5
+    else
+      echo "starting mariadb"
+      mysqld_safe --skip-networking --nowatch --log-bin=mysqld-bin
+      sleep 10
     fi
 done &
 

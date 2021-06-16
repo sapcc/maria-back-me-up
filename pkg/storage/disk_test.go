@@ -336,7 +336,7 @@ func createDummyBackups(path string, numberBackups int, numberEmptyBackups int) 
 				return fmt.Errorf("could not create binlog file: %s", err.Error())
 			}
 		}
-		time.Sleep(time.Microsecond * 25)
+		time.Sleep(time.Millisecond * 25)
 	}
 	for i := 1; i <= numberEmptyBackups; i++ {
 		dir := filepath.Join(path, fmt.Sprintf("backup_%v", i))
