@@ -15,7 +15,7 @@ mysql_install_db --user=mysql --datadir=/var/lib/mysql --basedir=/usr
 #chown -R mysql: testing/mysql/
 echo 'Database initialized'
 
-mysqld_safe --nowatch --log-bin=mysqld-bin
+mysqld_safe --skip-networking=0 --nowatch --log-bin=mysqld-bin
 mysql_options='--protocol=socket -uroot'
 
 execute() {
@@ -97,7 +97,7 @@ while :
       sleep 5
     else
       echo "mariadb is down. restarting."
-      mysqld_safe --nowatch --log-bin=mysqld-bin
+      mysqld_safe --skip-networking=0 --nowatch --log-bin=mysqld-bin
       sleep 10
       x=0
     fi
