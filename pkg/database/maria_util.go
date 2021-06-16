@@ -84,6 +84,10 @@ func purgeBinlogsTo(c config.DatabaseConfig, log string) (err error) {
 
 func resetSlave(c config.DatabaseConfig) (err error) {
 	conn, err := client.Connect(fmt.Sprintf("%s:%s", c.Host, strconv.Itoa(c.Port)), c.User, c.Password, "")
+	if err != nil {
+		return fmt.Errorf("connection for slave reset failed: %s", err.Error())
+	}
+
 	if err = conn.Ping(); err != nil {
 		return
 	}
