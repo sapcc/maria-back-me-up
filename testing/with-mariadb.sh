@@ -90,7 +90,7 @@ echo "Inserting dummy data into tasks table finished"
 echo "Starting background check to restart MariaDB if shutdown"
 while : 
   do 
-    mysqladmin -h localhost -uroot -ptest ping > dev/null
+    mysqladmin -h localhost -uroot -ptest ping > /dev/null
     if [ $? -ne 0 ]
             then
                   echo "starting mariadb"
