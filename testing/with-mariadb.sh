@@ -87,14 +87,15 @@ sudo mysql -e "$insert4"
  
 echo "Inserting dummy data into tasks table finished"
 
-echo "Starting background check to restart MariaDB"
+echo "Starting background check to restart MariaDB if shutdown"
 while : 
   do 
-    mysqladmin -h localhost -uroot -ptest ping
+    mysqladmin -h localhost -uroot -ptest ping > dev/null
     if [ $? -eq 0 ]
             then
-                    echo "do nothing"
+                    # DB is up and running
             else
+                    echo "starting mariadb"
                     mysqld_safe --skip-networking --nowatch --log-bin=mysqld-bin
     fi
 done &
