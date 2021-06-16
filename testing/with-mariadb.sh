@@ -87,6 +87,19 @@ sudo mysql -e "$insert4"
  
 echo "Inserting dummy data into tasks table finished"
 
+echo "Starting background check to restart MariaDB"
+while : 
+  do 
+    mysqladmin -h localhost -uroot -ptest ping
+    if [ $? -eq 0 ]
+            then
+                    echo "do nothing"
+            else
+                    mysqld_safe --skip-networking --nowatch --log-bin=mysqld-bin
+    fi
+done &
+
+
 echo "Running command: $@"
 set +e
 "$@"
