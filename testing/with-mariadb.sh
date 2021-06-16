@@ -15,7 +15,7 @@ mysql_install_db --user=mysql --datadir=/var/lib/mysql --basedir=/usr
 #chown -R mysql: testing/mysql/
 echo 'Database initialized'
 
-mysqld_safe --skip-networking --nowatch --log-bin=mysqld-bin
+mysqld_safe --nowatch --log-bin=mysqld-bin
 mysql_options='--protocol=socket -uroot'
 
 execute() {
@@ -94,11 +94,10 @@ while :
     mysqladmin -h localhost -uroot -ptest ping > /dev/null || x=1
     if [ $x -eq 0 ]
     then
-      echo "mariadb is up"
       sleep 5
     else
-      echo "starting mariadb"
-      mysqld_safe --skip-networking --nowatch --log-bin=mysqld-bin
+      echo "mariadb is down. restarting."
+      mysqld_safe --nowatch --log-bin=mysqld-bin
       sleep 10
       x=0
     fi
