@@ -91,8 +91,11 @@ echo "Starting background check to restart MariaDB if shutdown"
 while :
   do
     mysqladmin -h localhost -uroot -ptest ping > /dev/null
-    if [ $? -ne 0 ]
+    if [ $? -eq 0 ]
       then
+          echo "mariadb is up"
+          sleep 5
+      else
         echo "starting mariadb"
         mysqld_safe --skip-networking --nowatch --log-bin=mysqld-bin
     fi
