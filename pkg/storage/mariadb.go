@@ -32,12 +32,14 @@ import (
 	"github.com/siddontang/go-mysql/replication"
 )
 
+// MariaDBStream struct is ...
 type MariaDBStream struct {
 	cfg         config.MariaDBStream
 	serviceName string
 	statusError map[string]string
 }
 
+// NewMariaDBStream creates a new mariadbstream storage object
 func NewMariaDBStream(c config.MariaDBStream, serviceName string) (m *MariaDBStream, err error) {
 	return &MariaDBStream{
 		cfg:         c,
@@ -45,10 +47,12 @@ func NewMariaDBStream(c config.MariaDBStream, serviceName string) (m *MariaDBStr
 	}, nil
 }
 
+// WriteStream implements interface
 func (m *MariaDBStream) WriteStream(fileName, mimeType string, body io.Reader, tags map[string]string, dlo bool) error {
 	return &Error{Storage: m.cfg.Name, message: "method 'WriteStream' is not implemented"}
 }
 
+// WriteChannelStream implements interface
 func (m *MariaDBStream) WriteChannelStream(name, mimeType string, body <-chan StreamEvent, tags map[string]string, dlo bool) (err error) {
 
 	conn, err := client.Connect(strings.Join([]string{m.cfg.Host, strconv.Itoa(m.cfg.Port)}, ":"), m.cfg.User, m.cfg.Password, "")
@@ -107,14 +111,17 @@ func (m *MariaDBStream) WriteChannelStream(name, mimeType string, body <-chan St
 	}
 }
 
+// GetStorageServiceName implements interface
 func (m *MariaDBStream) GetStorageServiceName() (name string) {
 	return m.cfg.Name
 }
 
+// GetStatusError implements interface
 func (m *MariaDBStream) GetStatusError() map[string]string {
 	return m.statusError
 }
 
+// GetStatusErrorByKey implements interface
 func (m *MariaDBStream) GetStatusErrorByKey(backupKey string) string {
 	if st, ok := m.statusError[path.Dir(backupKey)]; ok {
 		return st
@@ -122,10 +129,12 @@ func (m *MariaDBStream) GetStatusErrorByKey(backupKey string) string {
 	return ""
 }
 
+// GetSupportedStream implements interface
 func (m *MariaDBStream) GetSupportedStream() StreamType {
 	return CHANNEL_STREAM
 }
 
+// WriteFolder implements interface
 func (m *MariaDBStream) WriteFolder(p string) (err error) {
 	log.Debug("SQL dump path: ", p)
 
@@ -167,22 +176,27 @@ func (m *MariaDBStream) WriteFolder(p string) (err error) {
 	return
 }
 
+// DownloadLatestBackup implements interface
 func (m *MariaDBStream) DownloadLatestBackup() (path string, err error) {
 	return path, &Error{Storage: m.cfg.Name, message: "method 'DownloadLatestBackup' is not implemented"}
 }
 
+// GetFullBackups implements interface
 func (m *MariaDBStream) GetFullBackups() (bl []Backup, err error) {
 	return bl, &Error{Storage: m.cfg.Name, message: "method 'ListFullBackups' is not implemented"}
 }
 
+// GetIncBackupsFromDump implements interface
 func (m *MariaDBStream) GetIncBackupsFromDump(key string) (bl []Backup, err error) {
 	return bl, &Error{Storage: m.cfg.Name, message: "method 'ListIncBackupsFor' is not implemented"}
 }
 
+// DownloadBackupWithLogPosition implements interface
 func (m *MariaDBStream) DownloadBackupWithLogPosition(fullBackupPath string, binlog string) (path string, err error) {
 	return path, &Error{Storage: m.cfg.Name, message: "method 'DownloadBackupFrom' is not implemented"}
 }
 
+// DownloadBackup implements interface
 func (m *MariaDBStream) DownloadBackup(fullBackup Backup) (path string, err error) {
 	return path, &Error{Storage: m.cfg.Name, message: "method 'DownloadBackup' is not implemented"}
 }
