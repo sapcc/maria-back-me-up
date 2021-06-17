@@ -60,7 +60,7 @@ func Setup(t *testing.T, opts *SetupOptions) (m *backup.Manager, cfg config.Conf
 		Database: config.DatabaseConfig{
 			Type:          opts.DBType,
 			Host:          "127.0.0.1",
-			Port:          3307,
+			Port:          3306,
 			User:          "root",
 			Password:      "test",
 			LogNameFormat: "mysqld-bin",
