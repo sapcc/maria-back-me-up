@@ -51,7 +51,7 @@ func NewManager(c config.StorageService, serviceName, binLog string) (m *Manager
 		if err != nil {
 			return m, err
 		}
-		stsvc["disk"] = disk
+		stsvc[cfg.Name] = disk
 
 	}
 	m = &Manager{

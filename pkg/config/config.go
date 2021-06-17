@@ -115,6 +115,7 @@ type Swift struct {
 
 // Disk holds info for the local backup storage
 type Disk struct {
+	Name      string `yaml:"name"`
 	BasePath  string `yaml:"base_path"`
 	Retention int    `yaml:"retention"`
 }

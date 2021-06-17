@@ -46,7 +46,7 @@ type Disk struct {
 // NewDisk creates a new disk storage object
 func NewDisk(cfg config.Disk, serviceName string, binLog string) (d *Disk, err error) {
 	return &Disk{
-		name:        "Disk",
+		name:        cfg.Name,
 		cfg:         cfg,
 		serviceName: serviceName,
 		binLog:      binLog,
