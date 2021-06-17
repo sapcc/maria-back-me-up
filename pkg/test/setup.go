@@ -19,10 +19,15 @@
 package test
 
 import (
+	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sapcc/maria-back-me-up/pkg/backup"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/database"
@@ -30,12 +35,14 @@ import (
 )
 
 const backupDir = "./backupDirTest"
-const backupDirDisk = "./backupDirDiskTest"
+
+const sourceSQLFile = "./testdata.sql"
+const clearDBFile = "./testclean.sql"
 
 //SetupOptions contains optional arguments for test.Setup().
 type SetupOptions struct {
 	DBType           string
-	WithDiskStorage  bool
+	DiskStorageName  string
 	WithSwiftStorage bool
 	WithK8s          bool
 	DumpTool         config.DumpTools
@@ -48,22 +55,24 @@ func Setup(t *testing.T, opts *SetupOptions) (m *backup.Manager, cfg config.Conf
 		SideCar:   func(b bool) *bool { return &b }(false),
 		Backup: config.BackupService{
 			BackupDir:              backupDir,
-			FullBackupCronSchedule: "*/20 * * * *",
+			FullBackupCronSchedule: "* * * * *",
 		},
 		Database: config.DatabaseConfig{
 			Type:          opts.DBType,
-			Host:          "localhost",
-			Port:          3306,
+			Host:          "127.0.0.1",
+			Port:          3307,
 			User:          "root",
 			Password:      "test",
 			LogNameFormat: "mysqld-bin",
 			DumpTool:      opts.DumpTool,
 			Databases:     []string{"service"},
+			VerifyTables:  []string{"service.tasks"},
 		},
 	}
-	if opts.WithDiskStorage {
+	if opts.DiskStorageName != "" {
 		cfg.Storages.Disk = []config.Disk{{
-			BasePath:  backupDirDisk,
+			Name:      opts.DiskStorageName,
+			BasePath:  filepath.Join(backupDir, opts.DiskStorageName),
 			Retention: 1,
 		}}
 	}
@@ -83,10 +92,41 @@ func Setup(t *testing.T, opts *SetupOptions) (m *backup.Manager, cfg config.Conf
 	if err = m.Db.Up(1*time.Minute, false); err != nil {
 		t.Errorf("expected db to be up, but got error: %s.", err.Error())
 	}
+
+	// Prepare Source DB
+	prepareDB(cfg.Database.Port, cfg.Database.Host, cfg.Database.User, cfg.Database.Password, sourceSQLFile)
+
 	return
 }
 
 // Cleanup after a test
 func Cleanup(t *testing.T) {
-	os.Remove(backupDir)
+	prometheus.Unregister(backup.NewMetricsCollector(&backup.UpdateStatus{}))
+	err := os.RemoveAll(backupDir)
+	if err != nil {
+		t.Errorf("failed to clean backupDir: %s", err.Error())
+	}
+}
+
+// prepareDB executes a sql file on the db.
+func prepareDB(port int, host, user, password, path string) error {
+
+	dump, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("could not open dump file: %s", err.Error())
+	}
+
+	cmd := exec.Command(
+		"mysql",
+		"--port="+strconv.Itoa(port),
+		"--host="+host,
+		"--user="+user,
+		"--password="+password,
+	)
+	cmd.Stdin = dump
+	b, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s error: %s", config.Mysqldump.String(), string(b))
+	}
+	return nil
 }

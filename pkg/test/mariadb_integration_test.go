@@ -22,6 +22,7 @@ import (
 	"path"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/constants"
@@ -54,11 +55,11 @@ func testFullBackup(t *testing.T) {
 }
 
 func TestRestoreFullBackupDisk(t *testing.T) {
-
+	serviceName := "FullBackupDisk"
 	m, cfg := Setup(t, &SetupOptions{
 		DBType:          constants.MARIADB,
 		DumpTool:        config.Mysqldump,
-		WithDiskStorage: true,
+		DiskStorageName: serviceName,
 	})
 
 	// Perform Backup
@@ -75,13 +76,13 @@ func TestRestoreFullBackupDisk(t *testing.T) {
 	}
 
 	// Restore full backup
-	backups, err := m.Storage.GetFullBackups("disk")
+	backups, err := m.Storage.GetFullBackups(serviceName)
 	if err != nil {
 		t.Errorf("failed to get backups from disk storage, error: %s", err.Error())
 		t.FailNow()
 	}
 
-	path, err := m.Storage.DownloadBackup("disk", backups[0])
+	path, err := m.Storage.DownloadBackup(serviceName, backups[0])
 	if err != nil {
 		t.Errorf("failed to get backup from disk, error: %s", err.Error())
 		t.FailNow()
@@ -94,21 +95,93 @@ func TestRestoreFullBackupDisk(t *testing.T) {
 	}
 
 	// Create DB client
-	conn := createConnection(t, cfg)
-	defer conn.Close()
-	// Query from DB to see if all test entries are present
-	result, err := conn.Execute("select count(*) from service.tasks;")
-
-	if err != nil {
-		t.Errorf("expected 4 entries, but got: %v", result.Resultset.Values[0][0].(int64))
-	}
-}
-
-func createConnection(t *testing.T, cfg config.Config) *client.Conn {
-	conn, err := client.Connect(fmt.Sprintf("%s:%v", cfg.Database.Host, cfg.Database.Port), cfg.Database.User, cfg.Database.Password, "service")
+	conn, err := createConnection(cfg.Database, "service")
 	if err != nil {
 		t.Errorf("could not connect to database, error: %s", err.Error())
 		t.FailNow()
 	}
-	return conn
+	defer conn.Close()
+	// Query from DB to see if all test entries are present
+	result, err := conn.Execute("select count(*) from service.tasks;")
+
+	act := result.Resultset.Values[0][0].(int64)
+
+	if err != nil || 4 != act {
+		t.Errorf("expected 4 entries, but got: %v", act)
+	}
+	Cleanup(t)
+}
+
+func TestRestoreFullBackupDiskWithIncrements(t *testing.T) {
+	serviceName := "DiskBackupIncrements"
+	m, cfg := Setup(t, &SetupOptions{
+		DBType:          constants.MARIADB,
+		DumpTool:        config.Mysqldump,
+		DiskStorageName: serviceName,
+	})
+
+	// Perform Backup
+	err := m.Start()
+	if err != nil {
+		t.Errorf("could not start backup: %s", err.Error())
+		t.FailNow()
+	}
+
+	// Create DB client
+	conn, err := createConnection(cfg.Database, "service")
+	if err != nil {
+		t.Errorf("could not connect to database: %s", err.Error())
+		t.FailNow()
+	}
+	defer conn.Close()
+
+	_, err = conn.Execute("INSERT INTO service.tasks (title, start_date, due_date, description) VALUES('task5', '2021-05-02', '2022-05-02', 'task info 5');")
+	if err != nil {
+		t.Errorf("failed to write to db: %s", err.Error())
+	}
+	time.Sleep(time.Minute * 2)
+	m.Stop()
+
+	// Restore full backup
+	backups, err := m.Storage.GetFullBackups(serviceName)
+	if err != nil {
+		t.Errorf("failed to get backups from disk storage, error: %s", err.Error())
+		t.FailNow()
+	}
+
+	path, err := m.Storage.DownloadBackup(serviceName, backups[0])
+	if err != nil {
+		t.Errorf("failed to get backup from disk, error: %s", err.Error())
+		t.FailNow()
+	}
+
+	err = m.Db.Restore(path)
+	if err != nil {
+		t.Errorf("failed to restore the database, error: %s", err.Error())
+		t.FailNow()
+	}
+
+	// Create DB client
+	conn, err = createConnection(cfg.Database, "service")
+	if err != nil {
+		t.Errorf("could not connect to database, error: %s", err.Error())
+		t.FailNow()
+	}
+	defer conn.Close()
+	// Query from DB to see if all test entries are present
+	result, err := conn.Execute("select count(*) from service.tasks;")
+	act := result.Resultset.Values[0][0].(int64)
+
+	if err != nil || 5 != act {
+		t.Errorf("expected 5 entries, but got: %v", act)
+	}
+	Cleanup(t)
+}
+
+func createConnection(cfg config.DatabaseConfig, db string) (conn *client.Conn, err error) {
+	conn, err = client.Connect(fmt.Sprintf("%s:%v", cfg.Host, cfg.Port), cfg.User, cfg.Password, db)
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
 }
