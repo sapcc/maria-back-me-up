@@ -54,70 +54,30 @@ func testFullBackup(t *testing.T) {
 	Cleanup(t)
 }
 
-func TestRestoreFullBackupDisk(t *testing.T) {
-	serviceName := "FullBackupDisk"
-	m, cfg := Setup(t, &SetupOptions{
-		DBType:          constants.MARIADB,
-		DumpTool:        config.Mysqldump,
-		DiskStorageName: serviceName,
-	})
-
-	// Perform Backup
-	bpath := path.Join(cfg.Backup.BackupDir, "test01")
-	_, err := m.Db.CreateFullBackup(bpath)
-	if err != nil {
-		t.Errorf("expected logpostion, but got error: %s", err.Error())
-		t.FailNow()
-	}
-
-	err = m.Storage.WriteFolderAll(bpath)
-	if err != nil {
-		t.Errorf("could not write backup to disk storage")
-	}
-
-	// Restore full backup
-	backups, err := m.Storage.GetFullBackups(serviceName)
-	if err != nil {
-		t.Errorf("failed to get backups from disk storage, error: %s", err.Error())
-		t.FailNow()
-	}
-
-	path, err := m.Storage.DownloadBackup(serviceName, backups[0])
-	if err != nil {
-		t.Errorf("failed to get backup from disk, error: %s", err.Error())
-		t.FailNow()
-	}
-
-	err = m.Db.Restore(path)
-	if err != nil {
-		t.Errorf("failed to restore the database, error: %s", err.Error())
-		t.FailNow()
-	}
-
-	// Create DB client
-	conn, err := createConnection(cfg.Database, "service")
-	if err != nil {
-		t.Errorf("could not connect to database, error: %s", err.Error())
-		t.FailNow()
-	}
-	defer conn.Close()
-	// Query from DB to see if all test entries are present
-	result, err := conn.Execute("select count(*) from service.tasks;")
-
-	act := result.Resultset.Values[0][0].(int64)
-
-	if err != nil || 4 != act {
-		t.Errorf("expected 4 entries, but got: %v", act)
-	}
-	Cleanup(t)
+type testCase struct {
+	WithDisk   bool
+	WithStream bool
+	Expected   int
 }
 
-func TestRestoreFullBackupDiskWithIncrements(t *testing.T) {
-	serviceName := "DiskBackupIncrements"
+func TestBackupRestore(t *testing.T) {
+	var tests = []testCase{
+		{true, false, 5},
+		{false, true, 5},
+		{true, true, 5},
+	}
+
+	for _, test := range tests {
+		testBackupRestore(t, test)
+	}
+}
+
+func testBackupRestore(t *testing.T, test testCase) {
 	m, cfg := Setup(t, &SetupOptions{
-		DBType:          constants.MARIADB,
-		DumpTool:        config.Mysqldump,
-		DiskStorageName: serviceName,
+		DBType:            constants.MARIADB,
+		DumpTool:          config.Mysqldump,
+		WithDiskStorage:   test.WithDisk,
+		WithStreamStorage: test.WithStream,
 	})
 
 	// Perform Backup
@@ -128,7 +88,7 @@ func TestRestoreFullBackupDiskWithIncrements(t *testing.T) {
 	}
 
 	// Create DB client
-	conn, err := createConnection(cfg.Database, "service")
+	conn, err := createConnection(cfg.Database.User, cfg.Database.Password, cfg.Database.Host, "service", cfg.Database.Port)
 	if err != nil {
 		t.Errorf("could not connect to database: %s", err.Error())
 		t.FailNow()
@@ -139,49 +99,67 @@ func TestRestoreFullBackupDiskWithIncrements(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to write to db: %s", err.Error())
 	}
-	time.Sleep(time.Minute * 2)
+	time.Sleep(time.Second * 15)
 	m.Stop()
 
-	// Restore full backup
-	backups, err := m.Storage.GetFullBackups(serviceName)
-	if err != nil {
-		t.Errorf("failed to get backups from disk storage, error: %s", err.Error())
-		t.FailNow()
+	if test.WithDisk {
+		serviceName := cfg.Storages.Disk[0].Name
+		// Restore full backup
+		backups, err := m.Storage.GetFullBackups(serviceName)
+		if err != nil {
+			t.Errorf("failed to get backups from disk storage, error: %s", err.Error())
+			t.FailNow()
+		}
+
+		path, err := m.Storage.DownloadBackup(serviceName, backups[0])
+		if err != nil {
+			t.Errorf("failed to get backup from disk, error: %s", err.Error())
+			t.FailNow()
+		}
+		if _, err = os.Stat(filepath.Join(path, "tablesChecksum.yaml")); os.IsNotExist(err) {
+			if cfg.Database.VerifyTables != nil {
+				t.Errorf("checksum for tables was not created")
+			}
+		}
+
+		err = m.Db.Restore(path)
+		if err != nil {
+			t.Errorf("failed to restore the database, error: %s", err.Error())
+			t.FailNow()
+		}
+
+		// Check restore success
+		assertTableConsistent(t, cfg.Database.User, cfg.Database.Password, cfg.Database.Host, "service", cfg.Database.Port, 5, "tasks")
 	}
 
-	path, err := m.Storage.DownloadBackup(serviceName, backups[0])
-	if err != nil {
-		t.Errorf("failed to get backup from disk, error: %s", err.Error())
-		t.FailNow()
+	if test.WithStream {
+		// Check streaming target db
+		assertTableConsistent(t, "root", "streaming", "127.0.0.1", "service", 3307, 5, "tasks")
 	}
 
-	err = m.Db.Restore(path)
-	if err != nil {
-		t.Errorf("failed to restore the database, error: %s", err.Error())
-		t.FailNow()
-	}
+	Cleanup(t)
+}
 
-	// Create DB client
-	conn, err = createConnection(cfg.Database, "service")
+func createConnection(user, password, host, db string, port int) (conn *client.Conn, err error) {
+	conn, err = client.Connect(fmt.Sprintf("%s:%v", host, port), user, password, db)
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
+}
+
+func assertTableConsistent(t *testing.T, user, password, host, db string, port int, exp int64, table string) {
+	conn, err := createConnection(user, password, host, db, port)
 	if err != nil {
 		t.Errorf("could not connect to database, error: %s", err.Error())
 		t.FailNow()
 	}
 	defer conn.Close()
 	// Query from DB to see if all test entries are present
-	result, err := conn.Execute("select count(*) from service.tasks;")
+	result, err := conn.Execute(fmt.Sprintf("select count(*) from %s.%s;", db, table))
 	act := result.Resultset.Values[0][0].(int64)
 
-	if err != nil || 5 != act {
+	if err != nil || exp != act {
 		t.Errorf("expected 5 entries, but got: %v", act)
 	}
-	Cleanup(t)
-}
-
-func createConnection(cfg config.DatabaseConfig, db string) (conn *client.Conn, err error) {
-	conn, err = client.Connect(fmt.Sprintf("%s:%v", cfg.Host, cfg.Port), cfg.User, cfg.Password, db)
-	if err != nil {
-		return nil, err
-	}
-	return conn, nil
 }
