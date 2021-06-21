@@ -147,14 +147,14 @@ func TestManagerStorageErrorHandling(t *testing.T) {
 		t.Errorf("expected fullBackup status to be 0, but got: %d.", m.updateSts.FullBackup["s1"])
 	}
 	if m.updateSts.FullBackup["s2"] != 1 {
-		t.Errorf("expected fullBackup status to be 0, but got: %d.", m.updateSts.FullBackup["s2"])
+		t.Errorf("expected fullBackup status to be 1, but got: %d.", m.updateSts.FullBackup["s2"])
 	}
 	time.Sleep(1 * time.Second)
 	if m.updateSts.IncBackup["s1"] != 0 {
 		t.Errorf("expected incBackup status to be 0, but got: %d.", m.updateSts.IncBackup["s1"])
 	}
 	if m.updateSts.IncBackup["s2"] != 1 {
-		t.Errorf("expected incBackup status to be 0, but got: %d.", m.updateSts.IncBackup["s2"])
+		t.Errorf("expected incBackup status to be 1, but got: %d.", m.updateSts.IncBackup["s2"])
 	}
 	cleanup()
 }
