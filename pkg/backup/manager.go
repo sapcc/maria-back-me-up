@@ -365,12 +365,17 @@ func (m *Manager) createTableChecksum(backupTime string) (err error) {
 	if err != nil {
 		return
 	}
-	channel := make(chan storage.StreamEvent, 10)
-	defer close(channel)
+	events := make(chan storage.StreamEvent, 1)
+	errors := make(chan error, 1)
+	defer close(errors)
 
-	err = m.Storage.WriteStreamAll(backupTime+"/tablesChecksum.yaml", "", channel, false)
-	channel <- &storage.ByteEvent{Value: out}
+	events <- &storage.ByteEvent{Value: out}
 
+	go func() {
+		errors <- m.Storage.WriteStreamAll(backupTime+"/tablesChecksum.yaml", "", events, false)
+	}()
+	close(events)
+	err = <-errors
 	if err != nil {
 		logger.Error(fmt.Errorf("cannot upload table checksums: %s", err.Error()))
 		return
