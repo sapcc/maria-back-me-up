@@ -138,13 +138,13 @@ func (m *MariaDBStream) GetSupportedStream() StreamType {
 func (m *MariaDBStream) WriteFolder(p string) (err error) {
 	log.Debug("SQL dump path: ", p)
 
-	if m.cfg.DumpTool == nil || *m.cfg.DumpTool == "mysqldump" {
-		dump, err := os.Open(path.Join(p, "dump.sql"))
+	dump, err := os.Open(path.Join(p, "dump.sql"))
+	if err != nil {
+		return fmt.Errorf("could not read dump: %s", err.Error())
+	}
 
-		if err != nil {
-			return fmt.Errorf("could not read dump: %s", err.Error())
-		}
-
+	switch m.cfg.DumpTool {
+	case config.Mysqldump:
 		cmd := exec.Command(
 			"mysql",
 			"--port="+strconv.Itoa(m.cfg.Port),
@@ -157,7 +157,7 @@ func (m *MariaDBStream) WriteFolder(p string) (err error) {
 		if err != nil {
 			return fmt.Errorf("mysql error: %s", string(b))
 		}
-	} else {
+	case config.MyDumper:
 		b, err := exec.Command(
 			"myloader",
 			"--port="+strconv.Itoa(m.cfg.Port),
@@ -170,6 +170,8 @@ func (m *MariaDBStream) WriteFolder(p string) (err error) {
 		if err != nil {
 			return fmt.Errorf("myloader error: %s", string(b))
 		}
+	default:
+		return fmt.Errorf("unsupported dump tool '%s'", m.cfg.DumpTool)
 	}
 
 	log.Debug("myloader restore finished")
