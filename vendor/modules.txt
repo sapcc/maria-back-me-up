@@ -107,6 +107,9 @@ github.com/ncw/swift
 # github.com/pingcap/errors v0.11.0
 ## explicit
 github.com/pingcap/errors
+# github.com/pkg/errors v0.8.1
+## explicit
+github.com/pkg/errors
 # github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35
 ## explicit
 github.com/pquerna/cachecontrol
