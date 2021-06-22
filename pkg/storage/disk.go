@@ -134,8 +134,8 @@ func (d *Disk) GetWriterType() WriterType {
 	return CHANNEL
 }
 
-//WriteChannelStream implements interface
-func (d *Disk) WriteChannelStream(fileName, mimeType string, body <-chan StreamEvent, tags map[string]string, dlo bool) error {
+//WriteChannel implements interface
+func (d *Disk) WriteChannel(fileName, mimeType string, body <-chan StreamEvent, tags map[string]string, dlo bool) error {
 	return &Error{Storage: d.cfg.Name, message: "method not supported"}
 }
 
