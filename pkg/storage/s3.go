@@ -94,8 +94,9 @@ func (s *S3) GetStatusErrorByKey(backupKey string) string {
 	return ""
 }
 
-func (s *S3) GetSupportedStream() StreamType {
-	return READER_STREAM
+// GetWriterType implements interface
+func (s *S3) GetWriterType() WriterType {
+	return STREAM
 }
 
 // WriteFolder implements interface
@@ -134,7 +135,8 @@ func (s *S3) WriteStream(fileName, mimeType string, body io.Reader, tags map[str
 	return nil
 }
 
-func (s *S3) WriteChannelStream(fileName, mimeType string, body <-chan StreamEvent, tags map[string]string, dlo bool) error {
+// WriteChannel implements interface
+func (s *S3) WriteChannel(fileName, mimeType string, body <-chan StreamEvent, tags map[string]string, dlo bool) error {
 	return &Error{Storage: s.cfg.Name, message: "method not supported"}
 }
 

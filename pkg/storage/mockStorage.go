@@ -78,13 +78,13 @@ func (s *MockStorage) WriteFolder(p string) (err error) {
 	return
 }
 
-// GetSupportedStream implements interface
-func (s *MockStorage) GetSupportedStream() StreamType {
-	return READER_STREAM
+// GetWriterType implements interface
+func (s *MockStorage) GetWriterType() WriterType {
+	return STREAM
 }
 
-//WriteChannelStream implements interface
-func (s *MockStorage) WriteChannelStream(fileName, mimeType string, body <-chan StreamEvent, tags map[string]string, dlo bool) error {
+//WriteChannel implements interface
+func (s *MockStorage) WriteChannel(fileName, mimeType string, body <-chan StreamEvent, tags map[string]string, dlo bool) error {
 	return &Error{Storage: s.serviceName, message: "method not supported"}
 }
 

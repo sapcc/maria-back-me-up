@@ -14,7 +14,8 @@ type Storage interface {
 	WriteFolder(p string) (err error)
 	// WriteStream writes a byte stream to the storage
 	WriteStream(name, mimeType string, body io.Reader, tags map[string]string, dlo bool) (err error)
-	WriteChannelStream(name, mimeType string, body <-chan StreamEvent, tags map[string]string, dlo bool) (err error)
+	// WriteChannel writes the contents of the channel to the storage
+	WriteChannel(name, mimeType string, body <-chan StreamEvent, tags map[string]string, dlo bool) (err error)
 	// DownloadLatestBackup downloads the latest available backup from a storage
 	DownloadLatestBackup() (path string, err error)
 	// GetFullBackups lists all available full backups per storage
@@ -27,7 +28,8 @@ type Storage interface {
 	DownloadBackup(b Backup) (path string, err error)
 	// GetStorageServiceName lists all available storages from a service
 	GetStorageServiceName() (name string)
-	GetSupportedStream() (t StreamType)
+	// GetWriterType indicates if the storage consumes io.Reader or a Channel
+	GetWriterType() (t WriterType)
 	// GetStatusError gets the backup->error map
 	GetStatusError() map[string]string
 	// GetStatusErrorByKey returns error per backup
@@ -88,29 +90,37 @@ func (s *Error) Error() string {
 	return fmt.Sprintf("Storage %s error: %s", s.Storage, s.message)
 }
 
-type StreamType byte
+// WriterType holds the differents types
+type WriterType byte
 
 const (
-	READER_STREAM StreamType = iota
-	CHANNEL_STREAM
+	// STREAM indicates Storage.WriteStream is implemented
+	STREAM WriterType = iota
+	// CHANNEL indicates Storage.WriteChannel is implemented
+	CHANNEL
 )
 
+// StreamEvent used to send byte slices or binlog events to the storages
 type StreamEvent interface {
 	ToByte() []byte
 }
 
+// ByteEvent holds a slice of bytes
 type ByteEvent struct {
 	Value []byte
 }
 
+// ToByte returns the bytes of the event
 func (b *ByteEvent) ToByte() []byte {
 	return b.Value
 }
 
+// BinlogEvent holds a binlog event
 type BinlogEvent struct {
 	Value *replication.BinlogEvent
 }
 
+// ToByte returns the byte content of a binlog event
 func (b *BinlogEvent) ToByte() []byte {
 	return b.Value.RawData
 }

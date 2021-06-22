@@ -96,12 +96,12 @@ func (m *Manager) WriteStreamAll(name, mimeType string, body <-chan StreamEvent,
 	chanConsumer := make([]string, 0, len(m.storageServices))
 
 	for k, s := range m.storageServices {
-		if s.GetSupportedStream() == CHANNEL_STREAM {
+		if s.GetWriterType() == CHANNEL {
 			chanConsumer = append(chanConsumer, k)
-		} else if s.GetSupportedStream() == READER_STREAM {
+		} else if s.GetWriterType() == STREAM {
 			readerConsumer = append(readerConsumer, k)
 		} else {
-			return fmt.Errorf("unsupported storage service with stream type: %v", s.GetSupportedStream())
+			return fmt.Errorf("unsupported storage service with stream type: %v", s.GetWriterType())
 		}
 	}
 
@@ -121,7 +121,7 @@ func (m *Manager) WriteStreamAll(name, mimeType string, body <-chan StreamEvent,
 	for i, s := range chanConsumer {
 		func(i int, st string) {
 			eg.Go(func() error {
-				return m.storageServices[st].WriteChannelStream(name, mimeType, channels[i], nil, dlo)
+				return m.storageServices[st].WriteChannel(name, mimeType, channels[i], nil, dlo)
 			})
 		}(i, s)
 	}

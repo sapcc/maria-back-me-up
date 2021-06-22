@@ -52,8 +52,8 @@ func (m *MariaDBStream) WriteStream(fileName, mimeType string, body io.Reader, t
 	return &Error{Storage: m.cfg.Name, message: "method 'WriteStream' is not implemented"}
 }
 
-// WriteChannelStream implements interface
-func (m *MariaDBStream) WriteChannelStream(name, mimeType string, body <-chan StreamEvent, tags map[string]string, dlo bool) (err error) {
+// WriteChannel implements interface
+func (m *MariaDBStream) WriteChannel(name, mimeType string, body <-chan StreamEvent, tags map[string]string, dlo bool) (err error) {
 
 	conn, err := client.Connect(strings.Join([]string{m.cfg.Host, strconv.Itoa(m.cfg.Port)}, ":"), m.cfg.User, m.cfg.Password, "")
 
@@ -129,9 +129,9 @@ func (m *MariaDBStream) GetStatusErrorByKey(backupKey string) string {
 	return ""
 }
 
-// GetSupportedStream implements interface
-func (m *MariaDBStream) GetSupportedStream() StreamType {
-	return CHANNEL_STREAM
+// GetWriterType implements interface
+func (m *MariaDBStream) GetWriterType() WriterType {
+	return CHANNEL
 }
 
 // WriteFolder implements interface

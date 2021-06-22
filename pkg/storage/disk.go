@@ -129,9 +129,9 @@ func (d *Disk) WriteStream(fileName, mimeType string, body io.Reader, tags map[s
 	return nil
 }
 
-// GetSupportedStream implements interface
-func (d *Disk) GetSupportedStream() StreamType {
-	return READER_STREAM
+// GetWriterType implements interface
+func (d *Disk) GetWriterType() WriterType {
+	return CHANNEL
 }
 
 //WriteChannelStream implements interface
