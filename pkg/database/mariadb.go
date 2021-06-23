@@ -268,7 +268,7 @@ func (m *MariaDB) StartIncBackup(ctx context.Context, mp LogPosition, dir string
 		MaxReconnectAttempts: 10,
 	}
 	syncer := replication.NewBinlogSyncer(cfg)
-	binlogChan := make(chan storage.StreamEvent, 50)
+	binlogChan := make(chan storage.StreamEvent, 5)
 	defer func() {
 		log.Debug("closing binlog syncer")
 		close(binlogChan)
@@ -309,7 +309,7 @@ func (m *MariaDB) StartIncBackup(ctx context.Context, mp LogPosition, dir string
 				close(binlogChan)
 				time.Sleep(100 * time.Millisecond)
 			}
-			binlogChan = make(chan storage.StreamEvent, 50)
+			binlogChan = make(chan storage.StreamEvent, 5)
 			var eg errgroup.Group
 			eg.Go(func() error {
 				return m.storage.WriteStreamAll(path.Join(dir, binlogFile), "", binlogChan, false)

@@ -78,16 +78,6 @@ func (s *MockStorage) WriteFolder(p string) (err error) {
 	return
 }
 
-// GetWriterType implements interface
-func (s *MockStorage) GetWriterType() WriterType {
-	return STREAM
-}
-
-//WriteChannel implements interface
-func (s *MockStorage) WriteChannel(fileName, mimeType string, body <-chan StreamEvent, tags map[string]string, dlo bool) error {
-	return &Error{Storage: s.serviceName, message: "method not supported"}
-}
-
 // GetStorageServiceName implements interface
 func (s *MockStorage) GetStorageServiceName() (name string) {
 	return s.serviceName

@@ -129,16 +129,6 @@ func (d *Disk) WriteStream(fileName, mimeType string, body io.Reader, tags map[s
 	return nil
 }
 
-// GetWriterType implements interface
-func (d *Disk) GetWriterType() WriterType {
-	return CHANNEL
-}
-
-//WriteChannel implements interface
-func (d *Disk) WriteChannel(fileName, mimeType string, body <-chan StreamEvent, tags map[string]string, dlo bool) error {
-	return &Error{Storage: d.cfg.Name, message: "method not supported"}
-}
-
 // DownloadLatestBackup implements interface
 func (d *Disk) DownloadLatestBackup() (path string, err error) {
 

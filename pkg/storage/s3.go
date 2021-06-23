@@ -94,11 +94,6 @@ func (s *S3) GetStatusErrorByKey(backupKey string) string {
 	return ""
 }
 
-// GetWriterType implements interface
-func (s *S3) GetWriterType() WriterType {
-	return STREAM
-}
-
 // WriteFolder implements interface
 func (s *S3) WriteFolder(p string) (err error) {
 	r, err := ZipFolderPath(p)
@@ -133,11 +128,6 @@ func (s *S3) WriteStream(fileName, mimeType string, body io.Reader, tags map[str
 		return s.handleError(fileName, err)
 	}
 	return nil
-}
-
-// WriteChannel implements interface
-func (s *S3) WriteChannel(fileName, mimeType string, body <-chan StreamEvent, tags map[string]string, dlo bool) error {
-	return &Error{Storage: s.cfg.Name, message: "method not supported"}
 }
 
 // DownloadBackupWithLogPosition implements interface

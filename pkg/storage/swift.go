@@ -75,11 +75,6 @@ func (s *Swift) GetStatusErrorByKey(backupKey string) string {
 	return ""
 }
 
-// GetWriterType implements interface
-func (s *Swift) GetWriterType() WriterType {
-	return STREAM
-}
-
 // WriteFolder implements interface
 func (s *Swift) WriteFolder(p string) (err error) {
 	r, err := ZipFolderPath(p)
@@ -155,11 +150,6 @@ func (s *Swift) WriteStream(name, mimeType string, body io.Reader, tags map[stri
 	}
 
 	return
-}
-
-// WriteChannel implements interface
-func (s *Swift) WriteChannel(fileName, mimeType string, body <-chan StreamEvent, tags map[string]string, dlo bool) error {
-	return &Error{Storage: s.cfg.Name, message: "method not supported"}
 }
 
 // DownloadLatestBackup implements interface

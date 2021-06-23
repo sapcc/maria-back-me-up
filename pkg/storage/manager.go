@@ -92,25 +92,24 @@ func (m *Manager) GetStorageServices() map[string]Storage {
 func (m *Manager) WriteStreamAll(name, mimeType string, body <-chan StreamEvent, dlo bool) (errs error) {
 
 	var eg errgroup.Group
-	readerConsumer := make([]string, 0, len(m.storageServices))
-	chanConsumer := make([]string, 0, len(m.storageServices))
+	streamConsumer := make(map[string]Storage, len(m.storageServices))
+	chanConsumer := make(map[string]ChannelWriter, len(m.storageServices))
 
 	for k, s := range m.storageServices {
-		if s.GetWriterType() == CHANNEL {
-			chanConsumer = append(chanConsumer, k)
-		} else if s.GetWriterType() == STREAM {
-			readerConsumer = append(readerConsumer, k)
+		if w, ok := s.(ChannelWriter); ok {
+			chanConsumer[k] = w
 		} else {
-			return fmt.Errorf("unsupported storage service with stream type: %v", s.GetWriterType())
+			streamConsumer[k] = s
 		}
 	}
 
 	// connect all io.Reader consumer with a reader
-	readers, writer, closer := m.createIOReaders(len(readerConsumer))
-	for i, s := range readerConsumer {
-		func(i int, st string) {
+	readers, writer, closer := m.createIOReaders(len(streamConsumer))
+	i := 0
+	for _, s := range streamConsumer {
+		func(i int, w Storage) {
 			eg.Go(func() error {
-				return m.storageServices[st].WriteStream(name, mimeType, readers[i], nil, dlo)
+				return w.WriteStream(name, mimeType, readers[i], nil, dlo)
 			})
 		}(i, s)
 		i++
@@ -118,12 +117,14 @@ func (m *Manager) WriteStreamAll(name, mimeType string, body <-chan StreamEvent,
 
 	// connect all channel consumer with a channel
 	channels := m.createChannels(len(chanConsumer), 50)
-	for i, s := range chanConsumer {
-		func(i int, st string) {
+	i = 0
+	for _, s := range chanConsumer {
+		func(i int, w ChannelWriter) {
 			eg.Go(func() error {
-				return m.storageServices[st].WriteChannel(name, mimeType, channels[i], nil, dlo)
+				return w.WriteChannel(name, mimeType, channels[i], nil, dlo)
 			})
 		}(i, s)
+		i++
 	}
 
 	go func() {
@@ -138,7 +139,7 @@ func (m *Manager) WriteStreamAll(name, mimeType string, body <-chan StreamEvent,
 				return
 			}
 			// write bytes all io.Reader consumer
-			if len(readerConsumer) > 0 {
+			if len(streamConsumer) > 0 {
 				writer.Write(v.ToByte())
 			}
 			// send the event as is to all channel consumer
@@ -157,6 +158,7 @@ func (m *Manager) WriteStream(storageService, name, mimeType string, body io.Rea
 	if !ok {
 		return fmt.Errorf("unknown storage service")
 	}
+
 	return s.WriteStream(name, mimeType, body, tags, dlo)
 }
 
@@ -167,7 +169,6 @@ func (m *Manager) WriteFolderAll(path string) (errs error) {
 			errs = multierror.Append(errs, &Error{message: err.Error(), Storage: k})
 		}
 	}
-
 	return
 }
 

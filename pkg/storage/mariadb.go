@@ -129,11 +129,6 @@ func (m *MariaDBStream) GetStatusErrorByKey(backupKey string) string {
 	return ""
 }
 
-// GetWriterType implements interface
-func (m *MariaDBStream) GetWriterType() WriterType {
-	return CHANNEL
-}
-
 // WriteFolder implements interface
 func (m *MariaDBStream) WriteFolder(p string) (err error) {
 	log.Debug("SQL dump path: ", p)
