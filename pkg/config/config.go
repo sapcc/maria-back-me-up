@@ -123,12 +123,13 @@ type Disk struct {
 
 // MariaDBStream holds info for the replication to another MariaDB
 type MariaDBStream struct {
-	Name     string    `yaml:"name"`
-	Host     string    `yaml:"host"`
-	Port     int       `yaml:"port"`
-	User     string    `yaml:"user"`
-	Password string    `yaml:"password"`
-	DumpTool DumpTools `yaml:"full_dump_tool"`
+	Name             string    `yaml:"name"`
+	Host             string    `yaml:"host"`
+	Port             int       `yaml:"port"`
+	User             string    `yaml:"user"`
+	Password         string    `yaml:"password"`
+	DumpTool         DumpTools `yaml:"full_dump_tool"`
+	ReplicateSchemas []string  `yaml:"replicate_schemas"`
 }
 
 // OAuth holds info for the api oauth middleware
