@@ -33,13 +33,15 @@ import (
 type (
 	// MockDB struct for testing
 	MockDB struct {
-		cfg         config.Config
-		storage     *storage.Manager
-		logPosition LogPosition
-		flushTimer  *time.Timer
-		healthError bool
-		incError    bool
-		dbError     bool
+		cfg                     config.Config
+		storage                 *storage.Manager
+		logPosition             LogPosition
+		flushTimer              *time.Timer
+		healthError             bool
+		incError                bool
+		dbError                 bool
+		binlogFormat            string
+		binlogAnnotateRowEvents bool
 	}
 )
 
@@ -161,6 +163,17 @@ func (m *MockDB) deleteMariaDBDataDir() (err error) {
 // GetDatabaseDiff implements interface
 func (m *MockDB) GetDatabaseDiff(c1, c2 config.DatabaseConfig) (out []byte, err error) {
 	return
+}
+
+// GetBinlogConfig returns binlog config flags
+func (m *MockDB) GetBinlogConfig() (format string, annotateRowEvents bool, err error) {
+	return m.binlogFormat, m.binlogAnnotateRowEvents, nil
+}
+
+// SetBinlogFlags sets test values
+func (m *MockDB) SetBinlogFlags(format string, annotateRowEvents bool) {
+	m.binlogFormat = format
+	m.binlogAnnotateRowEvents = annotateRowEvents
 }
 
 // WithError implements interface
