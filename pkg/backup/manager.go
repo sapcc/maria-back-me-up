@@ -32,6 +32,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	cron "github.com/robfig/cron/v3"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
+	"github.com/sapcc/maria-back-me-up/pkg/constants"
 	"github.com/sapcc/maria-back-me-up/pkg/database"
 	dberror "github.com/sapcc/maria-back-me-up/pkg/error"
 	"github.com/sapcc/maria-back-me-up/pkg/k8s"
@@ -84,6 +85,18 @@ func init() {
 
 // NewManager returns a manager instance
 func NewManager(s *storage.Manager, db database.Database, k *k8s.Database, c config.Config) (m *Manager, err error) {
+
+	if c.Storages.MariaDB != nil {
+		if db.GetConfig().Type == constants.MARIADB {
+			err = checkSupportsBinlogStreaming(db)
+			if err != nil {
+				return
+			}
+		} else {
+			return nil, fmt.Errorf("streaming backups requires a MariaDB")
+		}
+	}
+
 	us := UpdateStatus{
 		FullBackup: make(map[string]int, 0),
 		IncBackup:  make(map[string]int, 0),
@@ -430,4 +443,20 @@ func checkBackupDirExistsAndCreate(d string) (p string, err error) {
 		return d, err
 	}
 	return
+}
+
+func checkSupportsBinlogStreaming(db database.Database) (err error) {
+	if binlogCfg, ok := db.(database.BinlogConfig); ok {
+		format, annotateRowEvents, err := binlogCfg.GetBinlogConfig()
+		if err != nil {
+			return fmt.Errorf("error checking binlog format: %s", err.Error())
+		}
+		// Currently only query events and annotated row events are supported
+		if !(format == "STATEMENT" || annotateRowEvents) {
+			return fmt.Errorf("streaming not supported for binlog_format '%s' and binlog_annotate_row_events '%t'", format, annotateRowEvents)
+		}
+	} else {
+		return fmt.Errorf("streaming backups requires a MariaDB")
+	}
+	return nil
 }

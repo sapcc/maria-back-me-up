@@ -19,6 +19,7 @@ package backup
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -157,6 +158,86 @@ func TestManagerStorageErrorHandling(t *testing.T) {
 		t.Errorf("expected incBackup status to be 1, but got: %d.", m.updateSts.IncBackup["s2"])
 	}
 	cleanup()
+}
+
+func TestManagerStreamingNotSupportedError(t *testing.T) {
+	cfg := config.Config{
+		Namespace: "test",
+		Backup: config.BackupService{
+			BackupDir:              backupDir,
+			FullBackupCronSchedule: "*/20 * * * *",
+		},
+		Database: config.DatabaseConfig{
+			Type: "mock",
+		},
+		Storages: config.StorageService{
+			MariaDB: []config.MariaDBStream{
+				{Name: "mariadb"},
+			},
+		},
+	}
+	s1 := storage.NewMockStorage(cfg, "s1", "log")
+	sm, err := storage.NewManager(cfg.Storages, "test", "")
+	sm.AddStorage(s1)
+
+	db, err := database.NewMockDB(cfg, sm)
+	if err != nil {
+		return
+	}
+
+	_, err = NewManager(sm, db, nil, cfg)
+	if !strings.Contains(err.Error(), "streaming backups requires a MariaDB") {
+		t.Errorf("expected error streaming requires mariadb")
+	}
+
+}
+
+func TestCheckSupportsBinlogStreaming(t *testing.T) {
+
+	cfg := config.Config{
+		Namespace: "test",
+		Backup: config.BackupService{
+			BackupDir:              backupDir,
+			FullBackupCronSchedule: "*/20 * * * *",
+		},
+		Database: config.DatabaseConfig{
+			Type: "mock",
+		},
+		Storages: config.StorageService{
+			MariaDB: []config.MariaDBStream{
+				{Name: "stream"},
+			},
+		},
+	}
+
+	db, err := database.NewMockDB(cfg, nil)
+	if err != nil {
+		return
+	}
+
+	testCases := []struct {
+		Format            string
+		AnnotateRowEvents bool
+		ExpectError       bool
+	}{
+		{"STATEMENT", true, false},
+		{"STATEMENT", false, false},
+		{"ROWS", false, true},
+		{"ROWS", true, false},
+		{"MIXED", false, true},
+		{"MIXED", true, false},
+	}
+
+	for _, test := range testCases {
+		db.SetBinlogFlags(test.Format, test.AnnotateRowEvents)
+		err = checkSupportsBinlogStreaming(db)
+		if err != nil && !test.ExpectError {
+			t.Errorf("unexpected error: %s", err.Error())
+		}
+		if err == nil && test.ExpectError {
+			t.Errorf("expected streaming not supported error for binlog_format '%s' and binlog_annotate_row_events '%t'", test.Format, test.AnnotateRowEvents)
+		}
+	}
 }
 
 func setup(t *testing.T) (m *Manager, db *database.MockDB, cfg config.Config) {

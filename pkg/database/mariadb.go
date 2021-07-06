@@ -27,7 +27,7 @@ import (
 )
 
 type (
-	// MariaDB databse struct
+	// MariaDB database struct
 	MariaDB struct {
 		cfg         config.Config
 		storage     *storage.Manager
@@ -44,6 +44,11 @@ type (
 		GTID string `yaml:"GTID"`
 	}
 )
+
+// BinlogConfig interface
+type BinlogConfig interface {
+	GetBinlogConfig() (format string, annotateRowEvents bool, err error)
+}
 
 // NewMariaDB creates a mariadb databse instance
 func NewMariaDB(c config.Config, sm *storage.Manager, k *k8s.Database) (Database, error) {
@@ -650,4 +655,33 @@ func (m *MariaDB) GetDatabaseDiff(c1, c2 config.DatabaseConfig) (out []byte, err
 
 	out, err = e.CombinedOutput()
 	return
+}
+
+// GetBinlogConfig returns the values for 'BINLOG_FORMAT' and 'BINLOG_ANNOTATE_ROW_EVENTS'
+func (m *MariaDB) GetBinlogConfig() (format string, annotateRowEvents bool, err error) {
+
+	conn, err := client.Connect(fmt.Sprintf("%s:%v", m.cfg.Database.Host, m.cfg.Database.Port), m.cfg.Database.User, m.cfg.Database.Password, "")
+
+	if err != nil {
+		return format, annotateRowEvents, fmt.Errorf("error connecting to source db: %s", err.Error())
+	}
+
+	result, err := conn.Execute("show variables like 'binlog_format';")
+	if err != nil {
+		return format, annotateRowEvents, fmt.Errorf("error querying binlog format: %s", err.Error())
+	}
+	format = string(result.Values[0][1].([]uint8))
+
+	result, err = conn.Execute("show variables like 'binlog_annotate_row_events';")
+	if err != nil {
+		return format, annotateRowEvents, fmt.Errorf("error querying binlog annnotate rows flag: %s", err.Error())
+	}
+
+	if string(result.Values[0][1].([]uint8)) == "ON" {
+		annotateRowEvents = true
+	} else {
+		annotateRowEvents = false
+	}
+
+	return format, annotateRowEvents, nil
 }
