@@ -106,6 +106,28 @@ done &
 echo "Setting up secondary mariadb for streaming tests"
 mysql_install_db --user=mysql --datadir=/var/lib/mysqlstream --basedir=/usr
 mysqld_safe --skip-networking=0 --nowatch --socket=/tmp/mysqlstream.sock --port=3307 --datadir=/var/lib/mysqlstream
+
+execute() {
+    statement="$1"
+    if [ -n "$statement" ]; then
+        mysql -ss $mysql_options -e "$statement"
+    else
+        cat /dev/stdin | mysql -ss $mysql_options
+    fi
+}
+
+for i in `seq 30 -1 0`; do
+    if execute 'SELECT 1' &> /dev/null; then
+        break
+    fi
+    echo 'MySQL init process in progress...'
+    sleep 1
+done
+if [ "$i" = 0 ]; then
+    echo >&2 'MySQL init process failed.'
+    exit 1
+fi
+
 sudo mysql -S/tmp/mysqlstream.sock -e "SET PASSWORD FOR 'root'@'localhost' = PASSWORD('streaming');"
 
 echo "Running command: $@"
