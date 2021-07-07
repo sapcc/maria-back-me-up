@@ -14,6 +14,7 @@ require (
 	github.com/namsral/flag v1.7.4-pre
 	github.com/ncw/swift v1.0.50
 	github.com/pingcap/errors v0.11.0
+	github.com/pkg/errors v0.8.1
 	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
 	github.com/prometheus/client_golang v1.0.0
 	github.com/prometheus/common v0.7.0 // indirect

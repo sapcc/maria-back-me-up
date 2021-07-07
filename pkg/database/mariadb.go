@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -269,10 +268,10 @@ func (m *MariaDB) StartIncBackup(ctx context.Context, mp LogPosition, dir string
 		MaxReconnectAttempts: 10,
 	}
 	syncer := replication.NewBinlogSyncer(cfg)
-	binlogReader, binlogWriter := io.Pipe()
+	binlogChan := make(chan storage.StreamEvent, 5)
 	defer func() {
 		log.Debug("closing binlog syncer")
-		binlogWriter.Close()
+		close(binlogChan)
 		syncer.Close()
 		if m.flushTimer != nil {
 			m.flushTimer.Stop()
@@ -307,20 +306,20 @@ func (m *MariaDB) StartIncBackup(ctx context.Context, mp LogPosition, dir string
 		} else if ev.Header.EventType == replication.FORMAT_DESCRIPTION_EVENT {
 			// FormateDescriptionEvent is the first event in binlog, we will close old writer and create new ones
 			if binlogFile != "" {
-				binlogWriter.Close()
+				close(binlogChan)
 				time.Sleep(100 * time.Millisecond)
 			}
-			binlogReader, binlogWriter = io.Pipe()
+			binlogChan = make(chan storage.StreamEvent, 5)
 			var eg errgroup.Group
 			eg.Go(func() error {
-				return m.storage.WriteStreamAll(path.Join(dir, binlogFile), "", binlogReader, false)
+				return m.storage.WriteStreamAll(path.Join(dir, binlogFile), "", binlogChan, false)
 			})
 			go m.handleWriteErrors(ctx, &eg, ch)
 
-			binlogWriter.Write(replication.BinLogFileHeader)
+			binlogChan <- &storage.ByteEvent{Value: replication.BinLogFileHeader}
 
 		}
-		binlogWriter.Write(ev.RawData)
+		binlogChan <- &storage.BinlogEvent{Value: ev}
 
 		switch ev.Event.(type) {
 		case *replication.RowsEvent:

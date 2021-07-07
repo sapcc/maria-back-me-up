@@ -103,6 +103,10 @@ while :
     fi
 done &
 
+echo "Setting up secondary mariadb for streaming tests"
+mysql_install_db --user=mysql --datadir=/var/lib/mysqlstream --basedir=/usr
+mysqld_safe --skip-networking=0 --nowatch --socket=/tmp/mysqlstream.sock --port=3307 --datadir=/var/lib/mysqlstream
+sudo mysql -S/tmp/mysqlstream.sock -e "SET PASSWORD FOR 'root'@'localhost' = PASSWORD('streaming');"
 
 echo "Running command: $@"
 set +e

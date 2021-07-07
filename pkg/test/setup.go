@@ -31,6 +31,7 @@ import (
 	"github.com/sapcc/maria-back-me-up/pkg/backup"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/database"
+	"github.com/sapcc/maria-back-me-up/pkg/log"
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
 )
 
@@ -41,41 +42,56 @@ const clearDBFile = "./testclean.sql"
 
 //SetupOptions contains optional arguments for test.Setup().
 type SetupOptions struct {
-	DBType           string
-	DiskStorageName  string
-	WithSwiftStorage bool
-	WithK8s          bool
-	DumpTool         config.DumpTools
+	DBType            string
+	WithDiskStorage   bool
+	WithSwiftStorage  bool
+	WithK8s           bool
+	WithStreamStorage bool
+	DumpTool          config.DumpTools
 }
 
 // Setup the manager and database for testing
 func Setup(t *testing.T, opts *SetupOptions) (m *backup.Manager, cfg config.Config) {
+	log.SetLevel(6)
 	cfg = config.Config{
 		Namespace: "test",
 		SideCar:   func(b bool) *bool { return &b }(false),
 		Backup: config.BackupService{
 			BackupDir:              backupDir,
-			FullBackupCronSchedule: "* * * * *",
+			FullBackupCronSchedule: "*/20 * * * *",
 		},
 		Database: config.DatabaseConfig{
-			Type:          opts.DBType,
-			Host:          "127.0.0.1",
-			Port:          3306,
-			User:          "root",
-			Password:      "test",
+			Type:     opts.DBType,
+			Host:     "127.0.0.1",
+			Port:     3306,
+			User:     "root",
+			Password: "test",
+
 			LogNameFormat: "mysqld-bin",
 			DumpTool:      opts.DumpTool,
 			Databases:     []string{"service"},
 			VerifyTables:  []string{"service.tasks"},
 		},
 	}
-	if opts.DiskStorageName != "" {
+	if opts.WithDiskStorage {
 		cfg.Storages.Disk = []config.Disk{{
-			Name:      opts.DiskStorageName,
-			BasePath:  filepath.Join(backupDir, opts.DiskStorageName),
+			Name:      "DiskTest",
+			BasePath:  filepath.Join(backupDir, "DiskTest"),
 			Retention: 1,
 		}}
 	}
+
+	if opts.WithStreamStorage {
+		cfg.Storages.MariaDB = []config.MariaDBStream{{
+			Name:     "StreamingTest",
+			Host:     "127.0.0.1",
+			Port:     3307,
+			User:     "root",
+			Password: "streaming",
+			DumpTool: config.Mysqldump,
+		}}
+	}
+
 	s, err := storage.NewManager(cfg.Storages, cfg.ServiceName, cfg.Database.LogNameFormat)
 	if err != nil {
 		return
@@ -94,8 +110,20 @@ func Setup(t *testing.T, opts *SetupOptions) (m *backup.Manager, cfg config.Conf
 	}
 
 	// Prepare Source DB
-	prepareDB(cfg.Database.Port, cfg.Database.Host, cfg.Database.User, cfg.Database.Password, sourceSQLFile)
+	err = prepareDB(cfg.Database.Port, cfg.Database.Host, cfg.Database.User, cfg.Database.Password, sourceSQLFile)
+	if err != nil {
+		t.Errorf("failed to prepare source db: %s", err.Error())
+		t.FailNow()
+	}
 
+	if opts.WithStreamStorage {
+		// Clear Secondary DB
+		err = prepareDB(3307, "127.0.0.1", "root", "streaming", clearDBFile)
+		if err != nil {
+			t.Errorf("failed to prepare target db: %s", err.Error())
+			t.FailNow()
+		}
+	}
 	return
 }
 

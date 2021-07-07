@@ -79,9 +79,10 @@ type DatabaseConfig struct {
 
 // StorageService list of available storage services
 type StorageService struct {
-	S3    []S3    `yaml:"s3"`
-	Swift []Swift `yaml:"swift"`
-	Disk  []Disk  `yaml:"disk"`
+	S3      []S3            `yaml:"s3"`
+	Swift   []Swift         `yaml:"swift"`
+	Disk    []Disk          `yaml:"disk"`
+	MariaDB []MariaDBStream `yaml:"maria_db"`
 }
 
 // S3 hols info for the AWS S3 storage service
@@ -118,6 +119,16 @@ type Disk struct {
 	Name      string `yaml:"name"`
 	BasePath  string `yaml:"base_path"`
 	Retention int    `yaml:"retention"`
+}
+
+// MariaDBStream holds info for the replication to another MariaDB
+type MariaDBStream struct {
+	Name     string    `yaml:"name"`
+	Host     string    `yaml:"host"`
+	Port     int       `yaml:"port"`
+	User     string    `yaml:"user"`
+	Password string    `yaml:"password"`
+	DumpTool DumpTools `yaml:"full_dump_tool"`
 }
 
 // OAuth holds info for the api oauth middleware

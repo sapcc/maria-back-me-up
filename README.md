@@ -13,6 +13,8 @@ List of features currently available:
 - UI to see and select an available backup to restore to
 - UI shows status of backup verification
 - UI/API can be secured via OAuth openID
+- Replication via a full dump and binlog to another MariaDB
+  - restore from the replica is not supported
 
 ## UI
 The UI is available via localhost:8081/
@@ -97,6 +99,13 @@ storage_services:
       password: # os password
       region: # region name
       container_name: # name of the container the backups should be store in
+  maria_db:
+    - name: # name of the storage
+      host: # host of the MariaDB instance
+      port: # MariaDB port number
+      user: # MariaDB user with admin rights
+      password: # user password
+      full_dump_tool: # dump tool used to restore the full dump
   disk:
     - base_path: # root folder for the backups
       retention: # backup retention in number of full backups

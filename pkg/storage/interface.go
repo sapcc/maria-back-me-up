@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"time"
+
+	"github.com/siddontang/go-mysql/replication"
 )
 
 // Storage interface
@@ -28,6 +30,12 @@ type Storage interface {
 	GetStatusError() map[string]string
 	// GetStatusErrorByKey returns error per backup
 	GetStatusErrorByKey(backupKey string) string
+}
+
+// ChannelWriter for storages that do not support consuming io.Reader
+type ChannelWriter interface {
+	// WriteChannel writes the contents of the channel to the storage
+	WriteChannel(name, mimeType string, body <-chan StreamEvent, tags map[string]string, dlo bool) (err error)
 }
 
 // LastSuccessfulBackupFile name of meta file that contains the information of the last successful backup
@@ -82,4 +90,29 @@ type Error struct {
 
 func (s *Error) Error() string {
 	return fmt.Sprintf("Storage %s error: %s", s.Storage, s.message)
+}
+
+// StreamEvent used to send byte slices or binlog events to the storages
+type StreamEvent interface {
+	ToByte() []byte
+}
+
+// ByteEvent holds a slice of bytes
+type ByteEvent struct {
+	Value []byte
+}
+
+// ToByte returns the bytes of the event
+func (b *ByteEvent) ToByte() []byte {
+	return b.Value
+}
+
+// BinlogEvent holds a binlog event
+type BinlogEvent struct {
+	Value *replication.BinlogEvent
+}
+
+// ToByte returns the byte content of a binlog event
+func (b *BinlogEvent) ToByte() []byte {
+	return b.Value.RawData
 }

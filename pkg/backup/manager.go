@@ -164,7 +164,7 @@ func (m *Manager) scheduleBackup(ctx context.Context) {
 	}
 	// Stop binlog
 	m.stopIncBackup()
-	log.Debug("check if db is up and runnging")
+	log.Debug("check if db is up and running")
 	if err := m.Db.Up(2*time.Minute, false); err != nil {
 		log.Error("cannot connect to database")
 		m.Stop()
@@ -173,7 +173,7 @@ func (m *Manager) scheduleBackup(ctx context.Context) {
 	}
 	m.lastBackupTime = time.Now().Format(time.RFC3339)
 	if err := m.createTableChecksum(m.lastBackupTime); err != nil {
-		logger.Error("cannot create checksum", err)
+		logger.Error("cannot create checksum: ", err)
 	}
 	bpath := path.Join(m.cfg.Backup.BackupDir, m.lastBackupTime)
 	if ctx.Err() != nil {
@@ -353,6 +353,10 @@ func (m *Manager) onBinlogRotation(c chan error) {
 }
 
 func (m *Manager) createTableChecksum(backupTime string) (err error) {
+	if m.cfg.Database.VerifyTables == nil || len(m.cfg.Database.VerifyTables) == 0 {
+		logger.Info("no verify tables supplied. skipping table checksums")
+		return
+	}
 	cs, err := m.Db.GetCheckSumForTable(m.cfg.Database.VerifyTables, false)
 	if err != nil {
 		return
@@ -361,7 +365,17 @@ func (m *Manager) createTableChecksum(backupTime string) (err error) {
 	if err != nil {
 		return
 	}
-	err = m.Storage.WriteStreamAll(backupTime+"/tablesChecksum.yaml", "", bytes.NewReader(out), false)
+	events := make(chan storage.StreamEvent, 1)
+	errors := make(chan error, 1)
+	defer close(errors)
+
+	events <- &storage.ByteEvent{Value: out}
+
+	go func() {
+		errors <- m.Storage.WriteStreamAll(backupTime+"/tablesChecksum.yaml", "", events, false)
+	}()
+	close(events)
+	err = <-errors
 	if err != nil {
 		logger.Error(fmt.Errorf("cannot upload table checksums: %s", err.Error()))
 		return

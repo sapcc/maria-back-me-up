@@ -19,7 +19,6 @@ package database
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -108,8 +107,8 @@ func (m *MockDB) StartIncBackup(ctx context.Context, mp LogPosition, dir string,
 		ch <- fmt.Errorf("inc backup error")
 		return
 	}
-	binlogReader, _ := io.Pipe()
-	err = m.storage.WriteStreamAll("path", "", binlogReader, false)
+	binlogChan := make(chan storage.StreamEvent, 1)
+	err = m.storage.WriteStreamAll("path", "", binlogChan, false)
 	ch <- err
 	return
 }
