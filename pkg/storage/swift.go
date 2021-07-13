@@ -103,8 +103,18 @@ func (s *Swift) WriteFolder(p string) (err error) {
 func (s *Swift) WriteStream(name, mimeType string, body io.Reader, tags map[string]string, dlo bool) (err error) {
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(body)
+	t := strings.Split(name, "/")
+	var expire time.Time
+	if len(t) == 2 {
+		// uses the full backup timestamp
+		expire, err = time.Parse(time.RFC3339, t[0])
+		if err != nil {
+			expire = time.Now()
+			err = nil
+		}
+	}
 	backupKey := path.Join(s.serviceName, name)
-	headers := swift.Headers{"X-Delete-At": strconv.FormatInt(time.Now().AddDate(0, 0, 7).Unix(), 10)}
+	headers := swift.Headers{"X-Delete-At": strconv.FormatInt(expire.AddDate(0, 0, 7).Unix(), 10)}
 	for k, v := range tags {
 		headers["X-Object-Meta-"+k] = v
 	}
