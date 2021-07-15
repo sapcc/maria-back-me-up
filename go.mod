@@ -9,6 +9,7 @@ require (
 	github.com/googleapis/gnostic v0.3.1 // indirect
 	github.com/gorilla/sessions v1.2.0
 	github.com/hashicorp/go-multierror v1.0.0
+	github.com/jmoiron/sqlx v1.3.4 // indirect
 	github.com/labstack/echo v3.3.10+incompatible
 	github.com/labstack/gommon v0.3.0 // indirect
 	github.com/namsral/flag v1.7.4-pre

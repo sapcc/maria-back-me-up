@@ -17,24 +17,28 @@
 package storage
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path"
 	"strconv"
-	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
-	"github.com/siddontang/go-mysql/client"
+
+	// blank import of mysql driver for database/sql
+	_ "github.com/siddontang/go-mysql/driver"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 )
 
 // MariaDBStream struct is ...
 type MariaDBStream struct {
+	db          *sql.DB
 	cfg         config.MariaDBStream
 	serviceName string
 	statusError map[string]string
@@ -42,7 +46,17 @@ type MariaDBStream struct {
 
 // NewMariaDBStream creates a new mariadbstream storage object
 func NewMariaDBStream(c config.MariaDBStream, serviceName string) (m *MariaDBStream, err error) {
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@%s:%d", c.User, c.Password, c.Host, c.Port))
+	if err != nil {
+		return nil, fmt.Errorf("error opening db %s: %s", serviceName, err.Error())
+	}
+	err = db.Ping()
+	if err != nil {
+		return nil, fmt.Errorf("failed to ping db %s: %s", serviceName, err.Error())
+	}
+
 	return &MariaDBStream{
+		db:          db,
 		cfg:         c,
 		serviceName: serviceName,
 	}, nil
@@ -55,17 +69,11 @@ func (m *MariaDBStream) WriteStream(fileName, mimeType string, body io.Reader, t
 
 // WriteChannel implements interface
 func (m *MariaDBStream) WriteChannel(name, mimeType string, body <-chan StreamEvent, tags map[string]string, dlo bool) (err error) {
-
-	conn, err := client.Connect(strings.Join([]string{m.cfg.Host, strconv.Itoa(m.cfg.Port)}, ":"), m.cfg.User, m.cfg.Password, "")
-
-	if err != nil {
-		return fmt.Errorf("Error connecting to target mariadb: %w", err)
-	}
-	defer conn.Close()
-
+	ctx := context.Background()
 	for {
 		value, ok := <-body
 		if !ok {
+			ctx.Done()
 			return
 		}
 		switch value.(type) {
@@ -74,29 +82,14 @@ func (m *MariaDBStream) WriteChannel(name, mimeType string, body <-chan StreamEv
 			switch event.Header.EventType {
 			case replication.QUERY_EVENT:
 				queryEvent := event.Event.(*replication.QueryEvent)
-				err := conn.UseDB(string(queryEvent.Schema))
+				err = replicateQueryEvent(ctx, m.db, queryEvent)
 				if err != nil {
-					switch err := errors.Cause(err).(type) {
-					case *mysql.MyError:
-						if err.Code == 1049 {
-							// Unknown database, unset DB. This can be a `create database` query
-							conn.UseDB("")
-						} else {
-							return fmt.Errorf("cannot change schema: %v", err.Error())
-						}
-					default:
-						return fmt.Errorf("cannot change schema: %v", err.Error())
-					}
-				}
-
-				_, err = conn.Execute(string(queryEvent.Query))
-				if err != nil {
-					return fmt.Errorf("execution of query failed: %v", err.Error())
+					return fmt.Errorf("replication of query failed: %s", err.Error())
 				}
 
 			case replication.MARIADB_ANNOTATE_ROWS_EVENT:
 				annotateRowsEvent := event.Event.(*replication.MariadbAnnotateRowsEvent)
-				_, err := conn.Execute(string(annotateRowsEvent.Query))
+				_, err := m.db.Exec(string(annotateRowsEvent.Query))
 				if err != nil {
 					return fmt.Errorf("execution of query failed: %v", err.Error())
 				}
@@ -171,6 +164,37 @@ func (m *MariaDBStream) WriteFolder(p string) (err error) {
 	}
 
 	log.Debug("myloader restore finished")
+	return
+}
+
+// replicateQueryEvent replicates the query contained by the event.
+// It is not guaranteed that the query uses 'schema.table' syntax.
+// The transaction is necessary to ensure all statements are executed on the same db connection.
+// In case of a `create [database | schema]` query the `USE SCHEMA` will result in ERROR 1049. Thus unset it with `USE DUMMY`
+func replicateQueryEvent(ctx context.Context, db *sql.DB, event *replication.QueryEvent) (err error) {
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("cannot get db connection: %s", err.Error())
+	}
+	defer conn.Close()
+
+	_, err = conn.ExecContext(ctx, "use "+string(event.Schema))
+	if err != nil {
+		switch err := errors.Cause(err).(type) {
+		case *mysql.MyError:
+			if err.Code == 1049 {
+				// Unknown database, unset DB. This can be a `create database` query
+				conn.ExecContext(ctx, "use dummy")
+			} else {
+				return fmt.Errorf("cannot change schema: %v", err.Error())
+			}
+		}
+	}
+	_, err = conn.ExecContext(ctx, string(event.Query))
+
+	if err != nil {
+		return fmt.Errorf("execution of query failed: %v", err.Error())
+	}
 	return
 }
 
