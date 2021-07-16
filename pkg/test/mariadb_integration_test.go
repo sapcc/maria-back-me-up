@@ -74,10 +74,10 @@ func TestBackupRestore(t *testing.T) {
 
 func testBackupRestore(t *testing.T, test testCase) {
 	m, cfg := Setup(t, &SetupOptions{
-		DBType:            constants.MARIADB,
-		DumpTool:          config.Mysqldump,
-		WithDiskStorage:   test.WithDisk,
-		WithStreamStorage: test.WithStream,
+		DBType:          constants.MARIADB,
+		DumpTool:        config.Mysqldump,
+		WithDiskStorage: test.WithDisk,
+		StreamStorage:   &StreamStorageOptions{Enabled: test.WithStream},
 	})
 
 	// Perform Backup

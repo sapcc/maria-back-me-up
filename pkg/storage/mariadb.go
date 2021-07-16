@@ -59,7 +59,6 @@ func NewMariaDBStream(c config.MariaDBStream, serviceName string) (m *MariaDBStr
 	}
 
 	replSchemas := make(map[string]struct{}, len(c.ReplicateSchemas))
-
 	for _, schema := range c.ReplicateSchemas {
 		replSchemas[schema] = struct{}{}
 	}
@@ -93,9 +92,11 @@ func (m *MariaDBStream) WriteChannel(name, mimeType string, body <-chan StreamEv
 			case replication.QUERY_EVENT:
 				queryEvent := event.Event.(*replication.QueryEvent)
 
-				if _, ok := m.replSchemas[string(queryEvent.Schema)]; !ok {
-					// only schemas
-					continue
+				if len(m.replSchemas) > 0 {
+					if _, ok := m.replSchemas[string(queryEvent.Schema)]; !ok {
+						// query does not belong to a
+						continue
+					}
 				}
 
 				err = replicateQueryEvent(ctx, m.db, queryEvent)
@@ -225,8 +226,8 @@ func replicateQueryEvent(ctx context.Context, db *sql.DB, event *replication.Que
 }
 
 // extractSchemas filters the full backup dump.sql and only retains statements for schemas specified in the config
-func (m *MariaDBStream) extractSchemas(backupPath string) (filteredBackup string, err error) {
-	filteredBackupPath := filepath.Join(filepath.Base(backupPath), "dump_filtered.sql")
+func (m *MariaDBStream) extractSchemas(backupPath string) (filteredBackupPath string, err error) {
+	filteredBackupPath = filepath.Join(filepath.Dir(backupPath), "dump_filtered.sql")
 	file, err := os.Create(filteredBackupPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to create file for filtered backup: %s", err.Error())
@@ -251,8 +252,8 @@ func (m *MariaDBStream) extractSchemas(backupPath string) (filteredBackup string
 			return "", fmt.Errorf("failed to write schema %s to file: %s", s, err.Error())
 		}
 	}
-	file.Close()
-	return filteredBackup, nil
+
+	return filteredBackupPath, nil
 }
 
 // getBackupMetadata extracts the backup metadata from the full dump

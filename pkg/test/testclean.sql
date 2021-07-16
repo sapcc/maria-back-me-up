@@ -1,1 +1,2 @@
 DROP DATABASE IF EXISTS service;
+DROP DATABASE IF EXISTS application;

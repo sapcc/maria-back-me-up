@@ -40,14 +40,20 @@ const backupDir = "./backupDirTest"
 const sourceSQLFile = "./testdata.sql"
 const clearDBFile = "./testclean.sql"
 
+// StreamStorageOptions to configure test setup
+type StreamStorageOptions struct {
+	Enabled          bool
+	ReplicateSchemas []string
+}
+
 //SetupOptions contains optional arguments for test.Setup().
 type SetupOptions struct {
-	DBType            string
-	WithDiskStorage   bool
-	WithSwiftStorage  bool
-	WithK8s           bool
-	WithStreamStorage bool
-	DumpTool          config.DumpTools
+	DBType           string
+	WithDiskStorage  bool
+	WithSwiftStorage bool
+	WithK8s          bool
+	StreamStorage    *StreamStorageOptions
+	DumpTool         config.DumpTools
 }
 
 // Setup the manager and database for testing
@@ -81,14 +87,15 @@ func Setup(t *testing.T, opts *SetupOptions) (m *backup.Manager, cfg config.Conf
 		}}
 	}
 
-	if opts.WithStreamStorage {
+	if opts.StreamStorage.Enabled {
 		cfg.Storages.MariaDB = []config.MariaDBStream{{
-			Name:     "StreamingTest",
-			Host:     "127.0.0.1",
-			Port:     3307,
-			User:     "root",
-			Password: "streaming",
-			DumpTool: config.Mysqldump,
+			Name:             "StreamingTest",
+			Host:             "127.0.0.1",
+			Port:             3307,
+			User:             "root",
+			Password:         "streaming",
+			DumpTool:         config.Mysqldump,
+			ReplicateSchemas: opts.StreamStorage.ReplicateSchemas,
 		}}
 	}
 
@@ -116,7 +123,7 @@ func Setup(t *testing.T, opts *SetupOptions) (m *backup.Manager, cfg config.Conf
 		t.FailNow()
 	}
 
-	if opts.WithStreamStorage {
+	if opts.StreamStorage.Enabled {
 		// Clear Secondary DB
 		err = prepareDB(3307, "127.0.0.1", "root", "streaming", clearDBFile)
 		if err != nil {
