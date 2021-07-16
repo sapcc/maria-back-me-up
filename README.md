@@ -13,8 +13,10 @@ List of features currently available:
 - UI to see and select an available backup to restore to
 - UI shows status of backup verification
 - UI/API can be secured via OAuth openID
-- Replication via a full dump and binlog to another MariaDB
-  - restore from the replica is not supported
+- Replication of full dump and binlog events to another MariaDB
+  - only QueryEvents are supported
+  - restore from this replicas MariaDB is not supported
+  - verification of this replica is not supported
 
 ## UI
 The UI is available via localhost:8081/
@@ -106,6 +108,7 @@ storage_services:
       user: # MariaDB user with admin rights
       password: # user password
       full_dump_tool: # dump tool used to restore the full dump
+      databases: # if specified, only the listed databases are replicated
   disk:
     - base_path: # root folder for the backups
       retention: # backup retention in number of full backups

@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"strconv"
 
 	"github.com/pkg/errors"
@@ -38,8 +39,10 @@ import (
 
 // MariaDBStream struct is ...
 type MariaDBStream struct {
+	// db connection to the target db
 	db          *sql.DB
 	cfg         config.MariaDBStream
+	databases   map[string]struct{}
 	serviceName string
 	statusError map[string]string
 }
@@ -55,9 +58,15 @@ func NewMariaDBStream(c config.MariaDBStream, serviceName string) (m *MariaDBStr
 		return nil, fmt.Errorf("failed to ping db %s: %s", serviceName, err.Error())
 	}
 
+	databases := make(map[string]struct{}, len(c.Databases))
+	for _, database := range c.Databases {
+		databases[database] = struct{}{}
+	}
+
 	return &MariaDBStream{
 		db:          db,
 		cfg:         c,
+		databases:   databases,
 		serviceName: serviceName,
 	}, nil
 }
@@ -82,6 +91,14 @@ func (m *MariaDBStream) WriteChannel(name, mimeType string, body <-chan StreamEv
 			switch event.Header.EventType {
 			case replication.QUERY_EVENT:
 				queryEvent := event.Event.(*replication.QueryEvent)
+
+				if len(m.databases) > 0 {
+					if _, ok := m.databases[string(queryEvent.Schema)]; !ok {
+						// query does not belong to a
+						continue
+					}
+				}
+
 				err = replicateQueryEvent(ctx, m.db, queryEvent)
 				if err != nil {
 					return fmt.Errorf("replication of query failed: %s", err.Error())
@@ -126,8 +143,18 @@ func (m *MariaDBStream) GetStatusErrorByKey(backupKey string) string {
 // WriteFolder implements interface
 func (m *MariaDBStream) WriteFolder(p string) (err error) {
 	log.Debug("SQL dump path: ", p)
+	backupPath := path.Join(p, "dump.sql")
 
-	dump, err := os.Open(path.Join(p, "dump.sql"))
+	// Should the full dump be filtered to certain DB schemas?
+	if m.cfg.Databases != nil {
+		log.Debug("Extracting schemas from full backup")
+		backupPath, err = m.extractSchemas(backupPath)
+		if err != nil {
+			return fmt.Errorf("failed to write folder: %s", err.Error())
+		}
+	}
+
+	dump, err := os.Open(backupPath)
 	if err != nil {
 		return fmt.Errorf("could not read dump: %s", err.Error())
 	}
@@ -196,6 +223,66 @@ func replicateQueryEvent(ctx context.Context, db *sql.DB, event *replication.Que
 		return fmt.Errorf("execution of query failed: %v", err.Error())
 	}
 	return
+}
+
+// extractSchemas filters the full backup dump.sql and only retains statements for schemas specified in the config
+func (m *MariaDBStream) extractSchemas(backupPath string) (filteredBackupPath string, err error) {
+	filteredBackupPath = filepath.Join(filepath.Dir(backupPath), "dump_filtered.sql")
+	file, err := os.Create(filteredBackupPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to create file for filtered backup: %s", err.Error())
+	}
+	defer file.Close()
+	bytes, err := m.extractBackupMetadata(backupPath)
+	if err != nil {
+		return "", fmt.Errorf("could not extract metadata from full backup: %s", err.Error())
+	}
+	_, err = file.Write(bytes)
+	if err != nil {
+		return "", fmt.Errorf("failed to write backup metadata: %s", err.Error())
+	}
+
+	for _, s := range m.cfg.Databases {
+		bytes, err := m.extractSchema(backupPath, s)
+		if err != nil {
+			return "", fmt.Errorf("could not extract schema %s from full backup: %s", s, err.Error())
+		}
+		_, err = file.Write(bytes)
+		if err != nil {
+			return "", fmt.Errorf("failed to write schema %s to file: %s", s, err.Error())
+		}
+	}
+
+	return filteredBackupPath, nil
+}
+
+// getBackupMetadata extracts the backup metadata from the full dump
+func (m *MariaDBStream) extractBackupMetadata(path string) (bytes []byte, err error) {
+	cmd := exec.Command(
+		"sed",
+		"-n", "/^-- MariaDB dump /,/^-- Current Database: `/p",
+		path,
+	)
+	out, err := cmd.Output()
+
+	if err != nil {
+		return nil, fmt.Errorf("could not extract backup metadata from backup: %s", err.Error())
+	}
+	return out, nil
+}
+
+// extractSchema filters the full backup for all statements related to `schema`
+func (m *MariaDBStream) extractSchema(path, schema string) (bytes []byte, err error) {
+	cmd := exec.Command(
+		"sed",
+		"-n", fmt.Sprintf("/^-- Current Database: `%s`/,/^-- Current Database: `/p", schema),
+		path,
+	)
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("could not extract schema %s from backup: %s", schema, err.Error())
+	}
+	return out, nil
 }
 
 // DownloadLatestBackup implements interface
