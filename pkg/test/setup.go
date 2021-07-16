@@ -42,8 +42,8 @@ const clearDBFile = "./testclean.sql"
 
 // StreamStorageOptions to configure test setup
 type StreamStorageOptions struct {
-	Enabled          bool
-	ReplicateSchemas []string
+	Enabled   bool
+	Databases []string
 }
 
 //SetupOptions contains optional arguments for test.Setup().
@@ -89,13 +89,13 @@ func Setup(t *testing.T, opts *SetupOptions) (m *backup.Manager, cfg config.Conf
 
 	if opts.StreamStorage.Enabled {
 		cfg.Storages.MariaDB = []config.MariaDBStream{{
-			Name:             "StreamingTest",
-			Host:             "127.0.0.1",
-			Port:             3307,
-			User:             "root",
-			Password:         "streaming",
-			DumpTool:         config.Mysqldump,
-			ReplicateSchemas: opts.StreamStorage.ReplicateSchemas,
+			Name:      "StreamingTest",
+			Host:      "127.0.0.1",
+			Port:      3307,
+			User:      "root",
+			Password:  "streaming",
+			DumpTool:  config.Mysqldump,
+			Databases: opts.StreamStorage.Databases,
 		}}
 	}
 

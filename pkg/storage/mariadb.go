@@ -42,7 +42,7 @@ type MariaDBStream struct {
 	// db connection to the target db
 	db          *sql.DB
 	cfg         config.MariaDBStream
-	replSchemas map[string]struct{}
+	databases   map[string]struct{}
 	serviceName string
 	statusError map[string]string
 }
@@ -58,15 +58,15 @@ func NewMariaDBStream(c config.MariaDBStream, serviceName string) (m *MariaDBStr
 		return nil, fmt.Errorf("failed to ping db %s: %s", serviceName, err.Error())
 	}
 
-	replSchemas := make(map[string]struct{}, len(c.ReplicateSchemas))
-	for _, schema := range c.ReplicateSchemas {
-		replSchemas[schema] = struct{}{}
+	databases := make(map[string]struct{}, len(c.Databases))
+	for _, database := range c.Databases {
+		databases[database] = struct{}{}
 	}
 
 	return &MariaDBStream{
 		db:          db,
 		cfg:         c,
-		replSchemas: replSchemas,
+		databases:   databases,
 		serviceName: serviceName,
 	}, nil
 }
@@ -92,8 +92,8 @@ func (m *MariaDBStream) WriteChannel(name, mimeType string, body <-chan StreamEv
 			case replication.QUERY_EVENT:
 				queryEvent := event.Event.(*replication.QueryEvent)
 
-				if len(m.replSchemas) > 0 {
-					if _, ok := m.replSchemas[string(queryEvent.Schema)]; !ok {
+				if len(m.databases) > 0 {
+					if _, ok := m.databases[string(queryEvent.Schema)]; !ok {
 						// query does not belong to a
 						continue
 					}
@@ -146,7 +146,7 @@ func (m *MariaDBStream) WriteFolder(p string) (err error) {
 	backupPath := path.Join(p, "dump.sql")
 
 	// Should the full dump be filtered to certain DB schemas?
-	if m.cfg.ReplicateSchemas != nil {
+	if m.cfg.Databases != nil {
 		log.Debug("Extracting schemas from full backup")
 		backupPath, err = m.extractSchemas(backupPath)
 		if err != nil {
@@ -242,7 +242,7 @@ func (m *MariaDBStream) extractSchemas(backupPath string) (filteredBackupPath st
 		return "", fmt.Errorf("failed to write backup metadata: %s", err.Error())
 	}
 
-	for _, s := range m.cfg.ReplicateSchemas {
+	for _, s := range m.cfg.Databases {
 		bytes, err := m.extractSchema(backupPath, s)
 		if err != nil {
 			return "", fmt.Errorf("could not extract schema %s from full backup: %s", s, err.Error())

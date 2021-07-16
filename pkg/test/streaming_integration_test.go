@@ -31,8 +31,8 @@ func TestFilterBackup(t *testing.T) {
 		DBType:   constants.MARIADB,
 		DumpTool: config.Mysqldump,
 		StreamStorage: &StreamStorageOptions{
-			Enabled:          true,
-			ReplicateSchemas: []string{"service"},
+			Enabled:   true,
+			Databases: []string{"service"},
 		}})
 
 	// Perform Backup
