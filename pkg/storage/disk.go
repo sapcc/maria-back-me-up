@@ -19,6 +19,7 @@ package storage
 import (
 	"bytes"
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -94,7 +95,7 @@ func (d *Disk) WriteStream(fileName, mimeType string, body io.Reader, tags map[s
 	filePath := path.Join(d.cfg.BasePath, d.serviceName, fileName)
 
 	// check if backupfolder exists, create if not
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+	if _, err := os.Stat(filePath); errors.Is(err, os.ErrNotExist) {
 		dir, _ := filepath.Split(filePath)
 		err = os.MkdirAll(dir, os.ModePerm)
 		if err != nil {
@@ -151,7 +152,7 @@ func (d *Disk) GetFullBackups() (bl []Backup, err error) {
 
 	backupPath := filepath.Join(d.cfg.BasePath, d.serviceName)
 
-	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
+	if _, err := os.Stat(backupPath); errors.Is(err, os.ErrNotExist) {
 		return nil, &NoBackupError{fmt.Sprintf("backup directory for service '%s' does not exist", d.serviceName)}
 	}
 
@@ -186,7 +187,7 @@ func (d *Disk) GetIncBackupsFromDump(key string) (bl []Backup, err error) {
 	backupPath := filepath.Join(d.cfg.BasePath, key)
 
 	info, err := os.Stat(backupPath)
-	if os.IsNotExist(err) {
+	if errors.Is(err, os.ErrNotExist) {
 		return nil, &NoBackupError{}
 	}
 
@@ -262,7 +263,7 @@ func (d *Disk) DownloadBackupWithLogPosition(fullBackupPath string, binlog strin
 	}
 
 	path = filepath.Join(d.cfg.BasePath, fullBackupPath, binlog)
-	if _, err := os.Stat(path); os.IsNotExist(err) {
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		return "", &NoBackupError{}
 	}
 
@@ -272,7 +273,7 @@ func (d *Disk) DownloadBackupWithLogPosition(fullBackupPath string, binlog strin
 // DownloadBackup implements interface
 func (d *Disk) DownloadBackup(fullBackup Backup) (path string, err error) {
 	backupPath := filepath.Join(d.cfg.BasePath, fullBackup.Key)
-	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
+	if _, err := os.Stat(backupPath); errors.Is(err, os.ErrNotExist) {
 		return "", d.handleError(fullBackup.Key, fmt.Errorf("directory for full backup is empty"))
 	}
 	return backupPath, nil

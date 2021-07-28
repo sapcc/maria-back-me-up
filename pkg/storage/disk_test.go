@@ -18,6 +18,7 @@ package storage
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -51,7 +52,7 @@ func TestWriteFolder(t *testing.T) {
 	}
 
 	backupFile := filepath.Join(folder, "dump.tar")
-	if _, err := os.Stat(backupFile); os.IsNotExist(err) {
+	if _, err := os.Stat(backupFile); errors.Is(err, os.ErrNotExist) {
 		t.Errorf("expected folder %s does not exist", backupFile)
 	}
 
