@@ -14,7 +14,8 @@ require (
 	github.com/labstack/gommon v0.3.0 // indirect
 	github.com/namsral/flag v1.7.4-pre
 	github.com/ncw/swift v1.0.50
-	github.com/pingcap/errors v0.11.0
+	github.com/pingcap/errors v0.11.4
+	github.com/pingcap/parser v0.0.0-20200623164729-3a18f1e5dceb
 	github.com/pkg/errors v0.8.1
 	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
 	github.com/prometheus/client_golang v1.0.0

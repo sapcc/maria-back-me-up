@@ -42,6 +42,8 @@ func TestFilterBackup(t *testing.T) {
 		t.FailNow()
 	}
 
+	time.Sleep(time.Second * 5)
+
 	// Create DB client
 	conn, err := createConnection(cfg.Database.User, cfg.Database.Password, cfg.Database.Host, "", cfg.Database.Port)
 	if err != nil {
@@ -58,7 +60,7 @@ func TestFilterBackup(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to write to db: %s", err.Error())
 	}
-	time.Sleep(time.Second * 15)
+	time.Sleep(time.Second * 10)
 	m.Stop()
 
 	// Check streaming target db

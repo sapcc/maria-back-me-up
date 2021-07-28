@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+
 	"io"
 	"os"
 	"os/exec"
@@ -27,10 +28,14 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/pingcap/parser"
+	"github.com/pingcap/parser/ast"
 	"github.com/pkg/errors"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
 
+	// blank import of the mysql parser for pingcap/parser
+	_ "github.com/pingcap/parser/test_driver"
 	// blank import of mysql driver for database/sql
 	_ "github.com/siddontang/go-mysql/driver"
 	"github.com/siddontang/go-mysql/mysql"
@@ -43,30 +48,32 @@ type MariaDBStream struct {
 	db          *sql.DB
 	cfg         config.MariaDBStream
 	databases   map[string]struct{}
+	sqlParser   *parser.Parser
 	serviceName string
 	statusError map[string]string
 }
 
 // NewMariaDBStream creates a new mariadbstream storage object
 func NewMariaDBStream(c config.MariaDBStream, serviceName string) (m *MariaDBStream, err error) {
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@%s:%d", c.User, c.Password, c.Host, c.Port))
+
+	db, err := openDBConnection(c.User, c.Password, c.Host, c.Port, serviceName)
 	if err != nil {
-		return nil, fmt.Errorf("error opening db %s: %s", serviceName, err.Error())
-	}
-	err = db.Ping()
-	if err != nil {
-		return nil, fmt.Errorf("failed to ping db %s: %s", serviceName, err.Error())
+		return m, fmt.Errorf("failed to init MariaDBStream: %s", err.Error())
 	}
 
-	databases := make(map[string]struct{}, len(c.Databases))
-	for _, database := range c.Databases {
-		databases[database] = struct{}{}
+	databases := initDatabaseMap(c.Databases)
+
+	var sqlParser *parser.Parser
+	if c.ParseSchema {
+		log.Info("Parsing SQL for schema is enabled")
+		sqlParser = parser.New()
 	}
 
 	return &MariaDBStream{
 		db:          db,
 		cfg:         c,
 		databases:   databases,
+		sqlParser:   sqlParser,
 		serviceName: serviceName,
 	}, nil
 }
@@ -88,31 +95,9 @@ func (m *MariaDBStream) WriteChannel(name, mimeType string, body <-chan StreamEv
 		switch value.(type) {
 		case *BinlogEvent:
 			event := value.(*BinlogEvent).Value
-			switch event.Header.EventType {
-			case replication.QUERY_EVENT:
-				queryEvent := event.Event.(*replication.QueryEvent)
-
-				if len(m.databases) > 0 {
-					if _, ok := m.databases[string(queryEvent.Schema)]; !ok {
-						// query does not belong to a
-						continue
-					}
-				}
-
-				err = replicateQueryEvent(ctx, m.db, queryEvent)
-				if err != nil {
-					return fmt.Errorf("replication of query failed: %s", err.Error())
-				}
-
-			case replication.MARIADB_ANNOTATE_ROWS_EVENT:
-				annotateRowsEvent := event.Event.(*replication.MariadbAnnotateRowsEvent)
-				_, err := m.db.Exec(string(annotateRowsEvent.Query))
-				if err != nil {
-					return fmt.Errorf("execution of query failed: %v", err.Error())
-				}
-			default:
-				// Only QueryEvent and MARIADB_ANNOTATE_ROWS_EVENT contain queries which must be replicated
-				continue
+			err := m.ProcessBinlogEvent(ctx, event)
+			if err != nil {
+				return fmt.Errorf("replication of binlog event failed: %s", err.Error())
 			}
 		case *ByteEvent:
 			continue
@@ -194,18 +179,58 @@ func (m *MariaDBStream) WriteFolder(p string) (err error) {
 	return
 }
 
+// ProcessBinlogEvent processes the QueryEvents
+// - Events other than QueryEvent or AnnotateRowEvents are ignored
+// - Ignores DB schemas that were specified in the config and are loaded into the databases map
+func (m *MariaDBStream) ProcessBinlogEvent(ctx context.Context, event *replication.BinlogEvent) (err error) {
+	switch event.Header.EventType {
+	case replication.QUERY_EVENT:
+		queryEvent := event.Event.(*replication.QueryEvent)
+
+		schema := string(queryEvent.Schema)
+		if m.databases != nil && m.cfg.ParseSchema {
+			schema, err = m.determineSchema(queryEvent)
+			if err != nil {
+				return fmt.Errorf("schema could not be determined for '%s': %v", string(queryEvent.Query), err.Error())
+			}
+		}
+
+		if len(m.databases) > 0 {
+			if _, ok := m.databases[schema]; !ok {
+				// only scheams specified in the config are replicated
+				return
+			}
+		}
+		err = replicateQuery(ctx, m.db, string(queryEvent.Query), schema)
+		if err != nil {
+			return fmt.Errorf("replication of query failed: %s", err.Error())
+		}
+
+	case replication.MARIADB_ANNOTATE_ROWS_EVENT:
+		annotateRowsEvent := event.Event.(*replication.MariadbAnnotateRowsEvent)
+		_, err := m.db.Exec(string(annotateRowsEvent.Query))
+		if err != nil {
+			return fmt.Errorf("execution of query failed: %v", err.Error())
+		}
+	default:
+		// Only QueryEvent and MARIADB_ANNOTATE_ROWS_EVENT contain queries which must be replicated
+		return
+	}
+	return fmt.Errorf("error processing binlog event")
+}
+
 // replicateQueryEvent replicates the query contained by the event.
 // It is not guaranteed that the query uses 'schema.table' syntax.
 // The transaction is necessary to ensure all statements are executed on the same db connection.
 // In case of a `create [database | schema]` query the `USE SCHEMA` will result in ERROR 1049. Thus unset it with `USE DUMMY`
-func replicateQueryEvent(ctx context.Context, db *sql.DB, event *replication.QueryEvent) (err error) {
+func replicateQuery(ctx context.Context, db *sql.DB, query string, schema string) (err error) {
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		return fmt.Errorf("cannot get db connection: %s", err.Error())
 	}
 	defer conn.Close()
 
-	_, err = conn.ExecContext(ctx, "use "+string(event.Schema))
+	_, err = conn.ExecContext(ctx, "use "+schema)
 	if err != nil {
 		switch err := errors.Cause(err).(type) {
 		case *mysql.MyError:
@@ -217,7 +242,7 @@ func replicateQueryEvent(ctx context.Context, db *sql.DB, event *replication.Que
 			}
 		}
 	}
-	_, err = conn.ExecContext(ctx, string(event.Query))
+	_, err = conn.ExecContext(ctx, query)
 
 	if err != nil {
 		return fmt.Errorf("execution of query failed: %v", err.Error())
@@ -308,4 +333,60 @@ func (m *MariaDBStream) DownloadBackupWithLogPosition(fullBackupPath string, bin
 // DownloadBackup implements interface
 func (m *MariaDBStream) DownloadBackup(fullBackup Backup) (path string, err error) {
 	return path, &Error{Storage: m.cfg.Name, message: "method 'DownloadBackup' is not implemented"}
+}
+
+// openDBConnection open a DB connection and ping the db
+func openDBConnection(user, password, host string, port int, serviceName string) (db *sql.DB, err error) {
+	db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@%s:%d", user, password, host, port))
+	if err != nil {
+		return nil, fmt.Errorf("error opening db %s: %s", serviceName, err.Error())
+	}
+	err = db.Ping()
+	if err != nil {
+		return nil, fmt.Errorf("failed to ping db %s: %s", serviceName, err.Error())
+	}
+	return
+}
+
+// initDatabaseMap copies the db names from a slice to a map.
+// This map is used to lookup the databases that should be replicated
+func initDatabaseMap(dbs []string) map[string]struct{} {
+	var dbMap map[string]struct{}
+	if dbs != nil {
+		dbMap = make(map[string]struct{}, len(dbs))
+		for _, database := range dbs {
+			dbMap[database] = struct{}{}
+		}
+	}
+	return dbMap
+}
+
+type schemaExtractor struct {
+	schema string
+}
+
+func (s *schemaExtractor) Enter(in ast.Node) (ast.Node, bool) {
+	if name, ok := in.(*ast.TableName); ok {
+		s.schema = name.Schema.O
+		return in, true
+	}
+	return in, false
+}
+
+func (s *schemaExtractor) Leave(in ast.Node) (ast.Node, bool) {
+	return in, true
+}
+
+// determineSchema parses the query to determine the schema. If no schema is found use the event schema.
+func (m *MariaDBStream) determineSchema(event *replication.QueryEvent) (string, error) {
+	node, err := m.sqlParser.ParseOneStmt(string(event.Query), "", "")
+	if err != nil {
+		return "", err
+	}
+	v := &schemaExtractor{}
+	node.Accept(v)
+	if v.schema != "" {
+		return v.schema, nil
+	}
+	return "", fmt.Errorf("could not determine schema")
 }

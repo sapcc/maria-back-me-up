@@ -22,7 +22,7 @@ INSERT INTO service.tasks (title, start_date, due_date, description)
 INSERT INTO service.tasks (title, start_date, due_date, description)
         VALUES('task4', '2021-05-02', '2022-05-02', 'task info 4');
 
-DROP DATABASE IF EXISTS dummy;
+DROP DATABASE IF EXISTS application;
 
 CREATE DATABASE IF NOT EXISTS application;
 
