@@ -72,6 +72,7 @@ type DatabaseConfig struct {
 	Port          int       `yaml:"port"`
 	User          string    `yaml:"user"`
 	Password      string    `yaml:"password"`
+	ServerID      int       `yaml:"server_id"`
 	DataDir       string    `yaml:"data_dir"`
 	Databases     []string  `yaml:"databases"`
 	VerifyTables  []string  `yaml:"verify_tables"`

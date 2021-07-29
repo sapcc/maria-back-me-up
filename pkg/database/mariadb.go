@@ -259,7 +259,7 @@ func (m *MariaDB) createMysqlDump(toPath string) (bp LogPosition, err error) {
 func (m *MariaDB) StartIncBackup(ctx context.Context, mp LogPosition, dir string, ch chan error) (err error) {
 	var binlogFile string
 	cfg := replication.BinlogSyncerConfig{
-		ServerID:             999,
+		ServerID:             uint32(m.cfg.Database.ServerID),
 		Flavor:               "mariadb",
 		Host:                 m.cfg.Database.Host,
 		Port:                 uint16(m.cfg.Database.Port),

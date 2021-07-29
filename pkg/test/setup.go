@@ -72,6 +72,7 @@ func Setup(t *testing.T, opts *SetupOptions) (m *backup.Manager, cfg config.Conf
 			Port:     3306,
 			User:     "root",
 			Password: "test",
+			ServerID: 999,
 
 			LogNameFormat: "mysqld-bin",
 			DumpTool:      opts.DumpTool,

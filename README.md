@@ -76,6 +76,7 @@ backup_service:
     password: # user password
     host: # host of the MariaDB instance. If running as a sidecar within the MariaDB pod: 127.0.0.1
     port: # MariaDB port number
+    server_id: # server_uuid/server_id of the binlog syncer connecting to the host 
     data_dir: # data directory of the MariaDB instance
     databases: # list of databases (used for healthy checks and restores)
       - database_name
