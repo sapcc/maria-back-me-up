@@ -33,6 +33,7 @@ func TestFilterBackup(t *testing.T) {
 		StreamStorage: &StreamStorageOptions{
 			Enabled:   true,
 			Databases: []string{"service"},
+			ParseSQL:  true,
 		}})
 
 	// Perform Backup
@@ -42,7 +43,7 @@ func TestFilterBackup(t *testing.T) {
 		t.FailNow()
 	}
 
-	time.Sleep(time.Second * 5)
+	time.Sleep(time.Second * 10)
 
 	// Create DB client
 	conn, err := createConnection(cfg.Database.User, cfg.Database.Password, cfg.Database.Host, "", cfg.Database.Port)
@@ -60,7 +61,7 @@ func TestFilterBackup(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to write to db: %s", err.Error())
 	}
-	time.Sleep(time.Second * 10)
+	time.Sleep(time.Second * 1)
 	m.Stop()
 
 	// Check streaming target db

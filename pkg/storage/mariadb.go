@@ -188,6 +188,7 @@ func (m *MariaDBStream) WriteFolder(p string) (err error) {
 // ProcessBinlogEvent processes the QueryEvents
 // - Events other than QueryEvent or AnnotateRowEvents are ignored
 // - Ignores DB schemas that were specified in the config and are loaded into the databases map
+// - Ignores Querys where schema is empty and filtering is active
 func (m *MariaDBStream) ProcessBinlogEvent(ctx context.Context, event *replication.BinlogEvent) (err error) {
 	switch event.Header.EventType {
 	case replication.QUERY_EVENT:
@@ -202,6 +203,11 @@ func (m *MariaDBStream) ProcessBinlogEvent(ctx context.Context, event *replicati
 		}
 
 		if len(m.databases) > 0 {
+			if schema == "" {
+				log.Warn("Ignoring query with no schema set, filtering not possible, enable ParseSchema flag")
+				return
+			}
+
 			if _, ok := m.databases[schema]; !ok {
 				// only scheams specified in the config are replicated
 				return
@@ -236,15 +242,17 @@ func replicateQuery(ctx context.Context, db *sql.DB, query string, schema string
 	}
 	defer conn.Close()
 
-	_, err = conn.ExecContext(ctx, "use "+schema)
-	if err != nil {
-		switch err := errors.Cause(err).(type) {
-		case *mysql.MyError:
-			if err.Code == 1049 {
-				// Unknown database, unset DB. This can be a `create database` query
-				conn.ExecContext(ctx, "use dummy")
-			} else {
-				return fmt.Errorf("cannot change schema: %v", err.Error())
+	if schema != "" {
+		_, err = conn.ExecContext(ctx, "use "+schema)
+		if err != nil {
+			switch err := errors.Cause(err).(type) {
+			case *mysql.MyError:
+				if err.Code == 1049 {
+					// Unknown database, unset DB. This can be a `create database` query
+					conn.ExecContext(ctx, "use dummy")
+				} else {
+					return fmt.Errorf("cannot change schema: %v", err.Error())
+				}
 			}
 		}
 	}
