@@ -216,7 +216,7 @@ func (m *MariaDBStream) ProcessBinlogEvent(ctx context.Context, event *replicati
 		// Only QueryEvent and MARIADB_ANNOTATE_ROWS_EVENT contain queries which must be replicated
 		return
 	}
-	return fmt.Errorf("error processing binlog event")
+	return
 }
 
 // replicateQueryEvent replicates the query contained by the event.
