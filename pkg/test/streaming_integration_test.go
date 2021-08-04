@@ -20,10 +20,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pkg/errors"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/constants"
-	"github.com/siddontang/go-mysql/mysql"
 )
 
 func TestFilterBackup(t *testing.T) {

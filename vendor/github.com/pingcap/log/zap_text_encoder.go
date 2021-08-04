@@ -154,11 +154,18 @@ func NewTextEncoder(cfg *Config) zapcore.Encoder {
 	if cfg.DisableTimestamp {
 		cc.TimeKey = ""
 	}
-	return &textEncoder{
-		EncoderConfig:       &cc,
-		buf:                 _pool.Get(),
-		spaced:              false,
-		disableErrorVerbose: cfg.DisableErrorVerbose,
+	switch cfg.Format {
+	case "text", "":
+		return &textEncoder{
+			EncoderConfig:       &cc,
+			buf:                 _pool.Get(),
+			spaced:              false,
+			disableErrorVerbose: cfg.DisableErrorVerbose,
+		}
+	case "json":
+		return zapcore.NewJSONEncoder(cc)
+	default:
+		panic(fmt.Sprintf("unsupport log format: %s", cfg.Format))
 	}
 }
 

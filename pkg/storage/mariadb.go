@@ -39,9 +39,9 @@ import (
 	// blank import of the mysql parser for pingcap/parser
 	_ "github.com/pingcap/parser/test_driver"
 	// blank import of mysql driver for database/sql
-	_ "github.com/siddontang/go-mysql/driver"
-	"github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/replication"
+	_ "github.com/go-mysql-org/go-mysql/driver"
+	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 )
 
 // MariaDBStream struct is ...

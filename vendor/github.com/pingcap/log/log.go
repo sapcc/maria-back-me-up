@@ -16,11 +16,26 @@ package log
 import (
 	"errors"
 	"os"
+	"sync"
+	"sync/atomic"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	lumberjack "gopkg.in/natefinch/lumberjack.v2"
 )
+
+var _globalL, _globalP, _globalS atomic.Value
+
+var registerOnce sync.Once
+
+func init() {
+	l, p := newStdLogger()
+	_globalL.Store(l)
+	_globalP.Store(p)
+
+	s := _globalL.Load().(*zap.Logger).Sugar()
+	_globalS.Store(s)
+}
 
 // InitLogger initializes a zap logger.
 func InitLogger(cfg *Config, opts ...zap.Option) (*zap.Logger, *ZapProperties, error) {
@@ -32,9 +47,8 @@ func InitLogger(cfg *Config, opts ...zap.Option) (*zap.Logger, *ZapProperties, e
 		}
 		output = zapcore.AddSync(lg)
 	} else {
-		stdOut, close, err := zap.Open([]string{"stdout"}...)
+		stdOut, _, err := zap.Open([]string{"stdout"}...)
 		if err != nil {
-			close()
 			return nil, nil, err
 		}
 		output = stdOut
@@ -42,14 +56,23 @@ func InitLogger(cfg *Config, opts ...zap.Option) (*zap.Logger, *ZapProperties, e
 	return InitLoggerWithWriteSyncer(cfg, output, opts...)
 }
 
-// InitLoggerWithWriteSyncer initializes a zap logger with specified  write syncer.
+// InitLoggerWithWriteSyncer initializes a zap logger with specified write syncer.
 func InitLoggerWithWriteSyncer(cfg *Config, output zapcore.WriteSyncer, opts ...zap.Option) (*zap.Logger, *ZapProperties, error) {
 	level := zap.NewAtomicLevel()
 	err := level.UnmarshalText([]byte(cfg.Level))
 	if err != nil {
 		return nil, nil, err
 	}
-	core := NewTextCore(newZapTextEncoder(cfg).(*textEncoder), output, level)
+	encoder := newZapTextEncoder(cfg)
+	registerOnce.Do(func() {
+		err = zap.RegisterEncoder(ZapEncodingName, func(zapcore.EncoderConfig) (zapcore.Encoder, error) {
+			return encoder, nil
+		})
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	core := NewTextCore(encoder, output, level)
 	opts = append(cfg.buildOptions(output), opts...)
 	lg := zap.New(core, opts...)
 	r := &ZapProperties{
@@ -87,29 +110,24 @@ func newStdLogger() (*zap.Logger, *ZapProperties) {
 	return lg, r
 }
 
-var (
-	_globalL, _globalP = newStdLogger()
-	_globalS           = _globalL.Sugar()
-)
-
 // L returns the global Logger, which can be reconfigured with ReplaceGlobals.
 // It's safe for concurrent use.
 func L() *zap.Logger {
-	return _globalL
+	return _globalL.Load().(*zap.Logger)
 }
 
 // S returns the global SugaredLogger, which can be reconfigured with
 // ReplaceGlobals. It's safe for concurrent use.
 func S() *zap.SugaredLogger {
-	return _globalS
+	return _globalS.Load().(*zap.SugaredLogger)
 }
 
 // ReplaceGlobals replaces the global Logger and SugaredLogger.
-// It's unsafe for concurrent use.
+// It's safe for concurrent use.
 func ReplaceGlobals(logger *zap.Logger, props *ZapProperties) {
-	_globalL = logger
-	_globalS = logger.Sugar()
-	_globalP = props
+	_globalL.Store(logger)
+	_globalS.Store(logger.Sugar())
+	_globalP.Store(props)
 }
 
 // Sync flushes any buffered log entries.
