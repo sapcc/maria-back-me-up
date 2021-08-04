@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	"io"
 	"os"
@@ -359,6 +360,11 @@ func openDBConnection(user, password, host string, port int, serviceName string)
 	if err != nil {
 		return nil, fmt.Errorf("failed to ping db %s: %s", serviceName, err.Error())
 	}
+
+	db.SetMaxOpenConns(5)
+	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(time.Minute * 15)
+
 	return
 }
 
