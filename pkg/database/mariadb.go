@@ -47,7 +47,7 @@ type (
 
 // BinlogConfig interface
 type BinlogConfig interface {
-	GetBinlogConfig() (format string, annotateRowEvents bool, err error)
+	IsBinlogStreamingSupported() (err error)
 }
 
 // NewMariaDB creates a mariadb databse instance
@@ -657,31 +657,38 @@ func (m *MariaDB) GetDatabaseDiff(c1, c2 config.DatabaseConfig) (out []byte, err
 	return
 }
 
-// GetBinlogConfig returns the values for 'BINLOG_FORMAT' and 'BINLOG_ANNOTATE_ROW_EVENTS'
-func (m *MariaDB) GetBinlogConfig() (format string, annotateRowEvents bool, err error) {
+// IsBinlogStreamingSupported determines streaming support based on 'BINLOG_FORMAT' and 'BINLOG_ROW_METADATA'
+//
+// Supported combinations:
+// 'BINLOG_FORMAT' == `STATEMENT`
+// 'BINLOG_FORMAT' == `ROW` || `MIXED` && 'BINLOG_ROW_METADATA' == `FULL`
+func (m *MariaDB) IsBinlogStreamingSupported() (err error) {
 
 	conn, err := client.Connect(fmt.Sprintf("%s:%v", m.cfg.Database.Host, m.cfg.Database.Port), m.cfg.Database.User, m.cfg.Database.Password, "")
 
 	if err != nil {
-		return format, annotateRowEvents, fmt.Errorf("error connecting to source db: %s", err.Error())
+		return false, fmt.Errorf("error connecting to source db: %s", err.Error())
 	}
 
-	result, err := conn.Execute("show variables like 'binlog_format';")
+	result, err := conn.Execute("show global variables like 'binlog_format';")
 	if err != nil {
-		return format, annotateRowEvents, fmt.Errorf("error querying binlog format: %s", err.Error())
+		return false, fmt.Errorf("error querying binlog format: %s", err.Error())
 	}
-	format = string(result.Values[0][1].([]uint8))
+	binlogFormat := string(result.Values[0][1].AsString())
 
-	result, err = conn.Execute("show variables like 'binlog_annotate_row_events';")
+	if binlogFormat == "STATEMENT" { // statement based replication works with query events only
+		return nil
+	}
+
+	result, err = conn.Execute("show global variables like 'binlog_row_metadata';")
 	if err != nil {
-		return format, annotateRowEvents, fmt.Errorf("error querying binlog annnotate rows flag: %s", err.Error())
+		return fmt.Errorf("error querying binlog annnotate rows flag: %s", err.Error())
 	}
 
-	if string(result.Values[0][1].([]uint8)) == "ON" {
-		annotateRowEvents = true
-	} else {
-		annotateRowEvents = false
-	}
+	binlogRowMetadata := string(result.Values[0][1].AsString())
 
-	return format, annotateRowEvents, nil
+	if binlogRowMetadata != "FULL" && (binlogFormat == "MIXED" || binlogFormat == "ROW") {
+		return fmt.Errorf("binlog streaming not supported for binlog_format `%s` and binlog_metadata_row `%s`", binlogFormat, binlogRowMetadata)
+	}
+	return nil
 }
