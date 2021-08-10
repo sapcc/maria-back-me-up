@@ -3,6 +3,7 @@ module github.com/sapcc/maria-back-me-up
 go 1.16
 
 require (
+	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/aws/aws-sdk-go v1.23.21
 	github.com/coreos/go-oidc v2.1.0+incompatible
 	github.com/go-mysql-org/go-mysql v1.3.0
