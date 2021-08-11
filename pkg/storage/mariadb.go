@@ -55,6 +55,12 @@ type MariaDBStream struct {
 	statusError map[string]string
 }
 
+type column struct {
+	name  string
+	value sql.NullString
+	skip  bool
+}
+
 // NewMariaDBStream creates a new mariadbstream storage object
 func NewMariaDBStream(c config.MariaDBStream, serviceName string) (m *MariaDBStream, err error) {
 
@@ -272,109 +278,106 @@ func (m *MariaDBStream) handleRowsEvent(ctx context.Context, event *replication.
 		return
 	}
 
-	var action string = ""
-
-	switch eventType {
-	case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
-		action = "delete"
-
-	case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
-		action = "insert"
-
-	case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
-		action = "update"
-
-	default:
-		//"unknown action"
-	}
 	var query string
 	var args []interface{}
+	var columns, updateColumns []column
+
 	for i, row := range event.Rows {
-		if action == "update" && i%2 == 1 {
+		if eventType == replication.UPDATE_ROWS_EVENTv1 && i%2 == 1 {
 			// update action contains one row for the old values and one for the updated values
 			// these are handled together
 			continue
 		}
-		query = ""
-		args = nil
-		switch action {
-		case "insert":
-			query, args, _ = m.createInsertQueryFromRow(event.Table, row, event.Version)
-		case "delete":
-			query, args, _ = m.createDeleteQueryFromRow(event.Table, row, event.Version)
-		case "update":
-			query, args, _ = m.createUpdateQueryFromRow(event.Table, row, event.Rows[i+1], event.Version)
-		default:
-			return fmt.Errorf("failed to create query: unknown action %s", action)
+		if len(event.SkippedColumns) > i {
+			columns = getRowColumns(event.Table, row, event.SkippedColumns[0])
+		} else {
+			columns = getRowColumns(event.Table, row, []int{})
 		}
-		fmt.Println(query)
+
+		switch eventType {
+		case replication.WRITE_ROWS_EVENTv1:
+			query, args, err = m.createInsertQueryFromRow(event.Table, columns)
+			if err != nil {
+				return fmt.Errorf("error creating insert query: %s", err.Error())
+			}
+
+		case replication.DELETE_ROWS_EVENTv1:
+			query, args, err = m.createDeleteQueryFromRow(event.Table, columns)
+			if err != nil {
+				return fmt.Errorf("error creating delete query: %s", err.Error())
+			}
+
+		case replication.UPDATE_ROWS_EVENTv1:
+			if len(event.SkippedColumns) > 1 {
+				updateColumns = getRowColumns(event.Table, event.Rows[i+1], event.SkippedColumns[1])
+			} else {
+				updateColumns = getRowColumns(event.Table, event.Rows[i+1], []int{})
+			}
+
+			query, args, err = m.createUpdateQueryFromRow(event.Table, columns, updateColumns)
+			if err != nil {
+				return fmt.Errorf("error creating update query: %s", err.Error())
+			}
+
+		default:
+			return fmt.Errorf("failed to create query: unsupported rows event %s", eventType)
+		}
+
 		_, err := m.db.Exec(query, args...)
 		if err != nil {
-			fmt.Println(err.Error())
+			return fmt.Errorf("error replicating query: %s", err.Error())
 		}
 	}
 
 	return nil
 }
 
-func (m *MariaDBStream) createInsertQueryFromRow(table *replication.TableMapEvent, row []interface{}, version int) (query string, args []interface{}, err error) {
+// createInsertQueryFromRow returns an INSERT query with placeholders for the VALUES clause.
+// Args contains the values for the placeholders.
+func (m *MariaDBStream) createInsertQueryFromRow(table *replication.TableMapEvent, columns []column) (query string, args []interface{}, err error) {
 
-	columns := ""
+	columnExpression := ""
 	valuePlaceholders := ""
-	for _, name := range table.ColumnName {
-		columns += string(name) + ","
+	for _, col := range columns {
+		if col.skip {
+			continue
+		}
+		columnExpression += col.name + ","
 		valuePlaceholders += "?,"
+		args = append(args, col.value)
 	}
-	columns = strings.TrimSuffix(columns, ",")
+	columnExpression = strings.TrimSuffix(columnExpression, ",")
 	valuePlaceholders = strings.TrimSuffix(valuePlaceholders, ",")
 
-	for _, value := range row {
-		switch v := value.(type) {
-		case string:
-			args = append(args, newNullString(v))
-		case []byte:
-			args = append(args, newNullString(string(v)))
-		default:
-			if v == nil {
-				args = append(args, newNullString(""))
-			} else {
-				args = append(args, newNullString(fmt.Sprintf("%v", v)))
-			}
-		}
-	}
-	query = fmt.Sprintf("INSERT INTO %s.%s (%s) VALUES (%s);", table.Schema, table.Table, columns, valuePlaceholders)
+	query = fmt.Sprintf("INSERT INTO %s.%s (%s) VALUES (%s);", table.Schema, table.Table, columnExpression, valuePlaceholders)
 	return query, args, nil
 }
 
-func (m *MariaDBStream) createDeleteQueryFromRow(table *replication.TableMapEvent, row []interface{}, version int) (query string, args []interface{}, err error) {
+// createDeleteQueryFromRow returns an DELETE query with placeholders for the WHERE clause.
+// Args contains the values for the placeholders.
+func (m *MariaDBStream) createDeleteQueryFromRow(table *replication.TableMapEvent, columns []column) (query string, args []interface{}, err error) {
 
-	whereCondition, args := createWhereCondition(table, row)
-
+	whereCondition, args := createWhereCondition(table, columns)
 	query = fmt.Sprintf("DELETE FROM %s.%s WHERE %s;", table.Schema, table.Table, whereCondition)
 	return query, args, nil
 }
 
-func (m *MariaDBStream) createUpdateQueryFromRow(table *replication.TableMapEvent, row []interface{}, updateRow []interface{}, version int) (query string, args []interface{}, err error) {
+// createUpdateQueryFromRow returns an UPDATE query with placeholders for SET and WHERE clause.
+// Args contains the values for the placeholders.
+func (m *MariaDBStream) createUpdateQueryFromRow(table *replication.TableMapEvent, columns []column, updateColumns []column) (query string, args []interface{}, err error) {
 
 	setColumns := ""
-	for i, value := range updateRow {
-		setColumns += string(table.ColumnName[i]) + " = ?, "
-		switch v := value.(type) {
-		case string:
-			args = append(args, newNullString(v))
-		case []byte:
-			args = append(args, newNullString(string(v)))
-		default:
-			if v == nil {
-				args = append(args, newNullString(""))
-			} else {
-				args = append(args, newNullString(fmt.Sprintf("%v", v)))
-			}
+	for i, col := range updateColumns {
+		if col.skip {
+			continue
 		}
+		setColumns += string(table.ColumnName[i]) + " = ?, "
+		args = append(args, col.value)
 	}
+
 	setColumns = strings.TrimSuffix(setColumns, ", ")
 
-	whereCondition, whereArgs := createWhereCondition(table, row)
+	whereCondition, whereArgs := createWhereCondition(table, columns)
 	args = append(args, whereArgs...)
 	query = fmt.Sprintf("UPDATE %s.%s SET %s WHERE %s;", table.Schema, table.Table, setColumns, whereCondition)
 
@@ -554,39 +557,72 @@ func binlogEventCountsToString(events map[string]int) (result string) {
 	return
 }
 
-func newNullString(value string) sql.NullString {
-	if value == "" {
+func newNullString(value interface{}, nullable bool) sql.NullString {
+
+	if value == nil && nullable {
 		return sql.NullString{
 			String: "",
 			Valid:  false,
 		}
-	} else {
+	}
+
+	switch v := value.(type) {
+	case string:
 		return sql.NullString{
-			String: value,
+			String: v,
+			Valid:  true,
+		}
+	case []byte:
+		return sql.NullString{
+			String: string(v),
+			Valid:  true,
+		}
+	default:
+		if v == nil {
+			return sql.NullString{
+				String: "",
+				Valid:  true,
+			}
+		}
+		return sql.NullString{
+			String: fmt.Sprintf("%v", v),
 			Valid:  true,
 		}
 	}
+
 }
 
-func createWhereCondition(table *replication.TableMapEvent, row []interface{}) (condition string, args []interface{}) {
+func createWhereCondition(table *replication.TableMapEvent, columns []column) (condition string, args []interface{}) {
 
-	for _, j := range table.PrimaryKey {
-		condition += string(table.ColumnName[j]) + " = ?,"
-
-		value := row[j]
-		switch v := value.(type) {
-		case string:
-			args = append(args, newNullString(v))
-		case []byte:
-			args = append(args, newNullString(string(v)))
-		default:
-			if v == nil {
-				args = append(args, newNullString(""))
-			} else {
-				args = append(args, newNullString(fmt.Sprintf("%v", v)))
+	if len(table.PrimaryKey) > 0 {
+		for _, j := range table.PrimaryKey {
+			condition += string(table.ColumnName[j]) + " = ?,"
+			args = append(args, columns[j].value)
+		}
+	} else {
+		for i, col := range columns {
+			if col.skip {
+				continue
 			}
+			condition += string(table.ColumnName[i]) + " = ?,"
+			args = append(args, col.value)
 		}
 	}
 	condition = strings.TrimSuffix(condition, ",")
 	return
+}
+
+func getRowColumns(table *replication.TableMapEvent, row []interface{}, skipColumns []int) (columns []column) {
+	for i, col := range row {
+		if ok, nullable := table.Nullable(i); ok {
+			columns = append(columns, column{name: string(table.ColumnName[i]), value: newNullString(col, nullable), skip: false})
+		} else {
+			columns = append(columns, column{name: string(table.ColumnName[i]), value: newNullString(col, false), skip: false})
+		}
+	}
+
+	for _, i := range skipColumns {
+		columns[i].skip = true
+	}
+	return columns
 }
