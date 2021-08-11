@@ -38,10 +38,15 @@ func TestUpdateRowsEventV1(t *testing.T) {
 	mariaDBStream, mock := setup(t)
 
 	rowsEvent := createRowsTestEvent(1, replication.UPDATE_ROWS_EVENTv1, [][]interface{}{
-		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry"},
+		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry Old"},
+		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry New"},
+		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry Old"},
+		{int32(2), "task1", "2021-05-02", "2022-05-02", "Test Entry New"},
 	})
 
-	mock.ExpectExec("UPDATE service.task SET ask_id = ?, title = ?, start_date = ?, due_date = ?, description = ? WHERE ask_id = ?;").WithArgs("1", "task1", "2021-05-02", "2022-05-02", "Test Entry", "1").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("UPDATE service.task SET ask_id = ?, title = ?, start_date = ?, due_date = ?, description = ? WHERE ask_id = ?;").WithArgs("1", "task1", "2021-05-02", "2022-05-02", "Test Entry New", "1").WillReturnResult(sqlmock.NewResult(0, 1))
+
+	mock.ExpectExec("UPDATE service.task SET ask_id = ?, title = ?, start_date = ?, due_date = ?, description = ? WHERE ask_id = ?;").WithArgs("2", "task1", "2021-05-02", "2022-05-02", "Test Entry New", "1").WillReturnResult(sqlmock.NewResult(0, 1))
 
 	execRowsEventTest(t, mock, mariaDBStream, replication.UPDATE_ROWS_EVENTv1, rowsEvent)
 }

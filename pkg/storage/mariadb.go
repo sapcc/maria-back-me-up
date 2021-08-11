@@ -291,7 +291,7 @@ func (m *MariaDBStream) handleRowsEvent(ctx context.Context, event *replication.
 	var args []interface{}
 	for i, row := range event.Rows {
 		if action == "update" && i%2 == 1 {
-			// update action contains one rows for update and one for where conditions
+			// update action contains one row for the old values and one for the updated values
 			// these are handled together
 			continue
 		}
@@ -303,7 +303,7 @@ func (m *MariaDBStream) handleRowsEvent(ctx context.Context, event *replication.
 		case "delete":
 			query, args, _ = m.createDeleteQueryFromRow(event.Table, row, event.Version)
 		case "update":
-			query, args, _ = m.createUpdateQueryFromRow(event.Table, row, event.Version)
+			query, args, _ = m.createUpdateQueryFromRow(event.Table, row, event.Rows[i+1], event.Version)
 		default:
 			return fmt.Errorf("failed to create query: unknown action %s", action)
 		}
@@ -354,10 +354,10 @@ func (m *MariaDBStream) createDeleteQueryFromRow(table *replication.TableMapEven
 	return query, args, nil
 }
 
-func (m *MariaDBStream) createUpdateQueryFromRow(table *replication.TableMapEvent, row []interface{}, version int) (query string, args []interface{}, err error) {
+func (m *MariaDBStream) createUpdateQueryFromRow(table *replication.TableMapEvent, row []interface{}, updateRow []interface{}, version int) (query string, args []interface{}, err error) {
 
 	setColumns := ""
-	for i, value := range row {
+	for i, value := range updateRow {
 		setColumns += string(table.ColumnName[i]) + " = ?, "
 		switch v := value.(type) {
 		case string:
