@@ -667,12 +667,12 @@ func (m *MariaDB) IsBinlogStreamingSupported() (err error) {
 	conn, err := client.Connect(fmt.Sprintf("%s:%v", m.cfg.Database.Host, m.cfg.Database.Port), m.cfg.Database.User, m.cfg.Database.Password, "")
 
 	if err != nil {
-		return false, fmt.Errorf("error connecting to source db: %s", err.Error())
+		return fmt.Errorf("error connecting to source db: %s", err.Error())
 	}
 
 	result, err := conn.Execute("show global variables like 'binlog_format';")
 	if err != nil {
-		return false, fmt.Errorf("error querying binlog format: %s", err.Error())
+		return fmt.Errorf("error querying binlog format: %s", err.Error())
 	}
 	binlogFormat := string(result.Values[0][1].AsString())
 
