@@ -61,7 +61,8 @@ With STATEMENT only the update statement will be recorded in the binlog.
 ``` yaml
 service_name: # Name of your MariaDB (also used as the s3 folder name)
 namespace: # k8s namespace name
-backup_service:
+sidecar: # boolean
+backup:
   full_backup_interval_in_hours: # Interval for full MariaDB dumps in hours
   incremental_backup_interval_in_minutes: # Interval for saving incremental backups
   enable_init_restore: # Enables a automatic restore if one of the databases (in MariaDB.databases) are missing.
@@ -70,25 +71,32 @@ backup_service:
     enabled: # enables OAuth to access the API (openID)\
     provider_url: # Url of the openID provider (e.g. Dex)\
     redirect_url: # OAuth redirect url (this is the url of your mariabackup service)\
-  maria_db: # MariaDB config\
-    user: # user with admin rights (to drop and restart MariaDB)
+database: # database config
+    type: # either 'mariadb' or 'postgres'
     version: # MariaDB version e.g.: "10.4.0"
+    full_dump_tool: 
+    log_name_format: # prefix of the binlog files
+    user: # user with admin rights (to drop and restart MariaDB)
     password: # user password
     host: # host of the MariaDB instance. If running as a sidecar within the MariaDB pod: 127.0.0.1
     port: # MariaDB port number
     server_id: # server_uuid/server_id of the binlog syncer connecting to the host 
     data_dir: # data directory of the MariaDB instance
-    databases: # list of databases (used for healthy checks and restores)
+    databases: # list of databases (used for health checks and restores)
       - database_name
       - ... 
-      verify_tables: # list of tables for the backup verification check. If none are provided the checksum verification is skipped!
+    verify_tables: # list of tables for the backup verification check. If none are provided the checksum verification is skipped!
       - database_name.table_name
       - ...
-storage_services:
+storages:
   s3:
     - name: # name of the storage
       aws_access_key_id: # s3 access key
       aws_secret_access_key: # s3 secret access key
+      aws_endpoint:
+      sse_customer_algorithm:
+      s3_force_path_style:
+      sse_customer_key:
       region: # s3 region
       bucket_name: # bucket name to save the backup to
   swift:
@@ -102,6 +110,8 @@ storage_services:
       password: # os password
       region: # region name
       container_name: # name of the container the backups should be store in
+      chunk_size: # default 200mb
+      slo_size: # default 600mb
   maria_db:
     - name: # name of the storage
       host: # host of the MariaDB instance
@@ -110,7 +120,11 @@ storage_services:
       password: # user password
       full_dump_tool: # dump tool used to restore the full dump
       databases: # if specified, only the listed databases are replicated
+      parse_schema: # if true, the schema is parsed from the SQL Statement of a QueryEvent
   disk:
-    - base_path: # root folder for the backups
+    - name: # name of the storage
+      base_path: # root folder for the backups
       retention: # backup retention in number of full backups
+verification:
+  interval_in_minutes: # how often are the backups verified
 ```
