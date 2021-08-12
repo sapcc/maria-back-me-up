@@ -204,8 +204,6 @@ func (m *MariaDBStream) ProcessBinlogEvent(ctx context.Context, event *replicati
 
 	case *replication.RowsEvent:
 		return m.handleRowsEvent(ctx, e, event.Header.EventType)
-	case *replication.MariadbAnnotateRowsEvent:
-		return
 	default:
 		// Only QueryEvent and ROWS_EVENT contain queries which must be replicated
 		return
@@ -245,7 +243,7 @@ func replicateQuery(ctx context.Context, db *sql.DB, query string, schema string
 	defer conn.Close()
 
 	if schema != "" {
-		_, err = conn.ExecContext(ctx, "use "+schema)
+		_, err = conn.ExecContext(ctx, fmt.Sprintf("use %s;", schema))
 		if err != nil {
 			switch err := errors.Cause(err).(type) {
 			case *mysql.MyError:
@@ -596,7 +594,7 @@ func createWhereCondition(table *replication.TableMapEvent, columns []column) (c
 
 	if len(table.PrimaryKey) > 0 {
 		for _, j := range table.PrimaryKey {
-			condition += string(table.ColumnName[j]) + " = ?,"
+			condition += string(table.ColumnName[j]) + " = ? and "
 			args = append(args, columns[j].value)
 		}
 	} else {
@@ -604,11 +602,11 @@ func createWhereCondition(table *replication.TableMapEvent, columns []column) (c
 			if col.skip {
 				continue
 			}
-			condition += string(table.ColumnName[i]) + " = ?,"
+			condition += string(table.ColumnName[i]) + " = ? and "
 			args = append(args, col.value)
 		}
 	}
-	condition = strings.TrimSuffix(condition, ",")
+	condition = strings.TrimSuffix(condition, " and ")
 	return
 }
 
