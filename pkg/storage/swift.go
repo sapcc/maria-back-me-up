@@ -120,7 +120,6 @@ func (s *Swift) WriteStream(name, mimeType string, body io.Reader, tags map[stri
 	}
 	if !dlo {
 		f, err := s.connection.ObjectCreate(s.cfg.ContainerName, backupKey, false, "", "", headers)
-		fmt.Println(backupKey, err, headers)
 		defer func() {
 			f.Close()
 			if err == nil {
