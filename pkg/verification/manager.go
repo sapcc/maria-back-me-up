@@ -72,7 +72,7 @@ func NewManager(c config.Config) (m *Manager, err error) {
 // Start a verification routine per storage
 func (m *Manager) Start(ctx context.Context) {
 	for _, v := range m.verifications {
-		logger.Debugf("Starting verification service %s", v.serviceName)
+		logger.Debugf("starting verification for %s backup", v.storageServiceName)
 		go v.Start(ctx)
 	}
 }
