@@ -3,6 +3,7 @@ package storage
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"path"
@@ -107,11 +108,10 @@ func (s *Swift) WriteStream(name, mimeType string, body io.Reader, tags map[stri
 	var expire time.Time
 	if len(t) == 2 {
 		// uses the full backup timestamp
-		expire, err = time.Parse(time.RFC3339, t[0])
-		if err != nil {
-			expire = time.Now()
-			err = nil
-		}
+		expire, _ = time.Parse(time.RFC3339, t[0])
+	}
+	if expire.IsZero() {
+		expire = time.Now()
 	}
 	backupKey := path.Join(s.serviceName, name)
 	headers := swift.Headers{"X-Delete-At": strconv.FormatInt(expire.AddDate(0, 0, 7).Unix(), 10)}
@@ -120,6 +120,7 @@ func (s *Swift) WriteStream(name, mimeType string, body io.Reader, tags map[stri
 	}
 	if !dlo {
 		f, err := s.connection.ObjectCreate(s.cfg.ContainerName, backupKey, false, "", "", headers)
+		fmt.Println(backupKey, err, headers)
 		defer func() {
 			f.Close()
 			if err == nil {
