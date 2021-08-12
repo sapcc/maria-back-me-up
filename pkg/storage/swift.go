@@ -3,7 +3,6 @@ package storage
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"io"
 	"os"
 	"path"
