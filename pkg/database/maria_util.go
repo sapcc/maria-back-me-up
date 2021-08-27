@@ -22,9 +22,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	dberror "github.com/sapcc/maria-back-me-up/pkg/error"
-	"github.com/siddontang/go-mysql/client"
 )
 
 func mariaHealthCheck(c config.DatabaseConfig) (status Status, err error) {

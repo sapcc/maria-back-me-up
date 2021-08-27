@@ -39,10 +39,8 @@ func (user *UserIdentity) Restore(ctx *format.RestoreCtx) error {
 		ctx.WriteKeyWord("CURRENT_USER")
 	} else {
 		ctx.WriteName(user.Username)
-		if user.Hostname != "" {
-			ctx.WritePlain("@")
-			ctx.WriteName(user.Hostname)
-		}
+		ctx.WritePlain("@")
+		ctx.WriteName(user.Hostname)
 	}
 	return nil
 }
@@ -105,6 +103,9 @@ func CheckScrambledPassword(salt, hpwd, auth []byte) bool {
 	terror.Log(errors.Trace(err))
 	hash := crypt.Sum(nil)
 	// token = scrambleHash XOR stage1Hash
+	if len(auth) != len(hash) {
+		return false
+	}
 	for i := range hash {
 		hash[i] ^= auth[i]
 	}

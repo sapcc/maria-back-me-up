@@ -24,9 +24,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/constants"
-	"github.com/siddontang/go-mysql/client"
 )
 
 func testFullBackup(t *testing.T) {
@@ -157,7 +157,7 @@ func assertTableConsistent(t *testing.T, user, password, host, db string, port i
 	defer conn.Close()
 	// Query from DB to see if all test entries are present
 	result, err := conn.Execute(fmt.Sprintf("select count(*) from %s.%s;", db, table))
-	act := result.Resultset.Values[0][0].(int64)
+	act := result.Resultset.Values[0][0].AsInt64()
 
 	if err != nil || exp != act {
 		t.Errorf("expected 5 entries, but got: %v", act)

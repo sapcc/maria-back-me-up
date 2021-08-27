@@ -14,20 +14,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/client"
+	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/errgroup"
 	"github.com/sapcc/maria-back-me-up/pkg/k8s"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
-	"github.com/siddontang/go-mysql/client"
-	"github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/replication"
 	"gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 type (
-	// MariaDB databse struct
+	// MariaDB database struct
 	MariaDB struct {
 		cfg         config.Config
 		storage     *storage.Manager
@@ -44,6 +44,11 @@ type (
 		GTID string `yaml:"GTID"`
 	}
 )
+
+// BinlogConfig interface
+type BinlogConfig interface {
+	IsBinlogStreamingSupported() (err error)
+}
 
 // NewMariaDB creates a mariadb databse instance
 func NewMariaDB(c config.Config, sm *storage.Manager, k *k8s.Database) (Database, error) {
@@ -266,6 +271,7 @@ func (m *MariaDB) StartIncBackup(ctx context.Context, mp LogPosition, dir string
 		User:                 m.cfg.Database.User,
 		Password:             m.cfg.Database.Password,
 		MaxReconnectAttempts: 10,
+		DumpCommandFlag:      2,
 	}
 	syncer := replication.NewBinlogSyncer(cfg)
 	binlogChan := make(chan storage.StreamEvent, 5)
@@ -649,4 +655,43 @@ func (m *MariaDB) GetDatabaseDiff(c1, c2 config.DatabaseConfig) (out []byte, err
 
 	out, err = e.CombinedOutput()
 	return
+}
+
+// IsBinlogStreamingSupported determines streaming support based on 'BINLOG_FORMAT' and 'BINLOG_ROW_METADATA'
+//
+// Supported combinations:
+// 'BINLOG_FORMAT' == `STATEMENT`
+// 'BINLOG_FORMAT' == `ROW` || `MIXED` && 'BINLOG_ROW_METADATA' == `FULL`
+func (m *MariaDB) IsBinlogStreamingSupported() (err error) {
+
+	conn, err := client.Connect(fmt.Sprintf("%s:%v", m.cfg.Database.Host, m.cfg.Database.Port), m.cfg.Database.User, m.cfg.Database.Password, "")
+
+	if err != nil {
+		return fmt.Errorf("error connecting to source db: %s", err.Error())
+	}
+
+	result, err := conn.Execute("show global variables like 'binlog_format';")
+	if err != nil {
+		return fmt.Errorf("error querying binlog format: %s", err.Error())
+	}
+	binlogFormat := string(result.Values[0][1].AsString())
+
+	if binlogFormat == "STATEMENT" { // statement based replication works with query events only
+		return nil
+	}
+
+	result, err = conn.Execute("show global variables like 'binlog_row_metadata';")
+	if err != nil {
+		return fmt.Errorf("error querying binlog annnotate rows flag: %s", err.Error())
+	}
+	if result.Values == nil {
+		return fmt.Errorf("binlog streaming not supported, 'binlog_row_metadata' not set")
+	}
+
+	binlogRowMetadata := string(result.Values[0][1].AsString())
+
+	if binlogRowMetadata != "FULL" && (binlogFormat == "MIXED" || binlogFormat == "ROW") {
+		return fmt.Errorf("binlog streaming not supported for binlog_format `%s` and binlog_metadata_row `%s`", binlogFormat, binlogRowMetadata)
+	}
+	return nil
 }

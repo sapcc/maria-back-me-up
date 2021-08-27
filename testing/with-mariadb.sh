@@ -15,7 +15,7 @@ mysql_install_db --user=mysql --datadir=/var/lib/mysql --basedir=/usr
 #chown -R mysql: testing/mysql/
 echo 'Database initialized'
 
-mysqld_safe --skip-networking=0 --nowatch --log-bin=mysqld-bin
+mysqld_safe --skip-networking=0 --nowatch --log-bin=mysqld-bin --binlog-row-metadata=FULL
 mysql_options='--protocol=socket -uroot'
 
 execute() {

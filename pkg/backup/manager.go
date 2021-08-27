@@ -84,6 +84,14 @@ func init() {
 
 // NewManager returns a manager instance
 func NewManager(s *storage.Manager, db database.Database, k *k8s.Database, c config.Config) (m *Manager, err error) {
+
+	if c.Storages.MariaDB != nil {
+		err = checkSupportsBinlogStreaming(db)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	us := UpdateStatus{
 		FullBackup: make(map[string]int, 0),
 		IncBackup:  make(map[string]int, 0),
@@ -430,4 +438,12 @@ func checkBackupDirExistsAndCreate(d string) (p string, err error) {
 		return d, err
 	}
 	return
+}
+
+// checkSupportsBinlogStreaming returns an error if it is not supported
+func checkSupportsBinlogStreaming(db database.Database) (err error) {
+	if binlogCfg, ok := db.(database.BinlogConfig); ok {
+		return binlogCfg.IsBinlogStreamingSupported()
+	}
+	return fmt.Errorf("database `%s` does not support binlog streaming", db.GetConfig().Flavor)
 }

@@ -5,7 +5,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/siddontang/go-mysql/replication"
+	"github.com/go-mysql-org/go-mysql/replication"
 )
 
 // Storage interface

@@ -39,9 +39,9 @@ import (
 	// blank import of the mysql parser for pingcap/parser
 	_ "github.com/pingcap/parser/test_driver"
 	// blank import of mysql driver for database/sql
-	_ "github.com/siddontang/go-mysql/driver"
-	"github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/replication"
+	_ "github.com/go-mysql-org/go-mysql/driver"
+	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 )
 
 // MariaDBStream struct is ...
@@ -53,6 +53,12 @@ type MariaDBStream struct {
 	sqlParser   *parser.Parser
 	serviceName string
 	statusError map[string]string
+}
+
+type column struct {
+	name  string
+	value sql.NullString
+	skip  bool
 }
 
 // NewMariaDBStream creates a new mariadbstream storage object
@@ -187,47 +193,40 @@ func (m *MariaDBStream) WriteFolder(p string) (err error) {
 }
 
 // ProcessBinlogEvent processes the QueryEvents
-// - Events other than QueryEvent or AnnotateRowEvents are ignored
-// - Ignores DB schemas that were specified in the config and are loaded into the databases map
-// - Ignores Querys where schema is empty and filtering is active
+// - Events other than QueryEvent or RowsEvents are ignored
+// - Only replicates all schemas or those set in the config
+// - If schemas are filtered and the schema is set the event will be ignored
 func (m *MariaDBStream) ProcessBinlogEvent(ctx context.Context, event *replication.BinlogEvent) (err error) {
-	switch event.Header.EventType {
-	case replication.QUERY_EVENT:
-		queryEvent := event.Event.(*replication.QueryEvent)
 
-		schema := string(queryEvent.Schema)
-		if m.databases != nil && m.cfg.ParseSchema {
-			schema, err = m.determineSchema(queryEvent)
-			if err != nil {
-				return fmt.Errorf("schema could not be determined for '%s': %v", string(queryEvent.Query), err.Error())
-			}
-		}
+	switch e := event.Event.(type) {
+	case *replication.QueryEvent:
+		return m.handleQueryEvent(ctx, e)
 
-		if len(m.databases) > 0 {
-			if schema == "" {
-				log.Warn("Ignoring query with no schema set, filtering not possible, enable ParseSchema flag")
-				return
-			}
-
-			if _, ok := m.databases[schema]; !ok {
-				// only scheams specified in the config are replicated
-				return
-			}
-		}
-		err = replicateQuery(ctx, m.db, string(queryEvent.Query), schema)
-		if err != nil {
-			return fmt.Errorf("replication of query failed: %s", err.Error())
-		}
-
-	case replication.MARIADB_ANNOTATE_ROWS_EVENT:
-		annotateRowsEvent := event.Event.(*replication.MariadbAnnotateRowsEvent)
-		_, err := m.db.Exec(string(annotateRowsEvent.Query))
-		if err != nil {
-			return fmt.Errorf("execution of query failed: %v", err.Error())
-		}
+	case *replication.RowsEvent:
+		return m.handleRowsEvent(ctx, e, event.Header.EventType)
 	default:
-		// Only QueryEvent and MARIADB_ANNOTATE_ROWS_EVENT contain queries which must be replicated
+		// Only QueryEvent and ROWS_EVENT contain queries which must be replicated
 		return
+	}
+}
+
+func (m *MariaDBStream) handleQueryEvent(ctx context.Context, event *replication.QueryEvent) (err error) {
+	schema := string(event.Schema)
+	if m.databases != nil && m.cfg.ParseSchema {
+		schema, err = m.determineSchema(event)
+		if err != nil {
+			return fmt.Errorf("schema could not be determined for '%s': %v", string(event.Query), err.Error())
+		}
+	}
+
+	if !m.canReplicate(schema) {
+		// only schemas specified in the config are replicated
+		return
+	}
+
+	err = replicateQuery(ctx, m.db, string(event.Query), schema)
+	if err != nil {
+		return fmt.Errorf("replication of query failed: %s", err.Error())
 	}
 	return
 }
@@ -244,7 +243,7 @@ func replicateQuery(ctx context.Context, db *sql.DB, query string, schema string
 	defer conn.Close()
 
 	if schema != "" {
-		_, err = conn.ExecContext(ctx, "use "+schema)
+		_, err = conn.ExecContext(ctx, fmt.Sprintf("use %s;", schema))
 		if err != nil {
 			switch err := errors.Cause(err).(type) {
 			case *mysql.MyError:
@@ -263,6 +262,124 @@ func replicateQuery(ctx context.Context, db *sql.DB, query string, schema string
 		return fmt.Errorf("execution of query failed: %v", err.Error())
 	}
 	return
+}
+
+// handleRowsEvent replicates WriteRowEvents, DeleteRowsEvents or UpdateRowsEvents with Version V0,V1 or V2
+func (m *MariaDBStream) handleRowsEvent(ctx context.Context, event *replication.RowsEvent, eventType replication.EventType) (err error) {
+
+	if event.Version != 1 {
+		return fmt.Errorf("unsupported RowsEvent version: %d", event.Version)
+	}
+
+	if !m.canReplicate(string(event.Table.Schema)) {
+		// only schemas specified in the config are replicated
+		return
+	}
+
+	var query string
+	var args []interface{}
+	var columns, updateColumns []column
+
+	for i, row := range event.Rows {
+		if eventType == replication.UPDATE_ROWS_EVENTv1 && i%2 == 1 {
+			// update action contains one row for the old values and one for the updated values
+			// these are handled together
+			continue
+		}
+		if len(event.SkippedColumns) > i {
+			columns = getRowColumns(event.Table, row, event.SkippedColumns[0])
+		} else {
+			columns = getRowColumns(event.Table, row, []int{})
+		}
+
+		switch eventType {
+		case replication.WRITE_ROWS_EVENTv1:
+			query, args, err = m.createInsertQueryFromRow(event.Table, columns)
+			if err != nil {
+				return fmt.Errorf("error creating insert query: %s", err.Error())
+			}
+
+		case replication.DELETE_ROWS_EVENTv1:
+			query, args, err = m.createDeleteQueryFromRow(event.Table, columns)
+			if err != nil {
+				return fmt.Errorf("error creating delete query: %s", err.Error())
+			}
+
+		case replication.UPDATE_ROWS_EVENTv1:
+			if len(event.SkippedColumns) > 1 {
+				updateColumns = getRowColumns(event.Table, event.Rows[i+1], event.SkippedColumns[1])
+			} else {
+				updateColumns = getRowColumns(event.Table, event.Rows[i+1], []int{})
+			}
+
+			query, args, err = m.createUpdateQueryFromRow(event.Table, columns, updateColumns)
+			if err != nil {
+				return fmt.Errorf("error creating update query: %s", err.Error())
+			}
+
+		default:
+			return fmt.Errorf("failed to create query: unsupported rows event %s", eventType)
+		}
+
+		_, err := m.db.Exec(query, args...)
+		if err != nil {
+			return fmt.Errorf("error replicating query: %s", err.Error())
+		}
+	}
+
+	return nil
+}
+
+// createInsertQueryFromRow returns an INSERT query with placeholders for the VALUES clause.
+// Args contains the values for the placeholders.
+func (m *MariaDBStream) createInsertQueryFromRow(table *replication.TableMapEvent, columns []column) (query string, args []interface{}, err error) {
+
+	columnExpression := ""
+	valuePlaceholders := ""
+	for _, col := range columns {
+		if col.skip {
+			continue
+		}
+		columnExpression += col.name + ","
+		valuePlaceholders += "?,"
+		args = append(args, col.value)
+	}
+	columnExpression = strings.TrimSuffix(columnExpression, ",")
+	valuePlaceholders = strings.TrimSuffix(valuePlaceholders, ",")
+
+	query = fmt.Sprintf("INSERT INTO %s.%s (%s) VALUES (%s);", table.Schema, table.Table, columnExpression, valuePlaceholders)
+	return query, args, nil
+}
+
+// createDeleteQueryFromRow returns an DELETE query with placeholders for the WHERE clause.
+// Args contains the values for the placeholders.
+func (m *MariaDBStream) createDeleteQueryFromRow(table *replication.TableMapEvent, columns []column) (query string, args []interface{}, err error) {
+
+	whereCondition, args := createWhereCondition(table, columns)
+	query = fmt.Sprintf("DELETE FROM %s.%s WHERE %s;", table.Schema, table.Table, whereCondition)
+	return query, args, nil
+}
+
+// createUpdateQueryFromRow returns an UPDATE query with placeholders for SET and WHERE clause.
+// Args contains the values for the placeholders.
+func (m *MariaDBStream) createUpdateQueryFromRow(table *replication.TableMapEvent, columns []column, updateColumns []column) (query string, args []interface{}, err error) {
+
+	setColumns := ""
+	for i, col := range updateColumns {
+		if col.skip {
+			continue
+		}
+		setColumns += string(table.ColumnName[i]) + " = ?, "
+		args = append(args, col.value)
+	}
+
+	setColumns = strings.TrimSuffix(setColumns, ", ")
+
+	whereCondition, whereArgs := createWhereCondition(table, columns)
+	args = append(args, whereArgs...)
+	query = fmt.Sprintf("UPDATE %s.%s SET %s WHERE %s;", table.Schema, table.Table, setColumns, whereCondition)
+
+	return query, args, nil
 }
 
 // extractSchemas filters the full backup dump.sql and only retains statements for schemas specified in the config
@@ -351,6 +468,7 @@ func (m *MariaDBStream) DownloadBackup(fullBackup Backup) (path string, err erro
 }
 
 // openDBConnection open a DB connection and ping the db
+// MaxOpenConns = 5, MaxIdleConns = 5, ConnMaxLifetime = 15 Minutes
 func openDBConnection(user, password, host string, port int, serviceName string) (db *sql.DB, err error) {
 	db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@%s:%d", user, password, host, port))
 	if err != nil {
@@ -397,6 +515,22 @@ func (s *schemaExtractor) Leave(in ast.Node) (ast.Node, bool) {
 	return in, true
 }
 
+// canReplicate returns if the schema is on the list of schemas to replicate
+func (m *MariaDBStream) canReplicate(schema string) (ok bool) {
+	if len(m.databases) > 0 {
+		if schema == "" {
+			log.Warn("Ignoring query with no schema set, filtering not possible, enable ParseSchema flag")
+			return false
+		}
+
+		if _, ok := m.databases[schema]; !ok {
+			// only scheams specified in the config are replicated
+			return false
+		}
+	}
+	return true
+}
+
 // determineSchema parses the query to determine the schema. If no schema is found use the event schema.
 func (m *MariaDBStream) determineSchema(event *replication.QueryEvent) (string, error) {
 	node, err := m.sqlParser.ParseOneStmt(string(event.Query), "", "")
@@ -419,4 +553,74 @@ func binlogEventCountsToString(events map[string]int) (result string) {
 	result = strings.TrimSuffix(result, ",")
 	result += "] }"
 	return
+}
+
+func newNullString(value interface{}, nullable bool) sql.NullString {
+
+	if value == nil && nullable {
+		return sql.NullString{
+			String: "",
+			Valid:  false,
+		}
+	}
+
+	switch v := value.(type) {
+	case string:
+		return sql.NullString{
+			String: v,
+			Valid:  true,
+		}
+	case []byte:
+		return sql.NullString{
+			String: string(v),
+			Valid:  true,
+		}
+	default:
+		if v == nil {
+			return sql.NullString{
+				String: "",
+				Valid:  true,
+			}
+		}
+		return sql.NullString{
+			String: fmt.Sprintf("%v", v),
+			Valid:  true,
+		}
+	}
+
+}
+
+func createWhereCondition(table *replication.TableMapEvent, columns []column) (condition string, args []interface{}) {
+
+	if len(table.PrimaryKey) > 0 {
+		for _, j := range table.PrimaryKey {
+			condition += string(table.ColumnName[j]) + " = ? and "
+			args = append(args, columns[j].value)
+		}
+	} else {
+		for i, col := range columns {
+			if col.skip {
+				continue
+			}
+			condition += string(table.ColumnName[i]) + " = ? and "
+			args = append(args, col.value)
+		}
+	}
+	condition = strings.TrimSuffix(condition, " and ")
+	return
+}
+
+func getRowColumns(table *replication.TableMapEvent, row []interface{}, skipColumns []int) (columns []column) {
+	for i, col := range row {
+		if ok, nullable := table.Nullable(i); ok {
+			columns = append(columns, column{name: string(table.ColumnName[i]), value: newNullString(col, nullable), skip: false})
+		} else {
+			columns = append(columns, column{name: string(table.ColumnName[i]), value: newNullString(col, false), skip: false})
+		}
+	}
+
+	for _, i := range skipColumns {
+		columns[i].skip = true
+	}
+	return columns
 }
