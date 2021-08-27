@@ -684,6 +684,9 @@ func (m *MariaDB) IsBinlogStreamingSupported() (err error) {
 	if err != nil {
 		return fmt.Errorf("error querying binlog annnotate rows flag: %s", err.Error())
 	}
+	if result.Values == nil {
+		return fmt.Errorf("binlog streaming not supported, 'binlog_row_metadata' not set")
+	}
 
 	binlogRowMetadata := string(result.Values[0][1].AsString())
 
