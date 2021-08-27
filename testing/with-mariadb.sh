@@ -97,7 +97,7 @@ while :
       sleep 5
     else
       echo "mariadb is down. restarting."
-      mysqld_safe --skip-networking=0 --nowatch --log-bin=mysqld-bin
+      mysqld_safe --skip-networking=0 --nowatch --log-bin=mysqld-bin --binlog-row-metadata=FULL
       sleep 10
       x=0
     fi
