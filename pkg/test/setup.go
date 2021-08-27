@@ -115,6 +115,7 @@ func Setup(t *testing.T, opts *SetupOptions) (m *backup.Manager, cfg config.Conf
 	m, err = backup.NewManager(s, db, nil, cfg)
 	if err != nil {
 		t.Errorf("expected manager instance, but got error: %s.", err.Error())
+		t.FailNow()
 	}
 	if err = m.Db.Up(1*time.Minute, false); err != nil {
 		t.Errorf("expected db to be up, but got error: %s.", err.Error())
