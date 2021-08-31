@@ -116,7 +116,7 @@ func (m *Manager) WriteStreamAll(name, mimeType string, body <-chan StreamEvent,
 	}
 
 	// connect all channel consumer with a channel
-	channels := m.createChannels(len(chanConsumer), 50)
+	channels := m.createChannels(len(chanConsumer))
 	i = 0
 	for _, s := range chanConsumer {
 		func(i int, w ChannelWriter) {
@@ -132,7 +132,9 @@ func (m *Manager) WriteStreamAll(name, mimeType string, body <-chan StreamEvent,
 			v, ok := <-body
 			if !ok {
 				// Close all Reader, Writer and channels
-				closer.Close()
+				if closer != nil {
+					closer.Close()
+				}
 				for _, c := range channels {
 					close(c)
 				}
@@ -222,6 +224,9 @@ func (m *Manager) DownloadBackupWithLogPosition(storageService, fullBackupPath s
 }
 
 func (m *Manager) createIOReaders(count int) ([]io.Reader, io.Writer, io.Closer) {
+	if count == 0 {
+		return nil, nil, nil
+	}
 	readers := make([]io.Reader, 0, count)
 	pipeWriters := make([]io.Writer, 0, count)
 	pipeClosers := make([]io.Closer, 0, count)
@@ -236,14 +241,14 @@ func (m *Manager) createIOReaders(count int) ([]io.Reader, io.Writer, io.Closer)
 	return readers, io.MultiWriter(pipeWriters...), NewIOClosers(pipeClosers)
 }
 
-func (m *Manager) createChannels(count int, capacity int) []chan StreamEvent {
+func (m *Manager) createChannels(count int) []chan StreamEvent {
 
 	channels := make([]chan StreamEvent, 0, count)
 	if count == 0 {
 		return channels
 	}
-	for i := 0; i <= count; i++ {
-		channels = append(channels, make(chan StreamEvent, capacity))
+	for i := 0; i < count; i++ {
+		channels = append(channels, make(chan StreamEvent, 1))
 	}
 	return channels
 }
