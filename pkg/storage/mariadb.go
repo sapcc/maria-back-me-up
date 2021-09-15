@@ -53,6 +53,7 @@ type MariaDBStream struct {
 	sqlParser   *parser.Parser
 	serviceName string
 	statusError map[string]string
+	tx          *sql.Tx
 }
 
 type column struct {
@@ -99,15 +100,21 @@ func (m *MariaDBStream) WriteChannel(name, mimeType string, body <-chan StreamEv
 		value, ok := <-body
 		if !ok {
 			log.Debug(binlogEventCountsToString(events))
+			if m.tx != nil {
+				err = m.tx.Commit()
+				if ok := errors.Is(err, sql.ErrTxDone); !ok {
+					return fmt.Errorf("error committing transaction")
+				}
+				m.tx = nil
+			}
 			ctx.Done()
 			return
 		}
-		switch value.(type) {
+		switch e := value.(type) {
 		case *BinlogEvent:
-			event := value.(*BinlogEvent).Value
-			err := m.ProcessBinlogEvent(ctx, event)
+			err := m.ProcessBinlogEvent(ctx, e.Value)
 
-			events[event.Header.EventType.String()]++
+			events[e.Value.Header.EventType.String()]++
 
 			if err != nil {
 				return fmt.Errorf("replication of binlog event failed: %s", err.Error())
@@ -204,10 +211,54 @@ func (m *MariaDBStream) ProcessBinlogEvent(ctx context.Context, event *replicati
 
 	case *replication.RowsEvent:
 		return m.handleRowsEvent(ctx, e, event.Header.EventType)
+
+	case *replication.IntVarEvent:
+		return m.handleIntVarEvent(ctx, e)
+
+	case *replication.MariadbGTIDEvent:
+		if m.tx != nil {
+			err = m.tx.Commit()
+			if err != nil {
+				if ok := errors.Is(err, sql.ErrTxDone); !ok {
+					return fmt.Errorf("error committing transaction: %s", err.Error())
+				}
+			}
+		}
+		m.tx, err = m.db.BeginTx(ctx, nil)
+		return err
+
+	case *replication.XIDEvent:
+		err = m.tx.Commit()
+		if err != nil {
+			if ok := errors.Is(err, sql.ErrTxDone); !ok {
+				return fmt.Errorf("error commiting transaction: %s", err.Error())
+			}
+		}
+		m.tx = nil
+		return
+
 	default:
 		// Only QueryEvent and ROWS_EVENT contain queries which must be replicated
 		return
 	}
+}
+
+func (m *MariaDBStream) handleIntVarEvent(ctx context.Context, event *replication.IntVarEvent) (err error) {
+	var query string
+
+	if event.Type == replication.INSERT_ID_AUTO_INC {
+		query = fmt.Sprintf("SET INSERT_ID=%d;", event.Value)
+	} else if event.Type == replication.LAST_INSERT_ID {
+		query = fmt.Sprintf("SET LAST_INSERT_ID=%d;", event.Value)
+	} else {
+		return fmt.Errorf("error IntVarEvent has unsupported type")
+	}
+
+	_, err = m.tx.ExecContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("error setting insert id: %s", err.Error())
+	}
+	return
 }
 
 func (m *MariaDBStream) handleQueryEvent(ctx context.Context, event *replication.QueryEvent) (err error) {
@@ -224,7 +275,7 @@ func (m *MariaDBStream) handleQueryEvent(ctx context.Context, event *replication
 		return
 	}
 
-	err = replicateQuery(ctx, m.db, string(event.Query), schema)
+	err = m.replicateQuery(ctx, string(event.Query), schema)
 	if err != nil {
 		return fmt.Errorf("replication of query failed: %s", err.Error())
 	}
@@ -235,28 +286,23 @@ func (m *MariaDBStream) handleQueryEvent(ctx context.Context, event *replication
 // It is not guaranteed that the query uses 'schema.table' syntax.
 // The transaction is necessary to ensure all statements are executed on the same db connection.
 // In case of a `create [database | schema]` query the `USE SCHEMA` will result in ERROR 1049. Thus unset it with `USE DUMMY`
-func replicateQuery(ctx context.Context, db *sql.DB, query string, schema string) (err error) {
-	conn, err := db.Conn(ctx)
-	if err != nil {
-		return fmt.Errorf("cannot get db connection: %s", err.Error())
-	}
-	defer conn.Close()
+func (m *MariaDBStream) replicateQuery(ctx context.Context, query string, schema string) (err error) {
 
 	if schema != "" {
-		_, err = conn.ExecContext(ctx, fmt.Sprintf("use %s;", schema))
+		_, err = m.tx.ExecContext(ctx, fmt.Sprintf("use %s;", schema))
 		if err != nil {
 			switch err := errors.Cause(err).(type) {
 			case *mysql.MyError:
 				if err.Code == 1049 {
 					// Unknown database, unset DB. This can be a `create database` query
-					conn.ExecContext(ctx, "use dummy")
+					m.tx.ExecContext(ctx, "use dummy")
 				} else {
 					return fmt.Errorf("cannot change schema: %v", err.Error())
 				}
 			}
 		}
 	}
-	_, err = conn.ExecContext(ctx, query)
+	_, err = m.tx.ExecContext(ctx, query)
 
 	if err != nil {
 		return fmt.Errorf("execution of query failed: %v", err.Error())
@@ -321,7 +367,7 @@ func (m *MariaDBStream) handleRowsEvent(ctx context.Context, event *replication.
 			return fmt.Errorf("failed to create query: unsupported rows event %s", eventType)
 		}
 
-		_, err := m.db.Exec(query, args...)
+		_, err := m.tx.Exec(query, args...)
 		if err != nil {
 			return fmt.Errorf("error replicating query: %s", err.Error())
 		}
@@ -468,7 +514,7 @@ func (m *MariaDBStream) DownloadBackup(fullBackup Backup) (path string, err erro
 }
 
 // openDBConnection open a DB connection and ping the db
-// MaxOpenConns = 5, MaxIdleConns = 5, ConnMaxLifetime = 15 Minutes
+// MaxOpenConns = 5, MaxIdleConns = 5, ConnMaxLifetime = 30 Minutes
 func openDBConnection(user, password, host string, port int, serviceName string) (db *sql.DB, err error) {
 	db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@%s:%d", user, password, host, port))
 	if err != nil {

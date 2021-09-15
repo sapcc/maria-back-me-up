@@ -41,8 +41,11 @@ func TestWriteQueryEventParseSchema(t *testing.T) {
 	mock.ExpectExec("INSERT INTO service.task (ask_id, title, start_date, due_date, description) VALUES ( '2', 'task1', '2021-05-02', '2022-05-02', 'Test Entry');").WillReturnResult(sqlmock.NewResult(1, 1))
 
 	execQueryEventTest(t, mock, mariaDBStream, queryEvent)
+}
 
-	queryEvent = replication.QueryEvent{
+func TestWriteQueryEventParseSchemaSkipped(t *testing.T) {
+	mariaDBStream, mock := setup(t, true)
+	queryEvent := replication.QueryEvent{
 		Schema: []byte("service"),
 		Query:  []byte("INSERT INTO test.task (ask_id, title, start_date, due_date, description) VALUES ( '2', 'task1', '2021-05-02', '2022-05-02', 'Test Entry');"),
 	}
@@ -268,7 +271,7 @@ func TestUpdateRowsEventV1MinimalImageNoPK(t *testing.T) {
 	execRowsEventTest(t, mock, mariaDBStream, replication.UPDATE_ROWS_EVENTv1, rowsEvent)
 }
 
-func setup(t *testing.T, parseSQL bool) (mariaDBStream MariaDBStream, mock sqlmock.Sqlmock) {
+func setup(t *testing.T, parseSQL bool) (mariaDBStream *MariaDBStream, mock sqlmock.Sqlmock) {
 	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
 	if err != nil {
 		t.Errorf("test setup failed: %s", err.Error())
@@ -280,11 +283,17 @@ func setup(t *testing.T, parseSQL bool) (mariaDBStream MariaDBStream, mock sqlmo
 	config := config.MariaDBStream{
 		ParseSchema: parseSQL,
 	}
-	mariaDBStream = MariaDBStream{sqlParser: parser.New(), db: db, databases: databases, cfg: config}
+	mock.ExpectBegin()
+	tx, err := db.BeginTx(context.TODO(), nil)
+	if err != nil {
+		t.Error("test setup failed to create transaction")
+	}
+	mariaDBStream = &MariaDBStream{sqlParser: parser.New(), db: db, tx: tx, databases: databases, cfg: config}
 	return
 }
 
-func execRowsEventTest(t *testing.T, mock sqlmock.Sqlmock, mariaDBStream MariaDBStream, eventType replication.EventType, rowsEvent replication.RowsEvent) {
+func execRowsEventTest(t *testing.T, mock sqlmock.Sqlmock, mariaDBStream *MariaDBStream, eventType replication.EventType, rowsEvent replication.RowsEvent) {
+
 	event := &replication.BinlogEvent{
 		Header: &replication.EventHeader{
 			EventType: eventType,
@@ -296,12 +305,16 @@ func execRowsEventTest(t *testing.T, mock sqlmock.Sqlmock, mariaDBStream MariaDB
 		t.Errorf("Failed to replicate %s: %s", eventType.String(), err.Error())
 		t.FailNow()
 	}
+
+	mock.ExpectCommit()
+	mariaDBStream.tx.Commit()
+
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("Failed expectations not met: %s", err.Error())
 	}
 }
 
-func execQueryEventTest(t *testing.T, mock sqlmock.Sqlmock, mariaDBStream MariaDBStream, queryEvent replication.QueryEvent) {
+func execQueryEventTest(t *testing.T, mock sqlmock.Sqlmock, mariaDBStream *MariaDBStream, queryEvent replication.QueryEvent) {
 	event := &replication.BinlogEvent{
 		Header: &replication.EventHeader{
 			EventType: replication.QUERY_EVENT,
@@ -314,6 +327,10 @@ func execQueryEventTest(t *testing.T, mock sqlmock.Sqlmock, mariaDBStream MariaD
 		t.Errorf("Failed to replicate %s: %s", replication.QUERY_EVENT.String(), err.Error())
 		t.FailNow()
 	}
+
+	mock.ExpectCommit()
+	mariaDBStream.tx.Commit()
+
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("Failed expectations not met: %s", err.Error())
 	}
