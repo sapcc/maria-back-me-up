@@ -95,11 +95,9 @@ func (m *MariaDBStream) WriteStream(fileName, mimeType string, body io.Reader, t
 // WriteChannel implements interface
 func (m *MariaDBStream) WriteChannel(name, mimeType string, body <-chan StreamEvent, tags map[string]string, dlo bool) (err error) {
 	ctx := context.Background()
-	events := make(map[string]int, 10)
 	for {
 		value, ok := <-body
 		if !ok {
-			log.Debug(binlogEventCountsToString(events))
 			if m.tx != nil {
 				err = m.tx.Commit()
 				if ok := errors.Is(err, sql.ErrTxDone); !ok {
@@ -113,9 +111,6 @@ func (m *MariaDBStream) WriteChannel(name, mimeType string, body <-chan StreamEv
 		switch e := value.(type) {
 		case *BinlogEvent:
 			err := m.ProcessBinlogEvent(ctx, e.Value)
-
-			events[e.Value.Header.EventType.String()]++
-
 			if err != nil {
 				return fmt.Errorf("replication of binlog event failed: %s", err.Error())
 			}
@@ -589,16 +584,6 @@ func (m *MariaDBStream) determineSchema(event *replication.QueryEvent) (string, 
 		return v.schema, nil
 	}
 	return "", fmt.Errorf("could not determine schema")
-}
-
-func binlogEventCountsToString(events map[string]int) (result string) {
-	result += "{ \"binlog_events\": [ "
-	for key, value := range events {
-		result += fmt.Sprintf("{ \"Type\": \"%s\", \"Count\": \"%d\" }, ", key, value)
-	}
-	result = strings.TrimSuffix(result, ",")
-	result += "] }"
-	return
 }
 
 func newNullString(value interface{}, nullable bool) sql.NullString {
