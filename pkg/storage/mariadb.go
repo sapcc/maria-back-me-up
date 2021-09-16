@@ -100,8 +100,10 @@ func (m *MariaDBStream) WriteChannel(name, mimeType string, body <-chan StreamEv
 		if !ok {
 			if m.tx != nil {
 				err = m.tx.Commit()
-				if ok := errors.Is(err, sql.ErrTxDone); !ok {
-					return fmt.Errorf("error committing transaction: %s", err.Error())
+				if err != nil {
+					if ok := errors.Is(err, sql.ErrTxDone); !ok {
+						return fmt.Errorf("error committing transaction: %s", err.Error())
+					}
 				}
 				m.tx = nil
 			}
