@@ -101,7 +101,7 @@ func (m *MariaDBStream) WriteChannel(name, mimeType string, body <-chan StreamEv
 			if m.tx != nil {
 				err = m.tx.Commit()
 				if ok := errors.Is(err, sql.ErrTxDone); !ok {
-					return fmt.Errorf("error committing transaction")
+					return fmt.Errorf("error committing transaction: %s", err.Error())
 				}
 				m.tx = nil
 			}
@@ -226,7 +226,7 @@ func (m *MariaDBStream) ProcessBinlogEvent(ctx context.Context, event *replicati
 		err = m.tx.Commit()
 		if err != nil {
 			if ok := errors.Is(err, sql.ErrTxDone); !ok {
-				return fmt.Errorf("error commiting transaction: %s", err.Error())
+				return fmt.Errorf("error committing transaction: %s", err.Error())
 			}
 		}
 		m.tx = nil
