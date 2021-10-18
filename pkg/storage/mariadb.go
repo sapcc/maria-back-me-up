@@ -47,19 +47,21 @@ import (
 // MariaDBStream struct is ...
 type MariaDBStream struct {
 	// db connection to the target db
-	db          *sql.DB
-	cfg         config.MariaDBStream
-	databases   map[string]struct{}
-	sqlParser   *parser.Parser
-	serviceName string
-	statusError map[string]string
-	tx          *sql.Tx
+	db            *sql.DB
+	cfg           config.MariaDBStream
+	databases     map[string]struct{}
+	sqlParser     *parser.Parser
+	serviceName   string
+	statusError   map[string]string
+	tx            *sql.Tx
+	tableMetadata map[string]map[int]columnDefinition
 }
 
 type column struct {
-	name  string
-	value sql.NullString
-	skip  bool
+	name       string
+	value      sql.NullString
+	skip       bool
+	isKeyField bool
 }
 
 // NewMariaDBStream creates a new mariadbstream storage object
@@ -68,6 +70,12 @@ func NewMariaDBStream(c config.MariaDBStream, serviceName string) (m *MariaDBStr
 	db, err := openDBConnection(c.User, c.Password, c.Host, c.Port, serviceName)
 	if err != nil {
 		return m, fmt.Errorf("failed to init MariaDBStream: %s", err.Error())
+	}
+
+	metadata, err := queryTableMetadata(db, serviceName)
+
+	if err != nil {
+		return m, err
 	}
 
 	databases := initDatabaseMap(c.Databases)
@@ -79,11 +87,12 @@ func NewMariaDBStream(c config.MariaDBStream, serviceName string) (m *MariaDBStr
 	}
 
 	return &MariaDBStream{
-		db:          db,
-		cfg:         c,
-		databases:   databases,
-		sqlParser:   sqlParser,
-		serviceName: serviceName,
+		db:            db,
+		cfg:           c,
+		databases:     databases,
+		sqlParser:     sqlParser,
+		serviceName:   serviceName,
+		tableMetadata: metadata,
 	}, nil
 }
 
@@ -322,6 +331,7 @@ func (m *MariaDBStream) handleRowsEvent(ctx context.Context, event *replication.
 	var query string
 	var args []interface{}
 	var columns, updateColumns []column
+	var hasPrimaryKey bool
 
 	for i, row := range event.Rows {
 		if eventType == replication.UPDATE_ROWS_EVENTv1 && i%2 == 1 {
@@ -329,10 +339,19 @@ func (m *MariaDBStream) handleRowsEvent(ctx context.Context, event *replication.
 			// these are handled together
 			continue
 		}
-		if len(event.SkippedColumns) > i {
-			columns = getRowColumns(event.Table, row, event.SkippedColumns[0])
+
+		if hasRowMetadata(event) {
+			if hasFullRowImage(event) {
+				columns, hasPrimaryKey = getRowColumnsTableEvent(event.Table, row, []int{})
+			} else {
+				columns, hasPrimaryKey = getRowColumnsTableEvent(event.Table, row, event.SkippedColumns[0])
+			}
 		} else {
-			columns = getRowColumns(event.Table, row, []int{})
+			if hasFullRowImage(event) {
+				columns, hasPrimaryKey = getRowColumnsTableMetadata(m.tableMetadata[string(event.Table.Table)], row, []int{})
+			} else {
+				columns, hasPrimaryKey = getRowColumnsTableMetadata(m.tableMetadata[string(event.Table.Table)], row, event.SkippedColumns[0])
+			}
 		}
 
 		switch eventType {
@@ -343,19 +362,27 @@ func (m *MariaDBStream) handleRowsEvent(ctx context.Context, event *replication.
 			}
 
 		case replication.DELETE_ROWS_EVENTv1:
-			query, args, err = m.createDeleteQueryFromRow(event.Table, columns)
+			query, args, err = m.createDeleteQueryFromRow(event.Table, columns, hasPrimaryKey)
 			if err != nil {
 				return fmt.Errorf("error creating delete query: %s", err.Error())
 			}
 
 		case replication.UPDATE_ROWS_EVENTv1:
-			if len(event.SkippedColumns) > 1 {
-				updateColumns = getRowColumns(event.Table, event.Rows[i+1], event.SkippedColumns[1])
+			if hasRowMetadata(event) {
+				if hasFullRowImage(event) {
+					updateColumns, hasPrimaryKey = getRowColumnsTableEvent(event.Table, event.Rows[i+1], []int{})
+				} else {
+					updateColumns, hasPrimaryKey = getRowColumnsTableEvent(event.Table, event.Rows[i+1], event.SkippedColumns[1])
+				}
 			} else {
-				updateColumns = getRowColumns(event.Table, event.Rows[i+1], []int{})
+				if hasFullRowImage(event) {
+					updateColumns, hasPrimaryKey = getRowColumnsTableMetadata(m.tableMetadata[string(event.Table.Table)], event.Rows[i+1], []int{})
+				} else {
+					updateColumns, hasPrimaryKey = getRowColumnsTableMetadata(m.tableMetadata[string(event.Table.Table)], event.Rows[i+1], event.SkippedColumns[1])
+				}
 			}
 
-			query, args, err = m.createUpdateQueryFromRow(event.Table, columns, updateColumns)
+			query, args, err = m.createUpdateQueryFromRow(event.Table, columns, updateColumns, hasPrimaryKey)
 			if err != nil {
 				return fmt.Errorf("error creating update query: %s", err.Error())
 			}
@@ -396,29 +423,29 @@ func (m *MariaDBStream) createInsertQueryFromRow(table *replication.TableMapEven
 
 // createDeleteQueryFromRow returns an DELETE query with placeholders for the WHERE clause.
 // Args contains the values for the placeholders.
-func (m *MariaDBStream) createDeleteQueryFromRow(table *replication.TableMapEvent, columns []column) (query string, args []interface{}, err error) {
+func (m *MariaDBStream) createDeleteQueryFromRow(table *replication.TableMapEvent, columns []column, hasPrimaryKey bool) (query string, args []interface{}, err error) {
 
-	whereCondition, args := createWhereCondition(table, columns)
+	whereCondition, args := createWhereCondition(columns, hasPrimaryKey)
 	query = fmt.Sprintf("DELETE FROM %s.%s WHERE %s;", table.Schema, table.Table, whereCondition)
 	return query, args, nil
 }
 
 // createUpdateQueryFromRow returns an UPDATE query with placeholders for SET and WHERE clause.
 // Args contains the values for the placeholders.
-func (m *MariaDBStream) createUpdateQueryFromRow(table *replication.TableMapEvent, columns []column, updateColumns []column) (query string, args []interface{}, err error) {
+func (m *MariaDBStream) createUpdateQueryFromRow(table *replication.TableMapEvent, columns []column, updateColumns []column, hasPrimaryKey bool) (query string, args []interface{}, err error) {
 
 	setColumns := ""
-	for i, col := range updateColumns {
+	for _, col := range updateColumns {
 		if col.skip {
 			continue
 		}
-		setColumns += string(table.ColumnName[i]) + " = ?, "
+		setColumns += col.name + " = ?, "
 		args = append(args, col.value)
 	}
 
 	setColumns = strings.TrimSuffix(setColumns, ", ")
 
-	whereCondition, whereArgs := createWhereCondition(table, columns)
+	whereCondition, whereArgs := createWhereCondition(columns, hasPrimaryKey)
 	args = append(args, whereArgs...)
 	query = fmt.Sprintf("UPDATE %s.%s SET %s WHERE %s;", table.Schema, table.Table, setColumns, whereCondition)
 
@@ -623,19 +650,21 @@ func newNullString(value interface{}, nullable bool) sql.NullString {
 
 }
 
-func createWhereCondition(table *replication.TableMapEvent, columns []column) (condition string, args []interface{}) {
+func createWhereCondition(columns []column, hasPrimaryKey bool) (condition string, args []interface{}) {
 
-	if len(table.PrimaryKey) > 0 {
-		for _, j := range table.PrimaryKey {
-			condition += string(table.ColumnName[j]) + " = ? and "
-			args = append(args, columns[j].value)
+	if hasPrimaryKey {
+		for _, col := range columns {
+			if col.isKeyField {
+				condition += col.name + " = ? and "
+				args = append(args, col.value)
+			}
 		}
 	} else {
-		for i, col := range columns {
+		for _, col := range columns {
 			if col.skip {
 				continue
 			}
-			condition += string(table.ColumnName[i]) + " = ? and "
+			condition += col.name + " = ? and "
 			args = append(args, col.value)
 		}
 	}
@@ -643,7 +672,8 @@ func createWhereCondition(table *replication.TableMapEvent, columns []column) (c
 	return
 }
 
-func getRowColumns(table *replication.TableMapEvent, row []interface{}, skipColumns []int) (columns []column) {
+// getRowColumnsTableEvent combines the values from the row with the column defintion from the TableMapEvent
+func getRowColumnsTableEvent(table *replication.TableMapEvent, row []interface{}, skipColumns []int) (columns []column, hasPrimaryKey bool) {
 	for i, col := range row {
 		if ok, nullable := table.Nullable(i); ok {
 			columns = append(columns, column{name: string(table.ColumnName[i]), value: newNullString(col, nullable), skip: false})
@@ -655,5 +685,89 @@ func getRowColumns(table *replication.TableMapEvent, row []interface{}, skipColu
 	for _, i := range skipColumns {
 		columns[i].skip = true
 	}
-	return columns
+
+	if len(table.PrimaryKey) > 0 {
+		hasPrimaryKey = true
+
+		for _, i := range table.PrimaryKey {
+			columns[i].isKeyField = true
+		}
+	}
+
+	return columns, hasPrimaryKey
+}
+
+// getRowColumnsTableMetadata combines the values from the row with the column defintion from the TableMetadata
+func getRowColumnsTableMetadata(metadata map[int]columnDefinition, row []interface{}, skipColumns []int) (columns []column, hasPrimaryKey bool) {
+
+	for i, col := range row {
+		columns = append(columns, column{name: metadata[i+1].name, value: newNullString(col, metadata[i+1].isNullable), skip: false, isKeyField: metadata[i+1].isKey})
+		if metadata[i+1].isKey {
+			hasPrimaryKey = true
+		}
+	}
+	for _, i := range skipColumns {
+		columns[i].skip = true
+	}
+
+	return columns, hasPrimaryKey
+}
+
+type columnDefinition struct {
+	name       string
+	isKey      bool
+	isNullable bool
+}
+
+// hasRowMetadata returns true if the TableMapEvent of the RowsEvent contains column names
+func hasRowMetadata(event *replication.RowsEvent) bool {
+	return len(event.Table.ColumnName) > 0
+}
+
+// hasFullRowImage returns true if the RowsEvent does not have SkippedColumns
+func hasFullRowImage(event *replication.RowsEvent) bool {
+	return len(event.SkippedColumns) == 0
+}
+
+// queryTableMetadata queries the table information needed to replicate RowsEvents.
+// This metadata is only used if the Main Server does not have `binlog_row_metadata=FULL`
+func queryTableMetadata(db *sql.DB, serviceName string) (metadata map[string]map[int]columnDefinition, err error) {
+
+	query := fmt.Sprintf("SELECT TABLE_NAME, COLUMN_NAME, COLUMN_KEY, ORDINAL_POSITION, IS_NULLABLE from information_schema.COLUMNS where TABLE_SCHEMA = '%s';", serviceName)
+
+	rows, err := db.Query(query)
+	if err != nil {
+		return metadata, fmt.Errorf("error querying info schema: %s", err.Error())
+	}
+	defer rows.Close()
+
+	var tableName, columnName, columnKey, nullable string
+	var ordinalPosition int
+
+	metadata = make(map[string]map[int]columnDefinition)
+
+	for rows.Next() {
+		err := rows.Scan(&tableName, &columnName, &columnKey, &ordinalPosition, &nullable)
+		if err != nil {
+			return metadata, fmt.Errorf("error parsing info schema results: %s", err.Error())
+		}
+
+		isKey := false
+		if columnKey != "" {
+			isKey = true
+		}
+
+		isNullable := false
+		if nullable == "YES" {
+			isNullable = true
+		}
+
+		if _, ok := metadata[tableName]; !ok {
+			metadata[tableName] = make(map[int]columnDefinition)
+		}
+
+		metadata[tableName][ordinalPosition] = columnDefinition{columnName, isKey, isNullable}
+	}
+
+	return metadata, nil
 }
