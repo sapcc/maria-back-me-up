@@ -54,7 +54,7 @@ type MariaDBStream struct {
 	serviceName   string
 	statusError   map[string]string
 	tx            *sql.Tx
-	tableMetadata map[string]map[int]columnDefinition
+	tableMetadata map[string]map[string]map[int]columnDefinition
 }
 
 type column struct {
@@ -72,12 +72,6 @@ func NewMariaDBStream(c config.MariaDBStream, serviceName string) (m *MariaDBStr
 		return m, fmt.Errorf("failed to init MariaDBStream: %s", err.Error())
 	}
 
-	metadata, err := queryTableMetadata(db, serviceName)
-
-	if err != nil {
-		return m, err
-	}
-
 	databases := initDatabaseMap(c.Databases)
 
 	var sqlParser *parser.Parser
@@ -87,12 +81,11 @@ func NewMariaDBStream(c config.MariaDBStream, serviceName string) (m *MariaDBStr
 	}
 
 	return &MariaDBStream{
-		db:            db,
-		cfg:           c,
-		databases:     databases,
-		sqlParser:     sqlParser,
-		serviceName:   serviceName,
-		tableMetadata: metadata,
+		db:          db,
+		cfg:         c,
+		databases:   databases,
+		sqlParser:   sqlParser,
+		serviceName: serviceName,
 	}, nil
 }
 
@@ -104,6 +97,12 @@ func (m *MariaDBStream) WriteStream(fileName, mimeType string, body io.Reader, t
 // WriteChannel implements interface
 func (m *MariaDBStream) WriteChannel(name, mimeType string, body <-chan StreamEvent, tags map[string]string, dlo bool) (err error) {
 	ctx := context.Background()
+
+	m.tableMetadata, err = m.queryTableMetadata()
+	if err != nil {
+		return err
+	}
+
 	for {
 		value, ok := <-body
 		if !ok {
@@ -348,9 +347,9 @@ func (m *MariaDBStream) handleRowsEvent(ctx context.Context, event *replication.
 			}
 		} else {
 			if hasFullRowImage(event) {
-				columns, hasPrimaryKey = getRowColumnsTableMetadata(m.tableMetadata[string(event.Table.Table)], row, []int{})
+				columns, hasPrimaryKey = getRowColumnsTableMetadata(m.tableMetadata[string(event.Table.Schema)][string(event.Table.Table)], row, []int{})
 			} else {
-				columns, hasPrimaryKey = getRowColumnsTableMetadata(m.tableMetadata[string(event.Table.Table)], row, event.SkippedColumns[0])
+				columns, hasPrimaryKey = getRowColumnsTableMetadata(m.tableMetadata[string(event.Table.Schema)][string(event.Table.Table)], row, event.SkippedColumns[0])
 			}
 		}
 
@@ -376,9 +375,9 @@ func (m *MariaDBStream) handleRowsEvent(ctx context.Context, event *replication.
 				}
 			} else {
 				if hasFullRowImage(event) {
-					updateColumns, hasPrimaryKey = getRowColumnsTableMetadata(m.tableMetadata[string(event.Table.Table)], event.Rows[i+1], []int{})
+					updateColumns, hasPrimaryKey = getRowColumnsTableMetadata(m.tableMetadata[string(event.Table.Schema)][string(event.Table.Table)], event.Rows[i+1], []int{})
 				} else {
-					updateColumns, hasPrimaryKey = getRowColumnsTableMetadata(m.tableMetadata[string(event.Table.Table)], event.Rows[i+1], event.SkippedColumns[1])
+					updateColumns, hasPrimaryKey = getRowColumnsTableMetadata(m.tableMetadata[string(event.Table.Schema)][string(event.Table.Table)], event.Rows[i+1], event.SkippedColumns[1])
 				}
 			}
 
@@ -731,43 +730,47 @@ func hasFullRowImage(event *replication.RowsEvent) bool {
 
 // queryTableMetadata queries the table information needed to replicate RowsEvents.
 // This metadata is only used if the Main Server does not have `binlog_row_metadata=FULL`
-func queryTableMetadata(db *sql.DB, serviceName string) (metadata map[string]map[int]columnDefinition, err error) {
+func (m *MariaDBStream) queryTableMetadata() (metadata map[string]map[string]map[int]columnDefinition, err error) {
 
-	query := fmt.Sprintf("SELECT TABLE_NAME, COLUMN_NAME, COLUMN_KEY, ORDINAL_POSITION, IS_NULLABLE from information_schema.COLUMNS where TABLE_SCHEMA = '%s';", serviceName)
+	metadata = make(map[string]map[string]map[int]columnDefinition)
+	for _, schema := range m.cfg.Databases {
+		query := fmt.Sprintf("SELECT TABLE_NAME, COLUMN_NAME, COLUMN_KEY, ORDINAL_POSITION, IS_NULLABLE from information_schema.COLUMNS where TABLE_SCHEMA = '%s';", schema)
 
-	rows, err := db.Query(query)
-	if err != nil {
-		return metadata, fmt.Errorf("error querying info schema: %s", err.Error())
-	}
-	defer rows.Close()
-
-	var tableName, columnName, columnKey, nullable string
-	var ordinalPosition int
-
-	metadata = make(map[string]map[int]columnDefinition)
-
-	for rows.Next() {
-		err := rows.Scan(&tableName, &columnName, &columnKey, &ordinalPosition, &nullable)
+		rows, err := m.db.Query(query)
 		if err != nil {
-			return metadata, fmt.Errorf("error parsing info schema results: %s", err.Error())
+			return metadata, fmt.Errorf("error querying info schema: %s", err.Error())
 		}
+		defer rows.Close()
 
-		isKey := false
-		if columnKey != "" {
-			isKey = true
+		var tableName, columnName, columnKey, nullable string
+		var ordinalPosition int
+
+		tableMetadata := make(map[string]map[int]columnDefinition)
+
+		for rows.Next() {
+			err := rows.Scan(&tableName, &columnName, &columnKey, &ordinalPosition, &nullable)
+			if err != nil {
+				return metadata, fmt.Errorf("error parsing info schema results: %s", err.Error())
+			}
+
+			isKey := false
+			if columnKey != "" {
+				isKey = true
+			}
+
+			isNullable := false
+			if nullable == "YES" {
+				isNullable = true
+			}
+
+			if _, ok := tableMetadata[tableName]; !ok {
+				tableMetadata[tableName] = make(map[int]columnDefinition)
+			}
+
+			tableMetadata[tableName][ordinalPosition] = columnDefinition{columnName, isKey, isNullable}
 		}
-
-		isNullable := false
-		if nullable == "YES" {
-			isNullable = true
-		}
-
-		if _, ok := metadata[tableName]; !ok {
-			metadata[tableName] = make(map[int]columnDefinition)
-		}
-
-		metadata[tableName][ordinalPosition] = columnDefinition{columnName, isKey, isNullable}
+		metadata[schema] = tableMetadata
 	}
 
-	return metadata, nil
+	return metadata, err
 }

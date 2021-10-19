@@ -528,28 +528,30 @@ func setup(t *testing.T, parseSQL, hasRowMetadata bool, hasPrimaryKey bool) (mar
 		t.Error("test setup failed to create transaction")
 	}
 
-	tableMetadata := map[string]map[int]columnDefinition{}
+	tableMetadata := map[string]map[string]map[int]columnDefinition{}
 	if !hasRowMetadata {
-		tableMetadata = map[string]map[int]columnDefinition{
-			"task": {
-				1: {
-					name:  "ask_id",
-					isKey: hasPrimaryKey,
-				},
-				2: {
-					name: "title",
-				},
-				3: {
-					name:       "start_date",
-					isNullable: true,
-				},
-				4: {
-					name:       "due_date",
-					isNullable: true,
-				},
-				5: {
-					name:       "description",
-					isNullable: true,
+		tableMetadata = map[string]map[string]map[int]columnDefinition{
+			"service": {
+				"task": {
+					1: {
+						name:  "ask_id",
+						isKey: hasPrimaryKey,
+					},
+					2: {
+						name: "title",
+					},
+					3: {
+						name:       "start_date",
+						isNullable: true,
+					},
+					4: {
+						name:       "due_date",
+						isNullable: true,
+					},
+					5: {
+						name:       "description",
+						isNullable: true,
+					},
 				},
 			},
 		}
