@@ -11,14 +11,15 @@ import (
 )
 
 type testEventOptions struct {
-	eventType      replication.EventType
-	primaryKey     []uint64
-	nullBitmap     []byte
-	skippedColumns [][]int
+	eventType       replication.EventType
+	primaryKey      []uint64
+	nullBitmap      []byte
+	skippedColumns  [][]int
+	hasFullMetadata bool
 }
 
 func TestWriteQueryEvent(t *testing.T) {
-	mariaDBStream, mock := setup(t, false)
+	mariaDBStream, mock := setup(t, false, true, true)
 	queryEvent := replication.QueryEvent{
 		Schema: []byte("service"),
 		Query:  []byte("INSERT INTO task (ask_id, title, start_date, due_date, description) VALUES ( '2', 'task1', '2021-05-02', '2022-05-02', 'Test Entry');"),
@@ -31,7 +32,7 @@ func TestWriteQueryEvent(t *testing.T) {
 }
 
 func TestWriteQueryEventParseSchema(t *testing.T) {
-	mariaDBStream, mock := setup(t, true)
+	mariaDBStream, mock := setup(t, true, true, true)
 	queryEvent := replication.QueryEvent{
 		Schema: []byte("test"),
 		Query:  []byte("INSERT INTO service.task (ask_id, title, start_date, due_date, description) VALUES ( '2', 'task1', '2021-05-02', '2022-05-02', 'Test Entry');"),
@@ -44,7 +45,7 @@ func TestWriteQueryEventParseSchema(t *testing.T) {
 }
 
 func TestWriteQueryEventParseSchemaSkipped(t *testing.T) {
-	mariaDBStream, mock := setup(t, true)
+	mariaDBStream, mock := setup(t, true, true, true)
 	queryEvent := replication.QueryEvent{
 		Schema: []byte("service"),
 		Query:  []byte("INSERT INTO test.task (ask_id, title, start_date, due_date, description) VALUES ( '2', 'task1', '2021-05-02', '2022-05-02', 'Test Entry');"),
@@ -54,11 +55,12 @@ func TestWriteQueryEventParseSchemaSkipped(t *testing.T) {
 }
 
 func TestWriteRowsEventv1FullImage(t *testing.T) {
-	mariaDBStream, mock := setup(t, false)
+	mariaDBStream, mock := setup(t, false, true, true)
 	options := testEventOptions{
-		primaryKey: []uint64{0},
-		eventType:  replication.WRITE_ROWS_EVENTv1,
-		nullBitmap: []byte{28},
+		primaryKey:      []uint64{0},
+		eventType:       replication.WRITE_ROWS_EVENTv1,
+		nullBitmap:      []byte{28},
+		hasFullMetadata: true,
 	}
 	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
 		{int32(1), "task1", "2021-05-02", "2022-05-02", ""},
@@ -74,12 +76,13 @@ func TestWriteRowsEventv1FullImage(t *testing.T) {
 }
 
 func TestWriteRowsEventv1MinimalImage(t *testing.T) {
-	mariaDBStream, mock := setup(t, false)
+	mariaDBStream, mock := setup(t, false, true, true)
 
 	options := testEventOptions{
-		primaryKey: []uint64{0},
-		eventType:  replication.WRITE_ROWS_EVENTv1,
-		nullBitmap: []byte{28},
+		primaryKey:      []uint64{0},
+		eventType:       replication.WRITE_ROWS_EVENTv1,
+		nullBitmap:      []byte{28},
+		hasFullMetadata: true,
 	}
 
 	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
@@ -94,7 +97,7 @@ func TestWriteRowsEventv1MinimalImage(t *testing.T) {
 }
 
 func TestWriteRowsEventv1MinimalImageNullCols(t *testing.T) {
-	mariaDBStream, mock := setup(t, false)
+	mariaDBStream, mock := setup(t, false, true, true)
 	options := testEventOptions{
 		primaryKey: []uint64{0},
 		eventType:  replication.WRITE_ROWS_EVENTv1,
@@ -103,6 +106,7 @@ func TestWriteRowsEventv1MinimalImageNullCols(t *testing.T) {
 			{2, 3},
 			{2, 3, 4},
 		},
+		hasFullMetadata: true,
 	}
 
 	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
@@ -117,12 +121,13 @@ func TestWriteRowsEventv1MinimalImageNullCols(t *testing.T) {
 }
 
 func TestDeleteRowsEventV1FullImageWithPK(t *testing.T) {
-	mariaDBStream, mock := setup(t, false)
+	mariaDBStream, mock := setup(t, false, true, true)
 
 	options := testEventOptions{
-		primaryKey: []uint64{0},
-		eventType:  replication.DELETE_ROWS_EVENTv1,
-		nullBitmap: []byte{28},
+		primaryKey:      []uint64{0},
+		eventType:       replication.DELETE_ROWS_EVENTv1,
+		nullBitmap:      []byte{28},
+		hasFullMetadata: true,
 	}
 
 	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
@@ -134,11 +139,12 @@ func TestDeleteRowsEventV1FullImageWithPK(t *testing.T) {
 	execRowsEventTest(t, mock, mariaDBStream, replication.DELETE_ROWS_EVENTv1, rowsEvent)
 }
 func TestDeleteRowsEventV1FullImageNoPK(t *testing.T) {
-	mariaDBStream, mock := setup(t, false)
+	mariaDBStream, mock := setup(t, false, true, false)
 	// Without Primary Key
 	options := testEventOptions{
-		eventType:  replication.DELETE_ROWS_EVENTv1,
-		nullBitmap: []byte{28},
+		eventType:       replication.DELETE_ROWS_EVENTv1,
+		nullBitmap:      []byte{28},
+		hasFullMetadata: true,
 	}
 
 	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
@@ -151,12 +157,13 @@ func TestDeleteRowsEventV1FullImageNoPK(t *testing.T) {
 }
 
 func TestDeleteRowsEventV1MinimalImageWithPK(t *testing.T) {
-	mariaDBStream, mock := setup(t, false)
+	mariaDBStream, mock := setup(t, false, true, true)
 
 	options := testEventOptions{
-		eventType:      replication.DELETE_ROWS_EVENTv1,
-		nullBitmap:     []byte{28},
-		skippedColumns: [][]int{{1, 2, 3, 4}},
+		eventType:       replication.DELETE_ROWS_EVENTv1,
+		nullBitmap:      []byte{28},
+		skippedColumns:  [][]int{{1, 2, 3, 4}},
+		hasFullMetadata: true,
 	}
 
 	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
@@ -168,12 +175,13 @@ func TestDeleteRowsEventV1MinimalImageWithPK(t *testing.T) {
 }
 
 func TestDeleteRowsEventV1MinimalImageNoPK(t *testing.T) {
-	mariaDBStream, mock := setup(t, false)
+	mariaDBStream, mock := setup(t, false, true, false)
 
 	options := testEventOptions{
-		eventType:      replication.DELETE_ROWS_EVENTv1,
-		nullBitmap:     []byte{28},
-		skippedColumns: [][]int{{1, 2, 3, 4}},
+		eventType:       replication.DELETE_ROWS_EVENTv1,
+		nullBitmap:      []byte{28},
+		skippedColumns:  [][]int{{1, 2, 3, 4}},
+		hasFullMetadata: true,
 	}
 
 	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
@@ -185,12 +193,13 @@ func TestDeleteRowsEventV1MinimalImageNoPK(t *testing.T) {
 }
 
 func TestUpdateRowsEventV1FullImageWithPK(t *testing.T) {
-	mariaDBStream, mock := setup(t, false)
+	mariaDBStream, mock := setup(t, false, true, false)
 
 	options := testEventOptions{
-		primaryKey: []uint64{0},
-		eventType:  replication.UPDATE_ROWS_EVENTv1,
-		nullBitmap: []byte{28},
+		primaryKey:      []uint64{0},
+		eventType:       replication.UPDATE_ROWS_EVENTv1,
+		nullBitmap:      []byte{28},
+		hasFullMetadata: true,
 	}
 
 	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
@@ -207,11 +216,12 @@ func TestUpdateRowsEventV1FullImageWithPK(t *testing.T) {
 	execRowsEventTest(t, mock, mariaDBStream, replication.UPDATE_ROWS_EVENTv1, rowsEvent)
 }
 func TestUpdateRowsEventV1FullImageNoPK(t *testing.T) {
-	mariaDBStream, mock := setup(t, false)
+	mariaDBStream, mock := setup(t, false, true, false)
 
 	options := testEventOptions{
-		eventType:  replication.UPDATE_ROWS_EVENTv1,
-		nullBitmap: []byte{28},
+		eventType:       replication.UPDATE_ROWS_EVENTv1,
+		nullBitmap:      []byte{28},
+		hasFullMetadata: true,
 	}
 
 	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
@@ -229,7 +239,7 @@ func TestUpdateRowsEventV1FullImageNoPK(t *testing.T) {
 }
 
 func TestUpdateRowsEventV1MinimalImageWithPK(t *testing.T) {
-	mariaDBStream, mock := setup(t, false)
+	mariaDBStream, mock := setup(t, false, true, true)
 
 	options := testEventOptions{
 		primaryKey: []uint64{0},
@@ -239,6 +249,7 @@ func TestUpdateRowsEventV1MinimalImageWithPK(t *testing.T) {
 			{1, 2, 3, 4},
 			{0, 1, 2, 3},
 		},
+		hasFullMetadata: true,
 	}
 
 	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
@@ -251,7 +262,7 @@ func TestUpdateRowsEventV1MinimalImageWithPK(t *testing.T) {
 }
 
 func TestUpdateRowsEventV1MinimalImageNoPK(t *testing.T) {
-	mariaDBStream, mock := setup(t, false)
+	mariaDBStream, mock := setup(t, false, true, false)
 
 	options := testEventOptions{
 		eventType:  replication.UPDATE_ROWS_EVENTv1,
@@ -260,6 +271,7 @@ func TestUpdateRowsEventV1MinimalImageNoPK(t *testing.T) {
 			{1, 2, 3, 4},
 			{0, 1, 2, 3},
 		},
+		hasFullMetadata: true,
 	}
 
 	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
@@ -271,7 +283,234 @@ func TestUpdateRowsEventV1MinimalImageNoPK(t *testing.T) {
 	execRowsEventTest(t, mock, mariaDBStream, replication.UPDATE_ROWS_EVENTv1, rowsEvent)
 }
 
-func setup(t *testing.T, parseSQL bool) (mariaDBStream *MariaDBStream, mock sqlmock.Sqlmock) {
+func TestWriteRowsEventv1FullImageNoRowMetadata(t *testing.T) {
+	mariaDBStream, mock := setup(t, false, false, true)
+	options := testEventOptions{
+		eventType:       replication.WRITE_ROWS_EVENTv1,
+		nullBitmap:      []byte{28},
+		hasFullMetadata: false,
+	}
+	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+		{int32(1), "task1", "2021-05-02", "2022-05-02", ""},
+		{int32(2), "task1", "2021-05-02", "2022-05-02", "Test Entry"},
+		{int32(3), "task1", "2021-05-02", "2022-05-02", nil},
+	})
+
+	mock.ExpectExec("INSERT INTO service.task (ask_id,title,start_date,due_date,description) VALUES (?,?,?,?,?);").WithArgs("1", "task1", "2021-05-02", "2022-05-02", "").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("INSERT INTO service.task (ask_id,title,start_date,due_date,description) VALUES (?,?,?,?,?);").WithArgs("2", "task1", "2021-05-02", "2022-05-02", "Test Entry").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("INSERT INTO service.task (ask_id,title,start_date,due_date,description) VALUES (?,?,?,?,?);").WithArgs("3", "task1", "2021-05-02", "2022-05-02", nil).WillReturnResult(sqlmock.NewResult(1, 1))
+
+	execRowsEventTest(t, mock, mariaDBStream, replication.WRITE_ROWS_EVENTv1, rowsEvent)
+}
+
+func TestWriteRowsEventv1MinimalImageNoRowMetadata(t *testing.T) {
+	mariaDBStream, mock := setup(t, false, false, true)
+
+	options := testEventOptions{
+		eventType:       replication.WRITE_ROWS_EVENTv1,
+		nullBitmap:      []byte{28},
+		hasFullMetadata: false,
+	}
+
+	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+		{int32(1), "task1", "2021-05-02", "2022-05-02", ""},
+		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry"},
+	})
+
+	mock.ExpectExec("INSERT INTO service.task (ask_id,title,start_date,due_date,description) VALUES (?,?,?,?,?);").WithArgs("1", "task1", "2021-05-02", "2022-05-02", "").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("INSERT INTO service.task (ask_id,title,start_date,due_date,description) VALUES (?,?,?,?,?);").WithArgs("1", "task1", "2021-05-02", "2022-05-02", "Test Entry").WillReturnResult(sqlmock.NewResult(1, 1))
+
+	execRowsEventTest(t, mock, mariaDBStream, replication.WRITE_ROWS_EVENTv1, rowsEvent)
+}
+
+func TestWriteRowsEventv1MinimalImageNullColsNoRowMetadata(t *testing.T) {
+	mariaDBStream, mock := setup(t, false, false, true)
+	options := testEventOptions{
+		primaryKey: []uint64{0},
+		eventType:  replication.WRITE_ROWS_EVENTv1,
+		nullBitmap: []byte{28},
+		skippedColumns: [][]int{
+			{2, 3},
+			{2, 3, 4},
+		},
+		hasFullMetadata: false,
+	}
+
+	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+		{int32(1), "task1", nil, nil, ""},
+		{int32(1), "task1", nil, nil, nil},
+	})
+
+	mock.ExpectExec("INSERT INTO service.task (ask_id,title,description) VALUES (?,?,?);").WithArgs("1", "task1", "").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("INSERT INTO service.task (ask_id,title,description) VALUES (?,?,?);").WithArgs("1", "task1", nil).WillReturnResult(sqlmock.NewResult(1, 1))
+
+	execRowsEventTest(t, mock, mariaDBStream, replication.WRITE_ROWS_EVENTv1, rowsEvent)
+}
+
+func TestDeleteRowsEventV1FullImageWithPKNoRowMetadata(t *testing.T) {
+	mariaDBStream, mock := setup(t, false, false, true)
+
+	options := testEventOptions{
+		primaryKey:      []uint64{0},
+		eventType:       replication.DELETE_ROWS_EVENTv1,
+		nullBitmap:      []byte{28},
+		hasFullMetadata: false,
+	}
+
+	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry"},
+	})
+
+	mock.ExpectExec("DELETE FROM service.task WHERE ask_id = ?;").WithArgs("1").WillReturnResult(sqlmock.NewResult(0, 1))
+
+	execRowsEventTest(t, mock, mariaDBStream, replication.DELETE_ROWS_EVENTv1, rowsEvent)
+}
+func TestDeleteRowsEventV1FullImageNoPKNoRowMetadata(t *testing.T) {
+	mariaDBStream, mock := setup(t, false, false, false)
+	// Without Primary Key
+	options := testEventOptions{
+		eventType:       replication.DELETE_ROWS_EVENTv1,
+		nullBitmap:      []byte{28},
+		hasFullMetadata: false,
+	}
+
+	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry"},
+	})
+
+	mock.ExpectExec("DELETE FROM service.task WHERE ask_id = ? and title = ? and start_date = ? and due_date = ? and description = ?;").WithArgs("1", "task1", "2021-05-02", "2022-05-02", "Test Entry").WillReturnResult(sqlmock.NewResult(0, 1))
+
+	execRowsEventTest(t, mock, mariaDBStream, replication.DELETE_ROWS_EVENTv1, rowsEvent)
+}
+
+func TestDeleteRowsEventV1MinimalImageWithPKNoRowMetadata(t *testing.T) {
+	mariaDBStream, mock := setup(t, false, false, true)
+
+	options := testEventOptions{
+		eventType:       replication.DELETE_ROWS_EVENTv1,
+		nullBitmap:      []byte{28},
+		skippedColumns:  [][]int{{1, 2, 3, 4}},
+		hasFullMetadata: false,
+	}
+
+	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+		{int32(1), nil, nil, nil, nil},
+	})
+
+	mock.ExpectExec("DELETE FROM service.task WHERE ask_id = ?;").WithArgs("1").WillReturnResult(sqlmock.NewResult(0, 1))
+	execRowsEventTest(t, mock, mariaDBStream, replication.DELETE_ROWS_EVENTv1, rowsEvent)
+}
+
+func TestDeleteRowsEventV1MinimalImageNoPKNoRowMetadata(t *testing.T) {
+	mariaDBStream, mock := setup(t, false, false, false)
+
+	options := testEventOptions{
+		eventType:       replication.DELETE_ROWS_EVENTv1,
+		nullBitmap:      []byte{28},
+		skippedColumns:  [][]int{{1, 2, 3, 4}},
+		hasFullMetadata: false,
+	}
+
+	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+		{int32(1), nil, nil, nil, nil},
+	})
+
+	mock.ExpectExec("DELETE FROM service.task WHERE ask_id = ?;").WithArgs("1").WillReturnResult(sqlmock.NewResult(0, 1))
+	execRowsEventTest(t, mock, mariaDBStream, replication.DELETE_ROWS_EVENTv1, rowsEvent)
+}
+
+func TestUpdateRowsEventV1FullImageWithPKNoRowMetadata(t *testing.T) {
+	mariaDBStream, mock := setup(t, false, false, true)
+
+	options := testEventOptions{
+		primaryKey:      []uint64{0},
+		eventType:       replication.UPDATE_ROWS_EVENTv1,
+		nullBitmap:      []byte{28},
+		hasFullMetadata: false,
+	}
+
+	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry Old"},
+		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry New"},
+		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry Old"},
+		{int32(2), "task1", "2021-05-02", "2022-05-02", "Test Entry New"},
+	})
+
+	mock.ExpectExec("UPDATE service.task SET ask_id = ?, title = ?, start_date = ?, due_date = ?, description = ? WHERE ask_id = ?;").WithArgs("1", "task1", "2021-05-02", "2022-05-02", "Test Entry New", "1").WillReturnResult(sqlmock.NewResult(0, 1))
+
+	mock.ExpectExec("UPDATE service.task SET ask_id = ?, title = ?, start_date = ?, due_date = ?, description = ? WHERE ask_id = ?;").WithArgs("2", "task1", "2021-05-02", "2022-05-02", "Test Entry New", "1").WillReturnResult(sqlmock.NewResult(0, 1))
+
+	execRowsEventTest(t, mock, mariaDBStream, replication.UPDATE_ROWS_EVENTv1, rowsEvent)
+}
+func TestUpdateRowsEventV1FullImageNoPKNoRowMetadata(t *testing.T) {
+	mariaDBStream, mock := setup(t, false, false, false)
+
+	options := testEventOptions{
+		eventType:       replication.UPDATE_ROWS_EVENTv1,
+		nullBitmap:      []byte{28},
+		hasFullMetadata: false,
+	}
+
+	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry Old"},
+		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry New"},
+		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry Old"},
+		{int32(2), "task1", "2021-05-02", "2022-05-02", "Test Entry New"},
+	})
+
+	mock.ExpectExec("UPDATE service.task SET ask_id = ?, title = ?, start_date = ?, due_date = ?, description = ? WHERE ask_id = ? and title = ? and start_date = ? and due_date = ? and description = ?;").WithArgs("1", "task1", "2021-05-02", "2022-05-02", "Test Entry New", "1", "task1", "2021-05-02", "2022-05-02", "Test Entry Old").WillReturnResult(sqlmock.NewResult(0, 1))
+
+	mock.ExpectExec("UPDATE service.task SET ask_id = ?, title = ?, start_date = ?, due_date = ?, description = ? WHERE ask_id = ? and title = ? and start_date = ? and due_date = ? and description = ?;").WithArgs("2", "task1", "2021-05-02", "2022-05-02", "Test Entry New", "1", "task1", "2021-05-02", "2022-05-02", "Test Entry Old").WillReturnResult(sqlmock.NewResult(0, 1))
+
+	execRowsEventTest(t, mock, mariaDBStream, replication.UPDATE_ROWS_EVENTv1, rowsEvent)
+}
+
+func TestUpdateRowsEventV1MinimalImageWithPKNoRowMetadata(t *testing.T) {
+	mariaDBStream, mock := setup(t, false, false, true)
+
+	options := testEventOptions{
+		primaryKey: []uint64{0},
+		eventType:  replication.UPDATE_ROWS_EVENTv1,
+		nullBitmap: []byte{28},
+		skippedColumns: [][]int{
+			{1, 2, 3, 4},
+			{0, 1, 2, 3},
+		},
+		hasFullMetadata: false,
+	}
+
+	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+		{int32(1), nil, nil, nil, nil},
+		{nil, nil, nil, nil, "Test Entry New"},
+	})
+
+	mock.ExpectExec("UPDATE service.task SET description = ? WHERE ask_id = ?;").WithArgs("Test Entry New", "1").WillReturnResult(sqlmock.NewResult(0, 1))
+	execRowsEventTest(t, mock, mariaDBStream, replication.UPDATE_ROWS_EVENTv1, rowsEvent)
+}
+
+func TestUpdateRowsEventV1MinimalImageNoPKNoRowMetadata(t *testing.T) {
+	mariaDBStream, mock := setup(t, false, false, false)
+
+	options := testEventOptions{
+		eventType:  replication.UPDATE_ROWS_EVENTv1,
+		nullBitmap: []byte{28},
+		skippedColumns: [][]int{
+			{1, 2, 3, 4},
+			{0, 1, 2, 3},
+		},
+		hasFullMetadata: false,
+	}
+
+	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+		{int32(1), nil, nil, nil, nil},
+		{nil, nil, nil, nil, "Test Entry New"},
+	})
+
+	mock.ExpectExec("UPDATE service.task SET description = ? WHERE ask_id = ?;").WithArgs("Test Entry New", "1").WillReturnResult(sqlmock.NewResult(0, 1))
+	execRowsEventTest(t, mock, mariaDBStream, replication.UPDATE_ROWS_EVENTv1, rowsEvent)
+}
+
+func setup(t *testing.T, parseSQL, hasRowMetadata bool, hasPrimaryKey bool) (mariaDBStream *MariaDBStream, mock sqlmock.Sqlmock) {
 	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
 	if err != nil {
 		t.Errorf("test setup failed: %s", err.Error())
@@ -288,7 +527,37 @@ func setup(t *testing.T, parseSQL bool) (mariaDBStream *MariaDBStream, mock sqlm
 	if err != nil {
 		t.Error("test setup failed to create transaction")
 	}
-	mariaDBStream = &MariaDBStream{sqlParser: parser.New(), db: db, tx: tx, databases: databases, cfg: config}
+
+	tableMetadata := map[string]map[string]map[int]columnDefinition{}
+	if !hasRowMetadata {
+		tableMetadata = map[string]map[string]map[int]columnDefinition{
+			"service": {
+				"task": {
+					1: {
+						name:  "ask_id",
+						isKey: hasPrimaryKey,
+					},
+					2: {
+						name: "title",
+					},
+					3: {
+						name:       "start_date",
+						isNullable: true,
+					},
+					4: {
+						name:       "due_date",
+						isNullable: true,
+					},
+					5: {
+						name:       "description",
+						isNullable: true,
+					},
+				},
+			},
+		}
+	}
+
+	mariaDBStream = &MariaDBStream{sqlParser: parser.New(), db: db, tx: tx, databases: databases, cfg: config, tableMetadata: tableMetadata}
 	return
 }
 
@@ -343,19 +612,21 @@ func createRowsTestEvent(version int, options testEventOptions, rows [][]interfa
 		Table: &replication.TableMapEvent{
 			Schema: []byte("service"),
 			Table:  []byte("task"),
-			ColumnName: [][]byte{
-				[]byte("ask_id"),
-				[]byte("title"),
-				[]byte("start_date"),
-				[]byte("due_date"),
-				[]byte("description"),
-			},
-			PrimaryKey: options.primaryKey,
-			NullBitmap: options.nullBitmap,
 		},
 		ColumnCount:    5,
 		Rows:           rows,
 		SkippedColumns: options.skippedColumns,
+	}
+	if options.hasFullMetadata {
+		rowsEvent.Table.PrimaryKey = options.primaryKey
+		rowsEvent.Table.NullBitmap = options.nullBitmap
+		rowsEvent.Table.ColumnName = [][]byte{
+			[]byte("ask_id"),
+			[]byte("title"),
+			[]byte("start_date"),
+			[]byte("due_date"),
+			[]byte("description"),
+		}
 	}
 	return rowsEvent
 }

@@ -130,7 +130,8 @@ func Setup(t *testing.T, opts *SetupOptions) (m *backup.Manager, cfg config.Conf
 
 	if opts.StreamStorage.Enabled {
 		// Clear Secondary DB
-		err = prepareDB(3307, "127.0.0.1", "root", "streaming", clearDBFile)
+		destination := cfg.Storages.MariaDB[0]
+		err = prepareDB(destination.Port, destination.Host, destination.User, destination.Password, clearDBFile)
 		if err != nil {
 			t.Errorf("failed to prepare target db: %s", err.Error())
 			t.FailNow()
