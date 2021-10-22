@@ -43,12 +43,10 @@ import (
 )
 
 var (
-	binlogCancel  context.CancelFunc
-	backupCancel  context.CancelFunc
-	binlogChan    chan error
-	logUpdate     chan<- time.Time
-	logger        *logrus.Entry
-	scheduleTimer *time.Timer
+	binlogCancel context.CancelFunc
+	backupCancel context.CancelFunc
+	binlogChan   chan error
+	logger       *logrus.Entry
 )
 
 type (
@@ -59,7 +57,6 @@ type (
 	}
 	// ChecksumStatus backup checksum struct
 	ChecksumStatus struct {
-		timestamp int64            `yaml:"timestamp"`
 		Checksums map[string]int64 `yaml:"checksums"`
 	}
 	// Manager that handles the backup cycle
@@ -85,10 +82,7 @@ func init() {
 // NewManager returns a manager instance
 func NewManager(s *storage.Manager, db database.Database, k *k8s.Database, c config.Config) (m *Manager, err error) {
 
-	us := UpdateStatus{
-		FullBackup: make(map[string]int, 0),
-		IncBackup:  make(map[string]int, 0),
-	}
+	us := NewUpdateStatus()
 	for _, v := range s.GetStorageServicesKeys() {
 		us.IncBackup[v] = 0
 		us.FullBackup[v] = 0
@@ -134,11 +128,10 @@ func (m *Manager) Stop() (ctx context.Context) {
 	}
 	close(m.errCh)
 	ctx = m.cronBackup.Stop()
-	select {
-	case <-ctx.Done():
-		m.cronBackup = nil
-		return ctx
-	}
+
+	<-ctx.Done()
+	m.cronBackup = nil
+	return ctx
 }
 
 func (m *Manager) startBackup(ctx context.Context) (err error) {
@@ -396,6 +389,7 @@ func (m *Manager) readErrorChannel() {
 			continue
 		}
 		if err != nil {
+			m.updateSts.Restarts.Inc()
 			logger.Error(fmt.Sprintf("cannot handle backup error: %s. -> Restarting in 2min", err.Error()))
 			m.Stop()
 			time.Sleep(time.Duration(2) * time.Minute)

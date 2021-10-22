@@ -28,15 +28,23 @@ type (
 		sync.RWMutex `yaml:"-"`
 		IncBackup    map[string]int
 		FullBackup   map[string]int
+		Restarts     prometheus.Counter
 	}
 
 	// MetricsCollector collects metrics fort the backup and verification status
 	MetricsCollector struct {
 		backup    *prometheus.Desc
-		verify    *prometheus.Desc
 		updateSts *UpdateStatus
 	}
 )
+
+func NewUpdateStatus() UpdateStatus {
+	return UpdateStatus{
+		FullBackup: make(map[string]int),
+		IncBackup:  make(map[string]int),
+		Restarts:   prometheus.NewCounter(prometheus.CounterOpts{Name: "maria_backup_restarts", Help: "Number of times the backup process was restarted"}),
+	}
+}
 
 // Describe implements the exporter interface function
 func (c *MetricsCollector) Describe(ch chan<- *prometheus.Desc) {
@@ -65,6 +73,7 @@ func (c *MetricsCollector) Collect(ch chan<- prometheus.Metric) {
 			storage,
 		)
 	}
+	ch <- c.updateSts.Restarts
 }
 
 // NewMetricsCollector create a prometheus collector instance
