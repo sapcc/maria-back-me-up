@@ -205,7 +205,7 @@ func (m *MariaDBStream) WriteFolder(p string) (err error) {
 }
 
 // ProcessBinlogEvent processes the QueryEvents
-// - Events other than QueryEvent, RowsEvent are ignored
+// - Events other than QueryEvent or RowsEvents are ignored
 // - Only replicates all schemas or those set in the config
 // - If schemas are filtered and the schema is set the event will be ignored
 func (m *MariaDBStream) ProcessBinlogEvent(ctx context.Context, event *replication.BinlogEvent) (err error) {
