@@ -96,7 +96,7 @@ func Setup(t *testing.T, opts *SetupOptions) (m *backup.Manager, cfg config.Conf
 			Port:        3307,
 			User:        "root",
 			Password:    "streaming",
-			DumpTool:    config.Mysqldump,
+			DumpTool:    opts.DumpTool,
 			Databases:   opts.StreamStorage.Databases,
 			ParseSchema: opts.StreamStorage.ParseSQL,
 		}}

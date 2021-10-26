@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -152,25 +153,23 @@ func (m *MariaDBStream) GetStatusErrorByKey(backupKey string) string {
 
 // WriteFolder implements interface
 func (m *MariaDBStream) WriteFolder(p string) (err error) {
-	log.Debug("SQL dump path: ", p)
-	backupPath := path.Join(p, "dump.sql")
-
-	// Should the full dump be filtered to certain DB schemas?
-	if m.cfg.Databases != nil {
-		log.Debug("Extracting schemas from full backup")
-		backupPath, err = m.extractSchemas(backupPath)
-		if err != nil {
-			return fmt.Errorf("failed to write folder: %s", err.Error())
-		}
-	}
-
-	dump, err := os.Open(backupPath)
-	if err != nil {
-		return fmt.Errorf("could not read dump: %s", err.Error())
-	}
 
 	switch m.cfg.DumpTool {
 	case config.Mysqldump:
+		log.Debug("SQL dump path: ", p)
+		backupPath := path.Join(p, "dump.sql")
+		// Should the full dump be filtered to certain DB schemas?
+		if m.cfg.Databases != nil {
+			log.Debug("Extracting schemas from full backup")
+			backupPath, err = m.extractSchemas(backupPath)
+			if err != nil {
+				return fmt.Errorf("failed to write folder: %s", err.Error())
+			}
+		}
+		dump, err := os.Open(backupPath)
+		if err != nil {
+			return fmt.Errorf("could not read dump: %s", err.Error())
+		}
 		cmd := exec.Command(
 			"mysql",
 			"--port="+strconv.Itoa(m.cfg.Port),
@@ -184,13 +183,15 @@ func (m *MariaDBStream) WriteFolder(p string) (err error) {
 			return fmt.Errorf("mysql error: %s", string(b))
 		}
 	case config.MyDumper:
+		err = filterMyDumperBackupDir(p, m.cfg.Databases)
+
 		b, err := exec.Command(
 			"myloader",
 			"--port="+strconv.Itoa(m.cfg.Port),
 			"--host="+m.cfg.Host,
 			"--user="+m.cfg.User,
 			"--password="+m.cfg.Password,
-			"--directory="+path.Join(p, "dump"),
+			"--directory="+p,
 			"--overwrite-tables",
 		).CombinedOutput()
 		if err != nil {
@@ -773,4 +774,38 @@ func (m *MariaDBStream) queryTableMetadata() (metadata map[string]map[string]map
 	}
 
 	return metadata, err
+}
+
+// filterMyDumperBackupDir removes unwanted backup files
+// keeps `metadata` file of mydumper backup
+// keeps all files starting with one of the defined DB names
+func filterMyDumperBackupDir(path string, databases []string) error {
+	if databases == nil {
+		return nil
+	}
+
+	pattern := ".*/(metadata|"
+	for _, db := range databases {
+		pattern += db + "|"
+	}
+	pattern = strings.TrimSuffix(pattern, "|") + ")"
+
+	files, err := filepath.Glob(fmt.Sprintf("%s/*", path))
+	if err != nil {
+		return fmt.Errorf("could not list db directory")
+	}
+	regex, err := regexp.Compile(pattern)
+	if err != nil {
+		return fmt.Errorf("could not compile regex '%s'", pattern)
+	}
+
+	for _, file := range files {
+		if !regex.MatchString(file) {
+			err := os.Remove(file)
+			if err != nil {
+				return fmt.Errorf("could not remove file '%s'", file)
+			}
+		}
+	}
+	return nil
 }

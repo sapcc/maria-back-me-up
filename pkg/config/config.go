@@ -124,14 +124,14 @@ type Disk struct {
 
 // MariaDBStream holds info for the replication to another MariaDB
 type MariaDBStream struct {
-	Name        string    `yaml:"name"`
-	Host        string    `yaml:"host"`
-	Port        int       `yaml:"port"`
-	User        string    `yaml:"user"`
-	Password    string    `yaml:"password"`
-	DumpTool    DumpTools `yaml:"full_dump_tool"`
-	Databases   []string  `yaml:"databases"`
-	ParseSchema bool      `yaml:"parse_schema"`
+	Name        string `yaml:"name"`
+	Host        string `yaml:"host"`
+	Port        int    `yaml:"port"`
+	User        string `yaml:"user"`
+	Password    string `yaml:"password"`
+	DumpTool    DumpTools
+	Databases   []string `yaml:"databases"`
+	ParseSchema bool     `yaml:"parse_schema"`
 }
 
 // OAuth holds info for the api oauth middleware
@@ -160,5 +160,10 @@ func GetConfig(opts Options) (cfg Config, err error) {
 	if err != nil {
 		return cfg, fmt.Errorf("parse config file: %s", err.Error())
 	}
+
+	for i := range cfg.Storages.MariaDB {
+		cfg.Storages.MariaDB[i].DumpTool = cfg.Database.DumpTool
+	}
+
 	return cfg, nil
 }

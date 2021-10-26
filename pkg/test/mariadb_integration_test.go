@@ -58,13 +58,20 @@ type testCase struct {
 	WithDisk   bool
 	WithStream bool
 	Expected   int
+	DumpTool   config.DumpTools
 }
 
 func TestBackupRestore(t *testing.T) {
 	var tests = []testCase{
-		{true, false, 5},
-		{false, true, 5},
-		{true, true, 5},
+		{true, false, 5, config.Mysqldump},
+		{false, true, 5, config.Mysqldump},
+		{true, true, 5, config.Mysqldump},
+
+		//TODO: Restore of full MyDumper backup does not work:
+		// Can't create table `mysql`.`user` (errno: 168 "Unknown (generic) error from engine"
+		// {true, false, 5, config.MyDumper},
+		// {false, true, 5, config.MyDumper},
+		// {true, true, 5, config.MyDumper},
 	}
 
 	for _, test := range tests {
@@ -75,7 +82,7 @@ func TestBackupRestore(t *testing.T) {
 func testBackupRestore(t *testing.T, test testCase) {
 	m, cfg := Setup(t, &SetupOptions{
 		DBType:          constants.MARIADB,
-		DumpTool:        config.Mysqldump,
+		DumpTool:        test.DumpTool,
 		WithDiskStorage: test.WithDisk,
 		StreamStorage:   &StreamStorageOptions{Enabled: test.WithStream},
 	})
