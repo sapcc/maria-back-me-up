@@ -57,6 +57,7 @@ type BackupService struct {
 	BackupDir                  string `yaml:"backup_dir"`
 	FullBackupCronSchedule     string `yaml:"full_backup_cron_schedule"`
 	IncrementalBackupInMinutes int    `yaml:"incremental_backup_in_minutes"`
+	PurgeBinlogAfterMinutes    int    `yaml:"purge_binlog_after_minutes"`
 	EnableInitRestore          bool   `yaml:"enable_init_restore"`
 	EnableRestoreOnDBFailure   bool   `yaml:"enable_restore_on_db_failure"`
 }
