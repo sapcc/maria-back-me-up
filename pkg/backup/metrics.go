@@ -42,7 +42,7 @@ func NewUpdateStatus() UpdateStatus {
 	return UpdateStatus{
 		FullBackup: make(map[string]int),
 		IncBackup:  make(map[string]int),
-		Restarts:   prometheus.NewCounter(prometheus.CounterOpts{Name: "maria_backup_restarts", Help: "Number of times the backup process was restarted"}),
+		Restarts:   prometheus.NewCounter(prometheus.CounterOpts{Name: "maria_backup_errors", Help: "Number of times the backup process was restarted due to an error"}),
 	}
 }
 
