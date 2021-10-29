@@ -286,7 +286,9 @@ func (m *MariaDB) StartIncBackup(ctx context.Context, mp LogPosition, dir string
 	if err != nil {
 		return fmt.Errorf("Cannot start binlog stream: %w", err)
 	}
-	m.flushTimer = time.AfterFunc(time.Duration(m.cfg.Backup.IncrementalBackupInMinutes)*time.Minute, func() { m.flushLogs("") })
+	if m.cfg.Backup.IncrementalBackupInMinutes > 0 {
+		m.flushTimer = time.AfterFunc(time.Duration(m.cfg.Backup.IncrementalBackupInMinutes)*time.Minute, func() { m.flushLogs("") })
+	}
 	for {
 		ev, inerr := streamer.GetEvent(ctx)
 		if inerr != nil {
@@ -324,11 +326,11 @@ func (m *MariaDB) StartIncBackup(ctx context.Context, mp LogPosition, dir string
 
 		switch ev.Event.(type) {
 		case *replication.RowsEvent:
-			if m.flushTimer == nil {
+			if m.flushTimer == nil && m.cfg.Backup.IncrementalBackupInMinutes > 0 {
 				m.flushTimer = time.AfterFunc(time.Duration(m.cfg.Backup.IncrementalBackupInMinutes)*time.Minute, func() { m.flushLogs(binlogFile) })
 			}
 		case *replication.QueryEvent:
-			if m.flushTimer == nil {
+			if m.flushTimer == nil && m.cfg.Backup.IncrementalBackupInMinutes > 0 {
 				m.flushTimer = time.AfterFunc(time.Duration(m.cfg.Backup.IncrementalBackupInMinutes)*time.Minute, func() { m.flushLogs(binlogFile) })
 			}
 		}
