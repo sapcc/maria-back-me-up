@@ -384,7 +384,7 @@ func (m *MariaDB) flushLogs(binlogFile string) (err error) {
 		return
 	}
 
-	if m.cfg.Backup.EnableBinlogPurgeOnRotate {
+	if !m.cfg.Backup.DisableBinlogPurgeOnRotate {
 		if m.cfg.Backup.PurgeBinlogAfterMinutes > 0 {
 			err = purgeBinlogsBefore(m.cfg.Database, m.cfg.Backup.PurgeBinlogAfterMinutes)
 			if err != nil {
