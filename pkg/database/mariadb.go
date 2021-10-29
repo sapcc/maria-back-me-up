@@ -384,8 +384,18 @@ func (m *MariaDB) flushLogs(binlogFile string) (err error) {
 		return
 	}
 
-	if binlogFile != "" {
-		return purgeBinlogsTo(m.cfg.Database, binlogFile)
+	if m.cfg.Backup.EnableBinlogPurgeOnRotate {
+		if m.cfg.Backup.PurgeBinlogAfterMinutes > 0 {
+			err = purgeBinlogsBefore(m.cfg.Database, m.cfg.Backup.PurgeBinlogAfterMinutes)
+			if err != nil {
+				log.Warn("error purging binlogs: ", err)
+			}
+		} else if binlogFile != "" {
+			err = purgeBinlogsTo(m.cfg.Database, binlogFile)
+			if err != nil {
+				log.Warn("error purging binlogs: ", err)
+			}
+		}
 	}
 	return
 }
