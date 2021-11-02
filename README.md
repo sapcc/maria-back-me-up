@@ -64,9 +64,11 @@ namespace: # k8s namespace name
 sidecar: # boolean
 backup:
   full_backup_interval_in_hours: # Interval for full MariaDB dumps in hours
-  incremental_backup_interval_in_minutes: # Interval for saving incremental backups
+  incremental_backup_interval_in_minutes: # Interval for saving incremental backups, one continous increment if < 0
+  purge_binlog_after_minutes: # if > 0 binlog files are kept on the primary db until they are older 
   enable_init_restore: # Enables a automatic restore if one of the databases (in MariaDB.databases) are missing.
   enable_restore_on_db_failure: # Enables automatic restore if the db is unhealthy.\
+  disable_binlog_purge_on_rotate: # Boolean to disable binlog purging. Purging is enabled by detault
   outh:
     enabled: # enables OAuth to access the API (openID)\
     provider_url: # Url of the openID provider (e.g. Dex)\

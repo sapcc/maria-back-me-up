@@ -21,6 +21,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
@@ -69,8 +70,46 @@ func mariaHealthCheck(c config.DatabaseConfig) (status Status, err error) {
 	return
 }
 
+// purgeBinlogBefore purges all binlog files which are older than `minutes`
+func purgeBinlogsBefore(c config.DatabaseConfig, minutes int) (err error) {
+	conn, err := client.Connect(fmt.Sprintf("%s:%s", c.Host, strconv.Itoa(c.Port)), c.User, c.Password, "")
+	if err != nil {
+		return
+	}
+
+	if err = conn.Ping(); err != nil {
+		return
+	}
+
+	result, err := conn.Execute("SELECT NOW() FROM DUAL;")
+	if err != nil {
+		return
+	}
+
+	serverTimeString, err := result.GetString(0, 0)
+	if err != nil {
+		return
+	}
+
+	serverTime, err := time.Parse("2006-01-02 15:04:05", serverTimeString)
+	if err != nil {
+		return
+	}
+	purgeBeforeTimeString := serverTime.Add(-time.Duration(minutes) * time.Minute).Format("2006-01-02 15:04:05")
+
+	_, err = conn.Execute(fmt.Sprintf("PURGE BINARY LOGS BEFORE '%s'", purgeBeforeTimeString))
+	if err != nil {
+		return
+	}
+	return
+}
+
 func purgeBinlogsTo(c config.DatabaseConfig, log string) (err error) {
 	conn, err := client.Connect(fmt.Sprintf("%s:%s", c.Host, strconv.Itoa(c.Port)), c.User, c.Password, "")
+	if err != nil {
+		return
+	}
+
 	if err = conn.Ping(); err != nil {
 		return
 	}
