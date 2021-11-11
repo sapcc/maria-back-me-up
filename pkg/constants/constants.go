@@ -39,6 +39,4 @@ const (
 	POSTGRESDEPLOYMENT = "k8s_postgres_deployment.yaml"
 	// POSTGRESSERIVCE path to postgres k8s service file
 	POSTGRESSERIVCE = "k8s_postgres_svc.yaml"
-	// RESTOREFOLDER path to database restore folder
-	RESTOREFOLDER = "/restore"
 )

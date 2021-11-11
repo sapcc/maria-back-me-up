@@ -178,7 +178,7 @@ func GetRestore(m *backup.Manager) echo.HandlerFunc {
 //PostRestoreDownload handles restore download requests
 func PostRestoreDownload(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
-		os.RemoveAll(constants.RESTOREFOLDER)
+		os.RemoveAll(path.Join(m.GetConfig().Backup.RestoreDir, m.GetConfig().ServiceName))
 		res := c.Response()
 		params, err := c.FormParams()
 		res.WriteHeader(http.StatusOK)

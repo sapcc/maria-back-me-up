@@ -87,7 +87,7 @@ func (s *Status) Reset() {
 }
 
 // Upload the status info to the specified storage service
-func (s *Status) Upload(restoreFolder, logNameFormat, serviceName string, manager *storage.Manager) {
+func (s *Status) Upload(restoreFolder, logNameFormat, serviceName string, st storage.Storage) {
 	s.RLock()
 	out, err := yaml.Marshal(s)
 	s.RUnlock()
@@ -102,7 +102,7 @@ func (s *Status) Upload(restoreFolder, logNameFormat, serviceName string, manage
 		file = file + "/verify_fail.yaml"
 	}
 	s.logger.Debug("Uploading verify status to: ", file)
-	err = manager.WriteStream(s.StorageService, file, "", bytes.NewReader(out), nil, false)
+	err = st.WriteStream(file, "", bytes.NewReader(out), nil, false)
 	if err != nil {
 		s.logger.Error(fmt.Errorf("cannot upload verify status: %s", err.Error()))
 	}
@@ -126,7 +126,7 @@ func (s *Status) Upload(restoreFolder, logNameFormat, serviceName string, manage
 		base := path.Base(restoreFolder)
 		tags["key"] = path.Join(serviceName, base)
 		tags["binlog"] = fmt.Sprintf("%s.%d", logNameFormat, binlogNumber)
-		err = manager.WriteStream(s.StorageService, storage.LastSuccessfulBackupFile, "", strings.NewReader("latest_backup"), tags, false)
+		err = st.WriteStream(storage.LastSuccessfulBackupFile, "", strings.NewReader("latest_backup"), tags, false)
 		if err != nil {
 			s.logger.Error(fmt.Errorf("cannot upload verify status: %s", err.Error()))
 		}

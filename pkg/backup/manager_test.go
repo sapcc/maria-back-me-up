@@ -132,9 +132,9 @@ func TestManagerIncbackErrorHandling(t *testing.T) {
 
 func TestManagerStorageErrorHandling(t *testing.T) {
 	m, _, cfg := setup(t)
-	s1 := storage.NewMockStorage(cfg, "s1", "log")
+	s1 := storage.NewMockStorage(cfg, "s1", "./restore", "log")
 	s1.WithError(true)
-	s2 := storage.NewMockStorage(cfg, "s2", "log")
+	s2 := storage.NewMockStorage(cfg, "s2", "./restore", "log")
 	m.Storage.AddStorage(s1)
 	m.Storage.AddStorage(s2)
 
@@ -170,9 +170,9 @@ func setup(t *testing.T) (m *Manager, db *database.MockDB, cfg config.Config) {
 			Type: "mock",
 		},
 	}
-	s1 := storage.NewMockStorage(cfg, "s1", "log")
-	s2 := storage.NewMockStorage(cfg, "s2", "log")
-	sm, err := storage.NewManager(cfg.Storages, "test", "")
+	s1 := storage.NewMockStorage(cfg, "s1", "./restore", "log")
+	s2 := storage.NewMockStorage(cfg, "s2", "./restore", "log")
+	sm, err := storage.NewManager(cfg.Storages, "test", "./restore", "")
 	if err != nil {
 		t.Errorf("expected storage instance, but got error: %s.", err.Error())
 	}

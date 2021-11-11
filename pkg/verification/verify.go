@@ -17,6 +17,7 @@
 package verification
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -38,62 +39,83 @@ const podName = "mariadb"
 
 // Verification struct for the verification process
 type Verification struct {
-	storage            *storage.Manager
+	storage            storage.Storage
 	k8sDb              *k8s.Database
 	db                 database.Database
 	serviceName        string
-	lastBackup         storage.Backup
-	storageServiceName string
+	currentFullBackup  storage.Backup
 	cfg                config.VerificationService
 	status             *Status
 	logger             *logrus.Entry
+	totalVerifications int
 }
 
 // NewVerification creates a verification instance
-func NewVerification(serviceName, storageServiceName string, s *storage.Manager, cv config.VerificationService, db database.Database, kd *k8s.Database) *Verification {
+func NewVerification(serviceName string, s storage.Storage, cv config.VerificationService, db database.Database, kd *k8s.Database) *Verification {
 	return &Verification{
 		serviceName:        serviceName,
+		totalVerifications: 0,
 		storage:            s,
 		db:                 db,
 		k8sDb:              kd,
 		cfg:                cv,
-		storageServiceName: storageServiceName,
-		status:             NewStatus(serviceName, storageServiceName),
-		logger:             logger.WithFields(logrus.Fields{"service": serviceName, "storage": storageServiceName}),
+		status:             NewStatus(serviceName, s.GetStorageServiceName()),
+		logger:             logger.WithFields(logrus.Fields{"service": serviceName, "storage": s.GetStorageServiceName()}),
 	}
 }
 
 // Start a verification process
 func (v *Verification) Start(ctx context.Context) (err error) {
-	for c := time.Tick(time.Duration(v.cfg.IntervalInMinutes) * time.Minute); ; {
-		if err := v.verifyLatestBackup(); err != nil {
+	for c := time.Tick(time.Duration(10) * time.Minute); ; {
+		b, err := v.getLatestBackup()
+		if err != nil {
 			logger.Error(err)
+			continue
+		}
+		totalInc, err := v.storage.GetTotalIncBackupsFromDump(b.Key)
+		if err != nil {
+			logger.Error(err)
+			continue
+		}
+
+		if v.currentFullBackup.Time.Unix() < b.Time.Unix() {
+			v.totalVerifications = 0
+		}
+
+		if totalInc/v.cfg.RunAfterIncBackups > v.totalVerifications {
+			if err := v.verifyLatestBackup(b); err != nil {
+				logger.Error(err)
+			}
+			v.currentFullBackup = b
+			v.totalVerifications++
 		}
 		select {
 		case <-c:
 			continue
 		case <-ctx.Done():
-			return
+			return err
 		}
 	}
 }
 
-func (v *Verification) verifyLatestBackup() (err error) {
-	v.status.Reset()
-	var restoreFolder string
-	bs, err := v.storage.GetFullBackups(v.storageServiceName)
+func (v *Verification) getLatestBackup() (s storage.Backup, err error) {
+	bs, err := v.storage.GetFullBackups()
 	if err != nil {
 		return
 	}
 	if len(bs) == 0 {
-		return fmt.Errorf("no backup found")
+		return s, fmt.Errorf("no backup found")
 	}
 	backups := sortBackupsByTime(bs)
-	latestBackup := backups[len(backups)-1]
+	return backups[len(backups)-1], err
+}
 
-	if v.lastBackup.Time.Unix() > 0 && v.lastBackup.Time.Unix() < latestBackup.Time.Unix() {
+func (v *Verification) verifyLatestBackup(latestBackup storage.Backup) (err error) {
+	v.status.Reset()
+	var restoreFolder string
+	if v.currentFullBackup.Time.Unix() > 0 && v.currentFullBackup.Time.Unix() < latestBackup.Time.Unix() {
 		v.logger.Debug("found new full backup")
-		restoreFolder, err = v.downloadBackup(v.lastBackup)
+		restoreFolder, err = v.downloadBackup(v.currentFullBackup)
 		if err != nil {
 			return
 		}
@@ -114,12 +136,11 @@ func (v *Verification) verifyLatestBackup() (err error) {
 	}
 
 	v.verifyBackup(restoreFolder)
-	v.lastBackup = latestBackup
 	return
 }
 
 func (v *Verification) downloadBackup(b storage.Backup) (restoreFolder string, err error) {
-	restoreFolder, err = v.storage.DownloadBackup(v.storageServiceName, b)
+	restoreFolder, err = v.storage.DownloadBackup(b)
 	if err != nil {
 		var e *storage.NoBackupError
 		if errors.As(err, &e) {
@@ -143,7 +164,7 @@ func (v *Verification) verifyBackup(restoreFolder string) {
 		}
 	}()
 	verifyDbcfg := config.DatabaseConfig{
-		Host:          fmt.Sprintf("%s-%s-%s-verify", v.storageServiceName, v.serviceName, podName),
+		Host:          fmt.Sprintf("%s-%s-%s-verify", v.storage.GetStorageServiceName(), v.serviceName, podName),
 		Type:          dbCfg.Type,
 		Port:          3306,
 		User:          "root",
@@ -232,19 +253,7 @@ func (v *Verification) createTableChecksum(backupTime string) (err error) {
 		return
 	}
 
-	events := make(chan storage.StreamEvent, 1)
-	errors := make(chan error, 1)
-	defer close(errors)
-
-	events <- &storage.ByteEvent{Value: out}
-	go func() {
-		errors <- v.storage.WriteStreamAll(backupTime+"/tablesChecksum.yaml", "", events, false)
-	}()
-
-	close(events)
-	err = <-errors
-
-	if err != nil {
+	if err = v.storage.WriteStream(backupTime+"/tablesChecksum.yaml", "", bytes.NewReader(out), nil, false); err != nil {
 		logger.Error(fmt.Errorf("cannot upload table checksums: %s", err.Error()))
 		return
 	}

@@ -40,7 +40,7 @@ func NewManager(c config.Config) (m *Manager, err error) {
 		return
 	}
 
-	stgM, err := storage.NewManager(c.Storages, c.ServiceName, db.GetLogPosition().Format)
+	stgM, err := storage.NewManager(c.Storages, c.ServiceName, c.Backup.RestoreDir, db.GetLogPosition().Format)
 	if err != nil {
 		return
 	}
@@ -50,7 +50,7 @@ func NewManager(c config.Config) (m *Manager, err error) {
 			logger.Warnf("cannot create verification for %s", st)
 			continue
 		}
-		v := NewVerification(c.ServiceName, st, stgM, c.Verification, db, k8sm)
+		v := NewVerification(c.ServiceName, stgM.GetStorage(st), c.Verification, db, k8sm)
 		if err != nil {
 			return m, err
 		}
@@ -72,7 +72,7 @@ func NewManager(c config.Config) (m *Manager, err error) {
 // Start a verification routine per storage
 func (m *Manager) Start(ctx context.Context) {
 	for _, v := range m.verifications {
-		logger.Debugf("starting verification for %s backup", v.storageServiceName)
+		logger.Debugf("starting verification for %s backup", v.storage.GetStorageServiceName())
 		go v.Start(ctx)
 	}
 }

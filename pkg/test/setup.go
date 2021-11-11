@@ -102,7 +102,7 @@ func Setup(t *testing.T, opts *SetupOptions) (m *backup.Manager, cfg config.Conf
 		}}
 	}
 
-	s, err := storage.NewManager(cfg.Storages, cfg.ServiceName, cfg.Database.LogNameFormat)
+	s, err := storage.NewManager(cfg.Storages, cfg.ServiceName, "./restore", cfg.Database.LogNameFormat)
 	if err != nil {
 		t.Errorf("could not setup manager: %v", err.Error())
 		t.FailNow()
