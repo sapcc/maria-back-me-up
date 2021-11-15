@@ -32,7 +32,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
-	"github.com/sapcc/maria-back-me-up/pkg/constants"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
@@ -54,7 +53,7 @@ type (
 )
 
 // NewS3 creates a s3 storage instance
-func NewS3(c config.S3, serviceName, binLog string) (s3 *S3, err error) {
+func NewS3(c config.S3, serviceName, restoreFolder, binLog string) (s3 *S3, err error) {
 	s, err := session.NewSession(&aws.Config{
 		Endpoint:         aws.String(c.AwsEndpoint),
 		Region:           aws.String(c.Region),
@@ -69,7 +68,7 @@ func NewS3(c config.S3, serviceName, binLog string) (s3 *S3, err error) {
 		cfg:           c,
 		session:       s,
 		serviceName:   serviceName,
-		restoreFolder: path.Join(constants.RESTOREFOLDER, c.Name),
+		restoreFolder: path.Join(restoreFolder, c.Name),
 		logger:        logger.WithField("service", serviceName),
 		binLog:        binLog,
 		statusError:   make(map[string]string, 0),
@@ -168,6 +167,22 @@ func (s *S3) DownloadBackupWithLogPosition(fullBackupPath, binlog string) (path 
 		}
 	}
 	path = filepath.Join(s.restoreFolder, fullBackupPath)
+	return
+}
+
+// GetTotalIncBackupsFromDump implements interface
+func (s *S3) GetTotalIncBackupsFromDump(key string) (t int, err error) {
+	t = 0
+	svc := s3.New(s.session)
+	list, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.Replace(key, "dump.tar", "", -1))})
+	if err != nil {
+		return t, s.handleError("", err)
+	}
+	for _, incObj := range list.Contents {
+		if !strings.HasSuffix(*incObj.Key, "/") && strings.Contains(*incObj.Key, s.binLog) {
+			t++
+		}
+	}
 	return
 }
 

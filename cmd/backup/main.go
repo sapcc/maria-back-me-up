@@ -63,7 +63,7 @@ func main() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGSTOP)
 
-	sm, err := storage.NewManager(cfg.Storages, cfg.ServiceName, cfg.Database.LogNameFormat)
+	sm, err := storage.NewManager(cfg.Storages, cfg.ServiceName, cfg.Backup.RestoreDir, cfg.Database.LogNameFormat)
 	if err != nil {
 		log.Fatal(err)
 	}

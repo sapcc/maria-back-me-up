@@ -30,6 +30,8 @@ type Storage interface {
 	GetStatusError() map[string]string
 	// GetStatusErrorByKey returns error per backup
 	GetStatusErrorByKey(backupKey string) string
+	// GetTotalIncBackupsFromDump returns current total incremental backups in this dump
+	GetTotalIncBackupsFromDump(key string) (t int, err error)
 }
 
 // ChannelWriter for storages that do not support consuming io.Reader

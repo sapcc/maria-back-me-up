@@ -108,13 +108,9 @@ func (m *Database) CreateDatabaseDeployment(name string, c config.DatabaseConfig
 	deploy, err = m.createDeployment(tpl, c)
 	if err != nil {
 		if errors.IsAlreadyExists(err) {
-			if err = m.client.AppsV1().Deployments(m.ns).Delete(name, &metav1.DeleteOptions{
-				PropagationPolicy: &deletePolicy,
-			}); err != nil {
+			if err = m.ScaleDatabaseResources(name, 1); err != nil {
 				return
 			}
-			time.Sleep(10 * time.Second)
-			return m.CreateDatabaseDeployment(name, c)
 		}
 		return
 	}
@@ -194,20 +190,15 @@ func (m *Database) CheckPodNotReady(labelSelector string) (err error) {
 	return
 }
 
-// DeleteDatabaseResources deletes k8s db resources
-func (m *Database) DeleteDatabaseResources(deploy *appsv1.Deployment, svc *v1.Service) (err error) {
-	if err = m.client.AppsV1beta1().Deployments(m.ns).Delete(deploy.Name, &metav1.DeleteOptions{
-		PropagationPolicy: &deletePolicy,
-	}); err != nil {
+// ScaleDatabaseResources scales k8s db resources
+func (m *Database) ScaleDatabaseResources(name string, scale int32) (err error) {
+	s, err := m.client.AppsV1().Deployments(m.ns).GetScale(name, metav1.GetOptions{})
+	if err != nil {
 		return
 	}
-	/*
-		if err = m.client.CoreV1().Services(m.ns).Delete(svc.Name, &metav1.DeleteOptions{
-			PropagationPolicy: &deletePolicy,
-		}); err != nil {
-			return
-		}
-	*/
+	sc := *s
+	sc.Spec.Replicas = scale
+	_, err = m.client.AppsV1().Deployments(m.ns).UpdateScale(name, &sc)
 	return
 }
 

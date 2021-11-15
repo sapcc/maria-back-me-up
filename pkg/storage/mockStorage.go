@@ -18,6 +18,7 @@ package storage
 
 import (
 	"io"
+	"path"
 
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 )
@@ -32,12 +33,13 @@ type MockStorage struct {
 }
 
 // NewMockStorage creates a mock storage instance
-func NewMockStorage(c config.Config, serviceName, binLog string) (m *MockStorage) {
+func NewMockStorage(c config.Config, serviceName, restoreFolder, binLog string) (m *MockStorage) {
 	m = &MockStorage{}
 	m.binLog = binLog
 	m.cfg = c
 	m.serviceName = serviceName
 	m.withError = false
+	m.restoreFolder = path.Join(restoreFolder, serviceName)
 
 	return
 }
@@ -59,6 +61,10 @@ func (s *MockStorage) GetFullBackups() (bl []Backup, err error) {
 
 // DownloadLatestBackup implements interface
 func (s *MockStorage) DownloadLatestBackup() (path string, err error) {
+	return
+}
+
+func (s *MockStorage) GetTotalIncBackupsFromDump(key string) (t int, err error) {
 	return
 }
 

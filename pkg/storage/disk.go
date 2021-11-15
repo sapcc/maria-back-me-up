@@ -181,6 +181,11 @@ func (d *Disk) GetFullBackups() (bl []Backup, err error) {
 	return bl, err
 }
 
+// GetTotalIncBackupsFromDump implements interface
+func (d *Disk) GetTotalIncBackupsFromDump(key string) (t int, err error) {
+	return
+}
+
 // GetIncBackupsFromDump implements interface
 func (d *Disk) GetIncBackupsFromDump(key string) (bl []Backup, err error) {
 

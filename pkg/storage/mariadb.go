@@ -151,6 +151,11 @@ func (m *MariaDBStream) GetStatusErrorByKey(backupKey string) string {
 	return ""
 }
 
+// GetTotalIncBackupsFromDump implements interface
+func (m *MariaDBStream) GetTotalIncBackupsFromDump(key string) (t int, err error) {
+	return
+}
+
 // WriteFolder implements interface
 func (m *MariaDBStream) WriteFolder(p string) (err error) {
 

@@ -28,17 +28,17 @@ func init() {
 }
 
 // NewManager creates a new manager instance
-func NewManager(c config.StorageService, serviceName, binLog string) (m *Manager, err error) {
+func NewManager(c config.StorageService, serviceName, restoreFolder, binLog string) (m *Manager, err error) {
 	stsvc := make(map[string]Storage)
 	for _, cfg := range c.Swift {
-		swift, err := NewSwift(cfg, serviceName, binLog)
+		swift, err := NewSwift(cfg, serviceName, restoreFolder, binLog)
 		if err != nil {
 			return m, err
 		}
 		stsvc[cfg.Name] = swift
 	}
 	for _, cfg := range c.S3 {
-		s3, err := NewS3(cfg, serviceName, binLog)
+		s3, err := NewS3(cfg, serviceName, restoreFolder, binLog)
 		if err != nil {
 			return m, err
 		}
@@ -71,6 +71,11 @@ func NewManager(c config.StorageService, serviceName, binLog string) (m *Manager
 // AddStorage can add a specific storage service
 func (m *Manager) AddStorage(s Storage) {
 	m.storageServices[s.GetStorageServiceName()] = s
+}
+
+// GetStorage returns a specific storage service
+func (m *Manager) GetStorage(s string) Storage {
+	return m.storageServices[s]
 }
 
 // GetStorageServicesKeys returns a list of all storage names

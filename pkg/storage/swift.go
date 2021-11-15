@@ -13,7 +13,6 @@ import (
 
 	"github.com/ncw/swift"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
-	"github.com/sapcc/maria-back-me-up/pkg/constants"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 )
@@ -30,7 +29,7 @@ type Swift struct {
 }
 
 // NewSwift creates a swift storage instance
-func NewSwift(c config.Swift, serviceName string, logBin string) (s *Swift, err error) {
+func NewSwift(c config.Swift, serviceName, restoreFolder, logBin string) (s *Swift, err error) {
 	conn := &swift.Connection{
 		AuthVersion:  c.AuthVersion,
 		AuthUrl:      c.AuthURL,
@@ -50,7 +49,7 @@ func NewSwift(c config.Swift, serviceName string, logBin string) (s *Swift, err 
 		cfg:           c,
 		connection:    conn,
 		serviceName:   serviceName,
-		restoreFolder: path.Join(constants.RESTOREFOLDER, c.Name),
+		restoreFolder: path.Join(restoreFolder, c.Name),
 		logger:        logger.WithField("service", serviceName),
 		logBin:        logBin,
 		statusError:   make(map[string]string, 0),
@@ -73,6 +72,21 @@ func (s *Swift) GetStatusErrorByKey(backupKey string) string {
 		return st
 	}
 	return ""
+}
+
+// GetTotalIncBackupsFromDump implements interface
+func (s *Swift) GetTotalIncBackupsFromDump(key string) (t int, err error) {
+	t = 0
+	objs, err := s.connection.ObjectsAll(s.cfg.ContainerName, &swift.ObjectsOpts{Prefix: strings.Replace(key, "dump.tar", "", -1)})
+	if err != nil {
+		return t, s.handleError("", err)
+	}
+	for _, o := range objs {
+		if !strings.HasSuffix(o.Name, "/") && strings.Contains(o.Name, s.logBin) {
+			t++
+		}
+	}
+	return
 }
 
 // WriteFolder implements interface

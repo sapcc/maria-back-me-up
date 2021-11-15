@@ -55,6 +55,7 @@ type BackupService struct {
 	Version                    string `yaml:"version"`
 	OAuth                      OAuth  `yaml:"oauth"`
 	BackupDir                  string `yaml:"backup_dir"`
+	RestoreDir                 string `yaml:"restore_dir"`
 	FullBackupCronSchedule     string `yaml:"full_backup_cron_schedule"`
 	IncrementalBackupInMinutes int    `yaml:"incremental_backup_in_minutes"`
 	PurgeBinlogAfterMinutes    int    `yaml:"purge_binlog_after_minutes"`
@@ -145,8 +146,8 @@ type OAuth struct {
 
 // VerificationService holds info for the backup verification service
 type VerificationService struct {
-	IntervalInMinutes int `yaml:"interval_in_minutes"`
-	MariaDBVersion    string
+	RunAfterIncBackups int `yaml:"run_after_inc_backups"`
+	MariaDBVersion     string
 }
 
 // GetConfig returns the config struct from a yaml file
