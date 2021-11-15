@@ -68,7 +68,7 @@ func NewS3(c config.S3, serviceName, restoreFolder, binLog string) (s3 *S3, err 
 		cfg:           c,
 		session:       s,
 		serviceName:   serviceName,
-		restoreFolder: path.Join(restoreFolder, serviceName),
+		restoreFolder: path.Join(restoreFolder, c.Name),
 		logger:        logger.WithField("service", serviceName),
 		binLog:        binLog,
 		statusError:   make(map[string]string, 0),

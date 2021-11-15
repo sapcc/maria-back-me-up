@@ -52,6 +52,9 @@ type Verification struct {
 
 // NewVerification creates a verification instance
 func NewVerification(serviceName string, s storage.Storage, cv config.VerificationService, db database.Database, kd *k8s.Database) *Verification {
+	if cv.RunAfterIncBackups == 0 {
+		cv.RunAfterIncBackups = 5
+	}
 	return &Verification{
 		serviceName:        serviceName,
 		totalVerifications: 0,
@@ -81,13 +84,14 @@ func (v *Verification) Start(ctx context.Context) (err error) {
 		if v.currentFullBackup.Time.Unix() < b.Time.Unix() {
 			v.totalVerifications = 0
 		}
-
+		logger.Debugf("total verification count: %d. current incremental backup count: %d", v.totalVerifications, totalInc/v.cfg.RunAfterIncBackups)
 		if totalInc/v.cfg.RunAfterIncBackups > v.totalVerifications {
 			if err := v.verifyLatestBackup(b); err != nil {
 				logger.Error(err)
+				continue
 			}
 			v.currentFullBackup = b
-			v.totalVerifications++
+			v.totalVerifications = totalInc / v.cfg.RunAfterIncBackups
 		}
 		select {
 		case <-c:
@@ -175,10 +179,10 @@ func (v *Verification) verifyBackup(restoreFolder string) {
 		VerifyTables:  dbCfg.VerifyTables,
 	}
 
-	dp, err := v.k8sDb.CreateDatabaseDeployment(verifyDbcfg.Host, verifyDbcfg)
-	svc, err := v.k8sDb.CreateDatabaseService(verifyDbcfg.Host, verifyDbcfg)
+	_, err = v.k8sDb.CreateDatabaseDeployment(verifyDbcfg.Host, verifyDbcfg)
+	_, err = v.k8sDb.CreateDatabaseService(verifyDbcfg.Host, verifyDbcfg)
 	defer func() {
-		if err = v.k8sDb.DeleteDatabaseResources(dp, svc); err != nil {
+		if err = v.k8sDb.ScaleDatabaseResources(verifyDbcfg.Host, 0); err != nil {
 			v.logger.Error(fmt.Errorf("backup verify error: error deleting mariadb resources: %s", err.Error()))
 		}
 	}()

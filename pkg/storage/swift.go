@@ -49,7 +49,7 @@ func NewSwift(c config.Swift, serviceName, restoreFolder, logBin string) (s *Swi
 		cfg:           c,
 		connection:    conn,
 		serviceName:   serviceName,
-		restoreFolder: path.Join(restoreFolder, serviceName),
+		restoreFolder: path.Join(restoreFolder, c.Name),
 		logger:        logger.WithField("service", serviceName),
 		logBin:        logBin,
 		statusError:   make(map[string]string, 0),
