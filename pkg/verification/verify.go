@@ -86,6 +86,7 @@ func (v *Verification) Start(ctx context.Context) (err error) {
 		}
 		logger.Debugf("total verification count: %d. current incremental backup count: %d", v.totalVerifications, totalInc/v.cfg.RunAfterIncBackups)
 		if totalInc/v.cfg.RunAfterIncBackups > v.totalVerifications {
+			logger.Debug("verifying latest backup")
 			if err := v.verifyLatestBackup(b); err != nil {
 				logger.Error(err)
 				continue

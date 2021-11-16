@@ -64,6 +64,7 @@ func (s *MockStorage) DownloadLatestBackup() (path string, err error) {
 	return
 }
 
+// GetTotalIncBackupsFromDump implements interface
 func (s *MockStorage) GetTotalIncBackupsFromDump(key string) (t int, err error) {
 	return
 }
