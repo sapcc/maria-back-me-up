@@ -104,18 +104,22 @@ func (m *MariaDBStream) WriteChannel(name, mimeType string, body <-chan StreamEv
 		return err
 	}
 
+	defer func() error {
+		if m.tx != nil {
+			err = m.tx.Commit()
+			if err != nil {
+				if ok := errors.Is(err, sql.ErrTxDone); !ok {
+					return fmt.Errorf("error committing transaction: %s", err.Error())
+				}
+			}
+			m.tx = nil
+		}
+		return nil
+	}()
+
 	for {
 		value, ok := <-body
 		if !ok {
-			if m.tx != nil {
-				err = m.tx.Commit()
-				if err != nil {
-					if ok := errors.Is(err, sql.ErrTxDone); !ok {
-						return fmt.Errorf("error committing transaction: %s", err.Error())
-					}
-				}
-				m.tx = nil
-			}
 			ctx.Done()
 			return
 		}
@@ -247,7 +251,17 @@ func (m *MariaDBStream) ProcessBinlogEvent(ctx context.Context, event *replicati
 		}
 		m.tx = nil
 		return
-
+	case *replication.RotateEvent:
+		if m.tx != nil {
+			err = m.tx.Commit()
+			if err != nil {
+				if ok := errors.Is(err, sql.ErrTxDone); !ok {
+					return fmt.Errorf("error committing transaction: %s", err.Error())
+				}
+			}
+		}
+		m.tx = nil
+		return
 	default:
 		// Only QueryEvent and ROWS_EVENT contain queries which must be replicated
 		return
