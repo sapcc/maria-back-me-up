@@ -523,8 +523,12 @@ func setup(t *testing.T, parseSQL, hasRowMetadata bool, hasPrimaryKey bool) (mar
 		ParseSchema: parseSQL,
 	}
 	mock.ExpectBegin()
-	tx, err := db.BeginTx(context.TODO(), nil)
-	if err != nil {
+	// tx, err := db.BeginTx(context.TODO(), nil)
+	// if err != nil {
+	// 	t.Error("test setup failed to create transaction")
+	// }
+	retryTx := newRetryTx(db)
+	if err := retryTx.beginTx(context.TODO()); err != nil {
 		t.Error("test setup failed to create transaction")
 	}
 
@@ -557,7 +561,7 @@ func setup(t *testing.T, parseSQL, hasRowMetadata bool, hasPrimaryKey bool) (mar
 		}
 	}
 
-	mariaDBStream = &MariaDBStream{sqlParser: parser.New(), db: db, tx: tx, databases: databases, cfg: config, tableMetadata: tableMetadata}
+	mariaDBStream = &MariaDBStream{sqlParser: parser.New(), db: db, retryTx: retryTx, databases: databases, cfg: config, tableMetadata: tableMetadata}
 	return
 }
 
@@ -576,7 +580,7 @@ func execRowsEventTest(t *testing.T, mock sqlmock.Sqlmock, mariaDBStream *MariaD
 	}
 
 	mock.ExpectCommit()
-	mariaDBStream.tx.Commit()
+	mariaDBStream.retryTx.commit()
 
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("Failed expectations not met: %s", err.Error())
@@ -598,7 +602,7 @@ func execQueryEventTest(t *testing.T, mock sqlmock.Sqlmock, mariaDBStream *Maria
 	}
 
 	mock.ExpectCommit()
-	mariaDBStream.tx.Commit()
+	mariaDBStream.retryTx.commit()
 
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("Failed expectations not met: %s", err.Error())
