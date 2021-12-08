@@ -580,7 +580,7 @@ func execRowsEventTest(t *testing.T, mock sqlmock.Sqlmock, mariaDBStream *MariaD
 	}
 
 	mock.ExpectCommit()
-	mariaDBStream.retryTx.commit()
+	mariaDBStream.retryTx.commit(context.TODO())
 
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("Failed expectations not met: %s", err.Error())
@@ -602,7 +602,7 @@ func execQueryEventTest(t *testing.T, mock sqlmock.Sqlmock, mariaDBStream *Maria
 	}
 
 	mock.ExpectCommit()
-	mariaDBStream.retryTx.commit()
+	mariaDBStream.retryTx.commit(context.TODO())
 
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("Failed expectations not met: %s", err.Error())
