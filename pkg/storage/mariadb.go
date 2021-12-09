@@ -870,9 +870,8 @@ func (rtx *retryTransaction) execContext(ctx context.Context, query string, args
 		}
 		log.Info("successfully retried transaction")
 		return
-	} else {
-		return fmt.Errorf("non-retryable error: %s", err)
 	}
+	return fmt.Errorf("non-retryable error: %s", err)
 }
 
 // retry checks if the target DB is up and then retries all queries contained by the retryTx
