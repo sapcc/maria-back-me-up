@@ -828,6 +828,10 @@ func (rtx *retryTransaction) beginTx(ctx context.Context) (err error) {
 	}
 
 	rtx.tx, err = rtx.db.BeginTx(ctx, nil)
+	if err == nil {
+		return
+	}
+
 	if isRetryable(err) {
 		if err := rtx.pingDB(); err != nil {
 			return err
@@ -836,7 +840,7 @@ func (rtx *retryTransaction) beginTx(ctx context.Context) (err error) {
 		if err != nil {
 			return err
 		}
-		return
+		return nil
 	}
 	return fmt.Errorf("non-retryable error: %s", err)
 }
