@@ -828,7 +828,17 @@ func (rtx *retryTransaction) beginTx(ctx context.Context) (err error) {
 	}
 
 	rtx.tx, err = rtx.db.BeginTx(ctx, nil)
-	return err
+	if isRetryable(err) {
+		if err := rtx.pingDB(); err != nil {
+			return err
+		}
+		rtx.tx, err = rtx.db.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		return
+	}
+	return fmt.Errorf("non-retryable error: %s", err)
 }
 
 // commit tries to commit a tx and retries the tx if a retryable error occurs
@@ -876,16 +886,8 @@ func (rtx *retryTransaction) execContext(ctx context.Context, query string, args
 
 // retry checks if the target DB is up and then retries all queries contained by the retryTx
 func (rtx *retryTransaction) retry(ctx context.Context) (err error) {
-	cf := wait.ConditionFunc(func() (bool, error) {
-		if err = rtx.db.Ping(); err != nil {
-			log.Warn(fmt.Sprintf("error pinging mariadb: %s", err.Error()))
-			return false, nil
-		}
-		log.Debug("pinging mariadb successful")
-		return true, nil
-	})
-	if err = wait.Poll(5*time.Second, time.Duration(60)*time.Second, cf); err != nil {
-		return fmt.Errorf("pinging target mariadb failed. aborting tx retry")
+	if err := rtx.pingDB(); err != nil {
+		return err
 	}
 
 	if err := rtx.tx.Rollback(); err != nil {
@@ -904,6 +906,22 @@ func (rtx *retryTransaction) retry(ctx context.Context) (err error) {
 		}
 	}
 	return
+}
+
+// pingDB tries for 60 seconds to connect back with the DB then quits
+func (rtx *retryTransaction) pingDB() (err error) {
+	cf := wait.ConditionFunc(func() (bool, error) {
+		if err = rtx.db.Ping(); err != nil {
+			log.Warn(fmt.Sprintf("error pinging mariadb: %s", err.Error()))
+			return false, nil
+		}
+		log.Debug("pinging mariadb successful")
+		return true, nil
+	})
+	if err = wait.Poll(5*time.Second, time.Duration(60)*time.Second, cf); err != nil {
+		return fmt.Errorf("pinging target mariadb failed. aborting tx retry")
+	}
+	return nil
 }
 
 // isRetryable returns true if err is a retryable error
