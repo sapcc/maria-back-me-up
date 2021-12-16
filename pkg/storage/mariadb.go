@@ -77,6 +77,10 @@ func NewMariaDBStream(c config.MariaDBStream, serviceName string) (m *MariaDBStr
 
 	databases := initDatabaseMap(c.Databases)
 
+	tableMetadata, err := queryTableMetadata(c, db)
+	if err != nil {
+		return nil, err
+	}
 	var sqlParser *parser.Parser
 	if c.ParseSchema {
 		log.Info("Parsing SQL for schema is enabled")
@@ -84,13 +88,15 @@ func NewMariaDBStream(c config.MariaDBStream, serviceName string) (m *MariaDBStr
 	}
 
 	return &MariaDBStream{
-		db:          db,
-		cfg:         c,
-		databases:   databases,
-		sqlParser:   sqlParser,
-		serviceName: serviceName,
-		retryTx:     newRetryTx(db),
+		db:            db,
+		cfg:           c,
+		databases:     databases,
+		sqlParser:     sqlParser,
+		serviceName:   serviceName,
+		retryTx:       newRetryTx(db),
+		tableMetadata: tableMetadata,
 	}, nil
+
 }
 
 // WriteStream implements interface
@@ -101,11 +107,6 @@ func (m *MariaDBStream) WriteStream(fileName, mimeType string, body io.Reader, t
 // WriteChannel implements interface
 func (m *MariaDBStream) WriteChannel(name, mimeType string, body <-chan StreamEvent, tags map[string]string, dlo bool) (err error) {
 	ctx := context.Background()
-
-	m.tableMetadata, err = m.queryTableMetadata()
-	if err != nil {
-		return err
-	}
 
 	defer func() error {
 		if err := m.retryTx.commit(ctx); err != nil {
@@ -386,7 +387,7 @@ func (m *MariaDBStream) handleRowsEvent(ctx context.Context, event *replication.
 
 		err := m.retryTx.execContext(ctx, query, args)
 		if err != nil {
-			return fmt.Errorf("error replicating query: %s", err.Error())
+			return fmt.Errorf("error replicating RowsEvent: %s", err.Error())
 		}
 	}
 
@@ -724,13 +725,13 @@ func hasFullRowImage(event *replication.RowsEvent) bool {
 
 // queryTableMetadata queries the table information needed to replicate RowsEvents.
 // This metadata is only used if the Main Server does not have `binlog_row_metadata=FULL`
-func (m *MariaDBStream) queryTableMetadata() (metadata map[string]map[string]map[int]columnDefinition, err error) {
+func queryTableMetadata(cfg config.MariaDBStream, db *sql.DB) (metadata map[string]map[string]map[int]columnDefinition, err error) {
 
 	metadata = make(map[string]map[string]map[int]columnDefinition)
-	for _, schema := range m.cfg.Databases {
+	for _, schema := range cfg.Databases {
 		query := fmt.Sprintf("SELECT TABLE_NAME, COLUMN_NAME, COLUMN_KEY, ORDINAL_POSITION, IS_NULLABLE from information_schema.COLUMNS where TABLE_SCHEMA = '%s';", schema)
 
-		rows, err := m.db.Query(query)
+		rows, err := db.Query(query)
 		if err != nil {
 			return metadata, fmt.Errorf("error querying info schema: %s", err.Error())
 		}
@@ -838,11 +839,11 @@ func (rtx *retryTransaction) beginTx(ctx context.Context) (err error) {
 		}
 		rtx.tx, err = rtx.db.BeginTx(ctx, nil)
 		if err != nil {
-			return err
+			return fmt.Errorf("cannot create tx: %s", err)
 		}
 		return nil
 	}
-	return fmt.Errorf("non-retryable error: %s", err)
+	return fmt.Errorf("non-retryable error cannot create tx: %s", err)
 }
 
 // commit tries to commit a tx and retries the tx if a retryable error occurs
@@ -931,6 +932,9 @@ func (rtx *retryTransaction) pingDB() (err error) {
 // isRetryable returns true if err is a retryable error
 func isRetryable(err error) bool {
 
+	if errors.Is(err, mysql.ErrBadConn) {
+		return true
+	}
 	switch pcerrors.Cause(err).(type) {
 	case *mysql.MyError:
 		if mysqlErr, ok := pcerrors.Cause(err).(*mysql.MyError); ok {
