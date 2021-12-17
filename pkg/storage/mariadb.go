@@ -819,7 +819,7 @@ type retryTransaction struct {
 }
 
 func newRetryTx(db *sql.DB, cfg *config.MariaDBStream) (rtx *retryTransaction) {
-	return &retryTransaction{db: db}
+	return &retryTransaction{db: db, cfg: cfg}
 }
 
 // beginTx tries to commit if tx is non-nil and begins a new tx
