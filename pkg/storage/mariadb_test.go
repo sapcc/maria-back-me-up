@@ -527,7 +527,7 @@ func setup(t *testing.T, parseSQL, hasRowMetadata bool, hasPrimaryKey bool) (mar
 	// if err != nil {
 	// 	t.Error("test setup failed to create transaction")
 	// }
-	retryTx := newRetryTx(db)
+	retryTx := newRetryTx(db, &config)
 	if err := retryTx.beginTx(context.TODO()); err != nil {
 		t.Error("test setup failed to create transaction")
 	}

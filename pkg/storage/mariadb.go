@@ -93,7 +93,7 @@ func NewMariaDBStream(c config.MariaDBStream, serviceName string) (m *MariaDBStr
 		databases:     databases,
 		sqlParser:     sqlParser,
 		serviceName:   serviceName,
-		retryTx:       newRetryTx(db),
+		retryTx:       newRetryTx(db, &c),
 		tableMetadata: tableMetadata,
 	}, nil
 
@@ -813,11 +813,12 @@ type myQuery struct {
 // retryTransaction structure to hold a tx and its queries
 type retryTransaction struct {
 	db      *sql.DB
+	cfg     *config.MariaDBStream
 	tx      *sql.Tx
 	queries []myQuery
 }
 
-func newRetryTx(db *sql.DB) (rtx *retryTransaction) {
+func newRetryTx(db *sql.DB, cfg *config.MariaDBStream) (rtx *retryTransaction) {
 	return &retryTransaction{db: db}
 }
 
@@ -834,7 +835,7 @@ func (rtx *retryTransaction) beginTx(ctx context.Context) (err error) {
 	}
 
 	if isRetryable(err) {
-		if err := rtx.pingDB(); err != nil {
+		if err := rtx.isDBUp(); err != nil {
 			return err
 		}
 		rtx.tx, err = rtx.db.BeginTx(ctx, nil)
@@ -891,7 +892,7 @@ func (rtx *retryTransaction) execContext(ctx context.Context, query string, args
 
 // retry checks if the target DB is up and then retries all queries contained by the retryTx
 func (rtx *retryTransaction) retry(ctx context.Context) (err error) {
-	if err := rtx.pingDB(); err != nil {
+	if err := rtx.isDBUp(); err != nil {
 		return err
 	}
 
@@ -914,19 +915,39 @@ func (rtx *retryTransaction) retry(ctx context.Context) (err error) {
 }
 
 // pingDB tries for 60 seconds to connect back with the DB then quits
-func (rtx *retryTransaction) pingDB() (err error) {
+func (rtx *retryTransaction) isDBUp() (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
-		if err = rtx.db.Ping(); err != nil {
+		if err = rtx.pingMariaDB(); err != nil {
 			log.Warn(fmt.Sprintf("error pinging mariadb: %s", err.Error()))
 			return false, nil
 		}
 		log.Debug("pinging mariadb successful")
 		return true, nil
 	})
-	if err = wait.Poll(5*time.Second, time.Duration(60)*time.Second, cf); err != nil {
+	if err = wait.Poll(5*time.Second, time.Duration(90)*time.Second, cf); err != nil {
 		return fmt.Errorf("pinging target mariadb failed. aborting tx retry")
 	}
 	return nil
+}
+
+func (rtx *retryTransaction) pingMariaDB() (err error) {
+	var out []byte
+	if out, err = exec.Command("mysqladmin",
+		"status",
+		"-u"+rtx.cfg.User,
+		"-p"+rtx.cfg.Password,
+		"-h"+rtx.cfg.Host,
+		"-P"+strconv.Itoa(rtx.cfg.Port),
+	).CombinedOutput(); err != nil {
+		var msg string
+		if out != nil {
+			msg = string(out) // Stdout/Stderr
+		} else {
+			msg = err.Error() // Error message if command cannot be executed
+		}
+		return fmt.Errorf("mysqladmin status error: %s", msg)
+	}
+	return
 }
 
 // isRetryable returns true if err is a retryable error
