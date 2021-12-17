@@ -93,7 +93,7 @@ func NewMariaDBStream(c config.MariaDBStream, serviceName string) (m *MariaDBStr
 		databases:     databases,
 		sqlParser:     sqlParser,
 		serviceName:   serviceName,
-		retryTx:       newRetryTx(db, &c),
+		retryTx:       newRetryTx(db, &c, serviceName),
 		tableMetadata: tableMetadata,
 	}, nil
 
@@ -812,14 +812,15 @@ type myQuery struct {
 
 // retryTransaction structure to hold a tx and its queries
 type retryTransaction struct {
-	db      *sql.DB
-	cfg     *config.MariaDBStream
-	tx      *sql.Tx
-	queries []myQuery
+	db          *sql.DB
+	cfg         *config.MariaDBStream
+	serviceName string
+	tx          *sql.Tx
+	queries     []myQuery
 }
 
-func newRetryTx(db *sql.DB, cfg *config.MariaDBStream) (rtx *retryTransaction) {
-	return &retryTransaction{db: db, cfg: cfg}
+func newRetryTx(db *sql.DB, cfg *config.MariaDBStream, serviceName string) (rtx *retryTransaction) {
+	return &retryTransaction{db: db, cfg: cfg, serviceName: serviceName}
 }
 
 // beginTx tries to commit if tx is non-nil and begins a new tx
@@ -838,6 +839,7 @@ func (rtx *retryTransaction) beginTx(ctx context.Context) (err error) {
 		if err := rtx.isDBUp(); err != nil {
 			return err
 		}
+		rtx.reconnect()
 		rtx.tx, err = rtx.db.BeginTx(ctx, nil)
 		if err != nil {
 			return fmt.Errorf("cannot create tx: %s", err)
@@ -901,6 +903,10 @@ func (rtx *retryTransaction) retry(ctx context.Context) (err error) {
 			return err
 		}
 	}
+	if err := rtx.reconnect(); err != nil {
+		return err
+	}
+
 	rtx.tx, err = rtx.db.BeginTx(ctx, nil)
 	if err != nil {
 		return
@@ -928,6 +934,15 @@ func (rtx *retryTransaction) isDBUp() (err error) {
 		return fmt.Errorf("pinging target mariadb failed. aborting tx retry")
 	}
 	return nil
+}
+
+func (rtx *retryTransaction) reconnect() (err error) {
+	rtx.db.Close()
+	rtx.db, err = openDBConnection(rtx.cfg.User, rtx.cfg.Password, rtx.cfg.Host, rtx.cfg.Port, rtx.serviceName)
+	if err != nil {
+		return
+	}
+	return
 }
 
 func (rtx *retryTransaction) pingMariaDB() (err error) {
