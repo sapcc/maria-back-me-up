@@ -858,6 +858,12 @@ func (rtx *retryTransaction) commit(ctx context.Context) (err error) {
 		return
 	}
 
+	// reset tx and queries if successful or not
+	defer func() {
+		rtx.tx = nil
+		rtx.queries = nil
+	}()
+
 	err = rtx.tx.Commit()
 	if err != nil {
 		if isRetryable(err) {
@@ -872,7 +878,6 @@ func (rtx *retryTransaction) commit(ctx context.Context) (err error) {
 			return fmt.Errorf("non-retryable error committing transaction: %s", err.Error())
 		}
 	}
-	rtx.tx = nil
 	return
 }
 
