@@ -37,6 +37,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
+	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	// blank import of the mysql parser for pingcap/parser
@@ -52,6 +53,7 @@ type MariaDBStream struct {
 	// db connection to the target db
 	db            *sql.DB
 	cfg           config.MariaDBStream
+	logger        *logrus.Entry
 	databases     map[string]struct{}
 	sqlParser     *parser.Parser
 	serviceName   string
@@ -83,13 +85,14 @@ func NewMariaDBStream(c config.MariaDBStream, serviceName string) (m *MariaDBStr
 	}
 	var sqlParser *parser.Parser
 	if c.ParseSchema {
-		log.Info("Parsing SQL for schema is enabled")
+		logger.Info("Parsing SQL for schema is enabled")
 		sqlParser = parser.New()
 	}
 
 	return &MariaDBStream{
 		db:            db,
 		cfg:           c,
+		logger:        logger.WithField("service", serviceName),
 		databases:     databases,
 		sqlParser:     sqlParser,
 		serviceName:   serviceName,
@@ -859,14 +862,14 @@ func (rtx *retryTransaction) commit(ctx context.Context) (err error) {
 	if err != nil {
 		if isRetryable(err) {
 			if err = rtx.retry(ctx); err != nil {
-				return err
+				return fmt.Errorf("commit retry error: %s", err.Error())
 			}
 			if err = rtx.tx.Commit(); err != nil {
 				return fmt.Errorf("error committing retried transaction: %s", err.Error())
 			}
 		}
 		if ok := errors.Is(err, sql.ErrTxDone); !ok {
-			return fmt.Errorf("error committing transaction: %s", err.Error())
+			return fmt.Errorf("non-retryable error committing transaction: %s", err.Error())
 		}
 	}
 	rtx.tx = nil
@@ -895,14 +898,9 @@ func (rtx *retryTransaction) execContext(ctx context.Context, query string, args
 // retry checks if the target DB is up and then retries all queries contained by the retryTx
 func (rtx *retryTransaction) retry(ctx context.Context) (err error) {
 	if err := rtx.isDBUp(); err != nil {
-		return err
+		return fmt.Errorf("db not reachable: %s", err.Error())
 	}
 
-	if err := rtx.tx.Rollback(); err != nil {
-		if !(pcerrors.Cause(err) == mysql.ErrBadConn) {
-			return err
-		}
-	}
 	if err := rtx.reconnect(); err != nil {
 		return err
 	}
@@ -920,7 +918,7 @@ func (rtx *retryTransaction) retry(ctx context.Context) (err error) {
 	return
 }
 
-// pingDB tries for 60 seconds to connect back with the DB then quits
+// pingDB tries for 90 seconds to connect back with the DB then quits
 func (rtx *retryTransaction) isDBUp() (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
 		if err = rtx.pingMariaDB(); err != nil {
@@ -940,7 +938,7 @@ func (rtx *retryTransaction) reconnect() (err error) {
 	rtx.db.Close()
 	rtx.db, err = openDBConnection(rtx.cfg.User, rtx.cfg.Password, rtx.cfg.Host, rtx.cfg.Port, rtx.serviceName)
 	if err != nil {
-		return
+		return fmt.Errorf("error reconnecting to target db: %s", err.Error())
 	}
 	return
 }
@@ -967,7 +965,6 @@ func (rtx *retryTransaction) pingMariaDB() (err error) {
 
 // isRetryable returns true if err is a retryable error
 func isRetryable(err error) bool {
-
 	if errors.Is(err, mysql.ErrBadConn) {
 		return true
 	}
