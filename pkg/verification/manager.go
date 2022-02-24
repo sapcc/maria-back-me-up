@@ -46,8 +46,7 @@ func NewManager(c config.Config) (m *Manager, err error) {
 	}
 
 	for st, svc := range stgM.GetStorageServices() {
-		if _, ok := svc.(*storage.MariaDBStream); ok {
-			logger.Warnf("cannot create verification for %s", st)
+		if !svc.Verify() {
 			continue
 		}
 		v := NewVerification(c.ServiceName, stgM.GetStorage(st), c.Verification, db, k8sm)

@@ -66,6 +66,14 @@ func (s *Swift) GetStatusError() map[string]string {
 	return s.statusError
 }
 
+// Verify implements interface
+func (s *Swift) Verify() bool {
+	if s.cfg.Verify == nil {
+		return false
+	}
+	return *s.cfg.Verify
+}
+
 // GetStatusErrorByKey implements interface
 func (s *Swift) GetStatusErrorByKey(backupKey string) string {
 	if st, ok := s.statusError[path.Dir(backupKey)]; ok {

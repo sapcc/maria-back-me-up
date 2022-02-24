@@ -80,6 +80,14 @@ func (s *S3) GetStorageServiceName() (name string) {
 	return s.cfg.Name
 }
 
+// Verify implements interface
+func (s *S3) Verify() bool {
+	if s.cfg.Verify == nil {
+		return false
+	}
+	return *s.cfg.Verify
+}
+
 // GetStatusError implements interface
 func (s *S3) GetStatusError() map[string]string {
 	return s.statusError

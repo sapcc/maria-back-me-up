@@ -54,6 +54,14 @@ func NewDisk(cfg config.Disk, serviceName string, binLog string) (d *Disk, err e
 		statusError: make(map[string]string)}, nil
 }
 
+// Verify implements interface
+func (d *Disk) Verify() bool {
+	if d.cfg.Verify == nil {
+		return false
+	}
+	return *d.cfg.Verify
+}
+
 // GetStorageServiceName implements interface
 func (d *Disk) GetStorageServiceName() (name string) {
 	return d.name

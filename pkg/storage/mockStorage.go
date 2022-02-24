@@ -49,6 +49,11 @@ func (s *MockStorage) WithError(e bool) {
 	s.withError = e
 }
 
+// Verify implements interface
+func (s *MockStorage) Verify() bool {
+	return false
+}
+
 // GetIncBackupsFromDump implements interface
 func (s *MockStorage) GetIncBackupsFromDump(key string) (bl []Backup, err error) {
 	return

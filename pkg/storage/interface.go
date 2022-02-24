@@ -32,6 +32,8 @@ type Storage interface {
 	GetStatusErrorByKey(backupKey string) string
 	// GetTotalIncBackupsFromDump returns current total incremental backups in this dump
 	GetTotalIncBackupsFromDump(key string) (t int, err error)
+	// check if verify should be run with this Storage
+	Verify() bool
 }
 
 // ChannelWriter for storages that do not support consuming io.Reader

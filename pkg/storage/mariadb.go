@@ -102,6 +102,11 @@ func NewMariaDBStream(c config.MariaDBStream, serviceName string) (m *MariaDBStr
 
 }
 
+// Verify implements interface
+func (m *MariaDBStream) Verify() bool {
+	return false
+}
+
 // WriteStream implements interface
 func (m *MariaDBStream) WriteStream(fileName, mimeType string, body io.Reader, tags map[string]string, dlo bool) error {
 	return &Error{Storage: m.cfg.Name, message: "method 'WriteStream' is not implemented"}

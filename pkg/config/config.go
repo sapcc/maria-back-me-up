@@ -92,6 +92,7 @@ type StorageService struct {
 // S3 hols info for the AWS S3 storage service
 type S3 struct {
 	Name                 string  `yaml:"name"`
+	Verify               *bool   `yaml:"verify"`
 	AwsAccessKeyID       string  `yaml:"aws_access_key_id"`
 	AwsSecretAccessKey   string  `yaml:"aws_secret_access_key"`
 	AwsEndpoint          string  `yaml:"aws_endpoint"`
@@ -105,6 +106,7 @@ type S3 struct {
 // Swift holds info for the OS swift storage service
 type Swift struct {
 	Name              string `yaml:"name"`
+	Verify            *bool  `yaml:"verify"`
 	AuthVersion       int    `yaml:"auth_version"`
 	AuthURL           string `yaml:"auth_url"`
 	UserName          string `yaml:"user_name"`
@@ -121,6 +123,7 @@ type Swift struct {
 // Disk holds info for the local backup storage
 type Disk struct {
 	Name      string `yaml:"name"`
+	Verify    *bool  `yaml:"verify"`
 	BasePath  string `yaml:"base_path"`
 	Retention int    `yaml:"retention"`
 }
@@ -148,6 +151,7 @@ type OAuth struct {
 type VerificationService struct {
 	RunAfterIncBackups int `yaml:"run_after_inc_backups"`
 	MariaDBVersion     string
+	StorageServices    *[]string
 }
 
 // GetConfig returns the config struct from a yaml file
