@@ -29,6 +29,7 @@ import (
 
 	"github.com/labstack/echo"
 	"github.com/sapcc/maria-back-me-up/pkg/backup"
+	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/constants"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
@@ -223,20 +224,8 @@ func PostRestore(m *backup.Manager) echo.HandlerFunc {
 		if len(params["storage"]) == 0 {
 			return sendJSONResponse(c, "No Storage selected", "")
 		}
-		if m.GetConfig().Backup.OAuth.Enabled {
-			session, err := store.Get(c.Request(), sessionCookieName)
-			if err != nil {
-				return sendJSONResponse(c, "Cannot read session cookie", err.Error())
-			}
-
-			if session.Values["user"] == nil {
-				return sendJSONResponse(c, "No session user provided", "")
-			}
-			user := session.Values["user"].(string)
-			if user == "" {
-				return sendJSONResponse(c, "Cannot read user info", "")
-			}
-			log.Info("restore triggered by user: " + user)
+		if err = checkHeaderUserData(c, m.GetConfig().Backup.OAuth); err != nil {
+			return
 		}
 		p := params["backup"][0]
 		if p == "" {
@@ -251,6 +240,7 @@ func PostRestore(m *backup.Manager) echo.HandlerFunc {
 		if err != nil {
 			return sendJSONResponse(c, "Error downloading backup", err.Error())
 		}
+
 		sendJSONResponse(c, "Stopping backup...", "")
 		m.Stop()
 		time.Sleep(time.Duration(1 * time.Second))
@@ -358,5 +348,31 @@ func sendJSONResponse(c echo.Context, s string, errs string) (err error) {
 		return err
 	}
 	c.Response().Flush()
+	return
+}
+
+func checkHeaderUserData(c echo.Context, cfg config.OAuth) (err error) {
+	if cfg.Enabled {
+		session, err := store.Get(c.Request(), sessionCookieName)
+		if err != nil {
+			return sendJSONResponse(c, "Cannot read session cookie", err.Error())
+		}
+
+		if session.Values["user"] == nil {
+			return sendJSONResponse(c, "No session user provided", "")
+		}
+		user := session.Values["user"].(string)
+		if user == "" {
+			return sendJSONResponse(c, "Cannot read user info", "")
+		}
+		log.Warn("restore triggered by user: " + user)
+	}
+	if cfg.SAPID {
+		user := c.Request().Header.Get("X-Auth-Request-User")
+		if user == "" {
+			return sendJSONResponse(c, "Cannot read user info", "")
+		}
+		log.Warn("restore triggered by user: " + user)
+	}
 	return
 }

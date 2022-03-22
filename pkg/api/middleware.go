@@ -81,28 +81,32 @@ func InitOAuth(m *backup.Manager, opts config.Options) (err error) {
 }
 
 //Oauth middleware is used to start an OAuth2 flow with the dex server.
-func Oauth(enabled bool, opts config.Options) echo.MiddlewareFunc {
+func Oauth(cfg config.OAuth, opts config.Options) echo.MiddlewareFunc {
+	if cfg.Enabled {
+		return func(next echo.HandlerFunc) echo.HandlerFunc {
+			return func(c echo.Context) (err error) {
+				if ok := checkAuthenticated(c.Request()); ok {
+					return next(c)
+				}
+
+				state, _ := genStateString()
+				hashedState := hashStatecode(state, opts.ClientSecret)
+				writeCookie(c.Response(), hashedState, 1)
+				if err := updateSessionStore(c.Response(), c.Request(), "", "claims.Email", c.Request().URL.String()); err != nil {
+					return echo.NewHTTPError(http.StatusUnauthorized, "Error OAuth", err)
+				}
+				return c.Redirect(http.StatusTemporaryRedirect, oauth2Config.AuthCodeURL(state, oauth2.AccessTypeOnline))
+			}
+		}
+	}
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) (err error) {
-			if !enabled {
-				return next(c)
-			}
-			if ok := checkAuthenticated(c.Request()); ok {
-				return next(c)
-			}
-
-			state, _ := genStateString()
-			hashedState := hashStatecode(state, opts.ClientSecret)
-			writeCookie(c.Response(), hashedState, 1)
-			if err := updateSessionStore(c.Response(), c.Request(), "", "claims.Email", c.Request().URL.String()); err != nil {
-				return echo.NewHTTPError(http.StatusUnauthorized, "Error OAuth", err)
-			}
-			return c.Redirect(http.StatusTemporaryRedirect, oauth2Config.AuthCodeURL(state, oauth2.AccessTypeOnline))
+			return next(c)
 		}
 	}
 }
 
-//Restore middleware is used to start an OAuth2 flow with the dex server.
+//Restore middleware is used to check if a database restore is in progress
 func Restore(m *backup.Manager) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) (err error) {

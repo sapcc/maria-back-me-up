@@ -32,21 +32,22 @@ func InitAPI(m *backup.Manager, opts config.Options) (*echo.Echo, error) {
 		if err := api.InitOAuth(m, opts); err != nil {
 			return nil, err
 		}
+		e.GET("auth/callback", api.HandleOAuth2Callback(opts))
+	} else {
+
 	}
 
 	e.Static("/static", "static")
 
-	e.GET("auth/callback", api.HandleOAuth2Callback(opts))
-
 	i := e.Group("/")
-	i.Use(api.Oauth(m.GetConfig().Backup.OAuth.Enabled, opts), api.Restore(m))
+	i.Use(api.Oauth(m.GetConfig().Backup.OAuth, opts), api.Restore(m))
 	i.GET("", api.GetRoot(m))
 	i.GET("backup", api.GetBackup(m))
 	i.GET("restore", api.GetRestore(m))
 	i.POST("restore", api.PostRestore(m))
 
 	gb := e.Group("/api")
-	gb.Use(api.Oauth(m.GetConfig().Backup.OAuth.Enabled, opts), api.Restore(m))
+	gb.Use(api.Oauth(m.GetConfig().Backup.OAuth, opts), api.Restore(m))
 	gb.GET("/backup/status", api.GetBackupStatus(m))
 	gb.GET("/backup/stop", api.StartStopBackup(m))
 	gb.GET("/backup/start", api.StartStopBackup(m))
