@@ -33,8 +33,6 @@ func InitAPI(m *backup.Manager, opts config.Options) (*echo.Echo, error) {
 			return nil, err
 		}
 		e.GET("auth/callback", api.HandleOAuth2Callback(opts))
-	} else {
-
 	}
 
 	e.Static("/static", "static")
