@@ -28,7 +28,7 @@ import (
 func InitAPI(m *backup.Manager, opts config.Options) (*echo.Echo, error) {
 	e := echo.New()
 
-	if m.GetConfig().Backup.OAuth.Enabled {
+	if m.GetConfig().Backup.OAuth.Middleware {
 		if err := api.InitOAuth(m, opts); err != nil {
 			return nil, err
 		}

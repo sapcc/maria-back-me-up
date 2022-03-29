@@ -352,7 +352,7 @@ func sendJSONResponse(c echo.Context, s string, errs string) (err error) {
 }
 
 func checkHeaderUserData(c echo.Context, cfg config.OAuth) (err error) {
-	if cfg.Enabled {
+	if cfg.Middleware {
 		session, err := store.Get(c.Request(), sessionCookieName)
 		if err != nil {
 			return sendJSONResponse(c, "Cannot read session cookie", err.Error())

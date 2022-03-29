@@ -143,7 +143,7 @@ type MariaDBStream struct {
 // OAuth holds info for the api oauth middleware
 type OAuth struct {
 	SAPID       bool   `yaml:"sap_id"`
-	Enabled     bool   `yaml:"enabled"`
+	Middleware  bool   `yaml:"middleware"`
 	ProviderURL string `yaml:"provider_url"`
 	RedirectURL string `yaml:"redirect_url"`
 }

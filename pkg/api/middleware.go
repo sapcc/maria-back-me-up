@@ -82,7 +82,7 @@ func InitOAuth(m *backup.Manager, opts config.Options) (err error) {
 
 //Oauth middleware is used to start an OAuth2 flow with the dex server.
 func Oauth(cfg config.OAuth, opts config.Options) echo.MiddlewareFunc {
-	if cfg.Enabled {
+	if cfg.Middleware {
 		return func(next echo.HandlerFunc) echo.HandlerFunc {
 			return func(c echo.Context) (err error) {
 				if ok := checkAuthenticated(c.Request()); ok {
