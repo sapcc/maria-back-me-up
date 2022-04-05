@@ -1,38 +1,83 @@
 module github.com/sapcc/maria-back-me-up
 
-go 1.16
+go 1.17
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/aws/aws-sdk-go v1.23.21
 	github.com/coreos/go-oidc v2.1.0+incompatible
 	github.com/go-mysql-org/go-mysql v1.3.0
-	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/googleapis/gnostic v0.3.1 // indirect
 	github.com/gorilla/sessions v1.2.0
 	github.com/hashicorp/go-multierror v1.0.0
-	github.com/jmoiron/sqlx v1.3.4 // indirect
 	github.com/labstack/echo v3.3.10+incompatible
-	github.com/labstack/gommon v0.3.0 // indirect
 	github.com/namsral/flag v1.7.4-pre
 	github.com/ncw/swift v1.0.50
 	github.com/pingcap/errors v0.11.5-0.20201126102027-b0a155152ca3
 	github.com/pingcap/parser v0.0.0-20210415081931-48e7f467fd74
 	github.com/pkg/errors v0.9.1
-	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
 	github.com/prometheus/client_golang v1.0.0
-	github.com/prometheus/common v0.7.0 // indirect
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/sirupsen/logrus v1.4.2
-	golang.org/x/net v0.0.0-20201021035429-f5854403a974
-	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45
+	golang.org/x/net v0.0.0-20211209124913-491a49abca63
+	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
-	golang.org/x/time v0.0.0-20190921001708-c4c64cad1fd0 // indirect
+	gopkg.in/yaml.v2 v2.4.0
+	k8s.io/api v0.21.10
+	k8s.io/apimachinery v0.21.10
+	k8s.io/client-go v0.21.10
+)
+
+require (
+	github.com/beorn7/perks v1.0.0 // indirect
+	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/go-logr/logr v0.4.0 // indirect
+	github.com/gogo/protobuf v1.3.2 // indirect
+	github.com/golang/protobuf v1.5.0 // indirect
+	github.com/google/go-cmp v0.5.5 // indirect
+	github.com/google/gofuzz v1.1.0 // indirect
+	github.com/googleapis/gnostic v0.4.1 // indirect
+	github.com/gorilla/securecookie v1.1.1 // indirect
+	github.com/hashicorp/errwrap v1.0.0 // indirect
+	github.com/imdario/mergo v0.3.5 // indirect
+	github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af // indirect
+	github.com/jmoiron/sqlx v1.3.4 // indirect
+	github.com/json-iterator/go v1.1.10 // indirect
+	github.com/konsorten/go-windows-terminal-sequences v1.0.1 // indirect
+	github.com/labstack/gommon v0.3.0 // indirect
+	github.com/mattn/go-colorable v0.1.2 // indirect
+	github.com/mattn/go-isatty v0.0.9 // indirect
+	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
+	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
+	github.com/modern-go/reflect2 v1.0.1 // indirect
+	github.com/pingcap/log v0.0.0-20210317133921-96f4fcab92a4 // indirect
+	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
+	github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4 // indirect
+	github.com/prometheus/common v0.7.0 // indirect
+	github.com/prometheus/procfs v0.0.2 // indirect
+	github.com/satori/go.uuid v1.2.0 // indirect
+	github.com/shopspring/decimal v0.0.0-20180709203117-cd690d0c9e24 // indirect
+	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726 // indirect
+	github.com/siddontang/go-log v0.0.0-20180807004314-8d05993dda07 // indirect
+	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/valyala/bytebufferpool v1.0.0 // indirect
+	github.com/valyala/fasttemplate v1.0.1 // indirect
+	go.uber.org/atomic v1.7.0 // indirect
+	go.uber.org/multierr v1.6.0 // indirect
+	go.uber.org/zap v1.16.0 // indirect
+	golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83 // indirect
+	golang.org/x/sys v0.0.0-20210426230700-d19ff857e887 // indirect
+	golang.org/x/term v0.0.0-20210220032956-6a3ed077a48d // indirect
+	golang.org/x/text v0.3.6 // indirect
+	golang.org/x/time v0.0.0-20210220033141-f8bda1e9f3ba // indirect
+	google.golang.org/appengine v1.6.5 // indirect
+	google.golang.org/protobuf v1.26.0 // indirect
+	gopkg.in/inf.v0 v0.9.1 // indirect
+	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 	gopkg.in/square/go-jose.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v2 v2.3.0
-	k8s.io/api v0.17.3
-	k8s.io/apimachinery v0.17.3
-	k8s.io/client-go v0.17.0
+	k8s.io/klog/v2 v2.9.0 // indirect
+	k8s.io/utils v0.0.0-20210521133846-da695404a2bc // indirect
+	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
+	sigs.k8s.io/yaml v1.2.0 // indirect
 )
 
 replace github.com/docker/docker => github.com/docker/engine v0.0.0-20190717161051-705d9623b7c1

@@ -18,6 +18,7 @@ package k8s
 
 import (
 	"bytes"
+	"context"
 
 	"fmt"
 	"html/template"
@@ -140,7 +141,8 @@ func (m *Database) createDeployment(p string, cfg interface{}) (deploy *appsv1.D
 	if err = m.unmarshalYamlFile(p, deploy, cfg); err != nil {
 		return
 	}
-	return m.client.AppsV1().Deployments(m.ns).Create(deploy)
+
+	return m.client.AppsV1().Deployments(m.ns).Create(context.Background(), deploy, metav1.CreateOptions{})
 }
 
 func (m *Database) createService(p string, cfg interface{}) (svc *v1.Service, err error) {
@@ -148,12 +150,12 @@ func (m *Database) createService(p string, cfg interface{}) (svc *v1.Service, er
 	if err = m.unmarshalYamlFile(p, svc, cfg); err != nil {
 		return
 	}
-	return m.client.CoreV1().Services(m.ns).Create(svc)
+	return m.client.CoreV1().Services(m.ns).Create(context.Background(), svc, metav1.CreateOptions{})
 }
 
 // GetPodIP returns the pods actual ip based on as lable selector
 func (m *Database) GetPodIP(labelSelector string) (ip string, err error) {
-	p, err := m.client.CoreV1().Pods(m.ns).List(metav1.ListOptions{LabelSelector: labelSelector})
+	p, err := m.client.CoreV1().Pods(m.ns).List(context.Background(), metav1.ListOptions{LabelSelector: labelSelector})
 	if err != nil {
 		return ip, err
 	}
@@ -166,7 +168,7 @@ func (m *Database) GetPodIP(labelSelector string) (ip string, err error) {
 // CheckPodNotReady checks if a pod is in state NotReady
 func (m *Database) CheckPodNotReady(labelSelector string) (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
-		p, err := m.client.CoreV1().Pods(m.ns).List(metav1.ListOptions{LabelSelector: labelSelector})
+		p, err := m.client.CoreV1().Pods(m.ns).List(context.Background(), metav1.ListOptions{LabelSelector: labelSelector})
 		if err != nil {
 			return false, err
 		}
@@ -192,13 +194,13 @@ func (m *Database) CheckPodNotReady(labelSelector string) (err error) {
 
 // ScaleDatabaseResources scales k8s db resources
 func (m *Database) ScaleDatabaseResources(name string, scale int32) (err error) {
-	s, err := m.client.AppsV1().Deployments(m.ns).GetScale(name, metav1.GetOptions{})
+	s, err := m.client.AppsV1().Deployments(m.ns).GetScale(context.Background(), name, metav1.GetOptions{})
 	if err != nil {
 		return
 	}
 	sc := *s
 	sc.Spec.Replicas = scale
-	_, err = m.client.AppsV1().Deployments(m.ns).UpdateScale(name, &sc)
+	_, err = m.client.AppsV1().Deployments(m.ns).UpdateScale(context.Background(), name, &sc, metav1.UpdateOptions{})
 	return
 }
 

@@ -31,6 +31,9 @@ func Convert_Slice_v1_NamedCluster_To_Map_string_To_Pointer_api_Cluster(in *[]Na
 		if err := Convert_v1_Cluster_To_api_Cluster(&curr.Cluster, newCluster, s); err != nil {
 			return err
 		}
+		if *out == nil {
+			*out = make(map[string]*api.Cluster)
+		}
 		if (*out)[curr.Name] == nil {
 			(*out)[curr.Name] = newCluster
 		} else {
@@ -64,6 +67,9 @@ func Convert_Slice_v1_NamedAuthInfo_To_Map_string_To_Pointer_api_AuthInfo(in *[]
 		newAuthInfo := api.NewAuthInfo()
 		if err := Convert_v1_AuthInfo_To_api_AuthInfo(&curr.AuthInfo, newAuthInfo, s); err != nil {
 			return err
+		}
+		if *out == nil {
+			*out = make(map[string]*api.AuthInfo)
 		}
 		if (*out)[curr.Name] == nil {
 			(*out)[curr.Name] = newAuthInfo
@@ -99,6 +105,9 @@ func Convert_Slice_v1_NamedContext_To_Map_string_To_Pointer_api_Context(in *[]Na
 		if err := Convert_v1_Context_To_api_Context(&curr.Context, newContext, s); err != nil {
 			return err
 		}
+		if *out == nil {
+			*out = make(map[string]*api.Context)
+		}
 		if (*out)[curr.Name] == nil {
 			(*out)[curr.Name] = newContext
 		} else {
@@ -133,6 +142,9 @@ func Convert_Slice_v1_NamedExtension_To_Map_string_To_runtime_Object(in *[]Named
 		if err := runtime.Convert_runtime_RawExtension_To_runtime_Object(&curr.Extension, &newExtension, s); err != nil {
 			return err
 		}
+		if *out == nil {
+			*out = make(map[string]runtime.Object)
+		}
 		if (*out)[curr.Name] == nil {
 			(*out)[curr.Name] = newExtension
 		} else {
@@ -153,7 +165,7 @@ func Convert_Map_string_To_runtime_Object_To_Slice_v1_NamedExtension(in *map[str
 		newExtension := (*in)[key]
 		oldExtension := runtime.RawExtension{}
 		if err := runtime.Convert_runtime_Object_To_runtime_RawExtension(&newExtension, &oldExtension, s); err != nil {
-			return nil
+			return err
 		}
 		namedExtension := NamedExtension{key, oldExtension}
 		*out = append(*out, namedExtension)
