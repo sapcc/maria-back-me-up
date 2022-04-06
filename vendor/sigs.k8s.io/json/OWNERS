@@ -1,7 +1,6 @@
 # See the OWNERS docs at https://go.k8s.io/owners
 
 approvers:
-- ericchiang
-reviewers:
-- ericchiang
-- rithujohn191
+  - deads2k
+  - lavalamp
+  - liggitt
