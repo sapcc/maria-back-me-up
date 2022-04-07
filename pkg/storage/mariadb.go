@@ -254,7 +254,7 @@ func (m *MariaDBStream) ProcessBinlogEvent(ctx context.Context, event *replicati
 func (m *MariaDBStream) handleIntVarEvent(ctx context.Context, event *replication.IntVarEvent) (err error) {
 	var query string
 
-	if event.Type == replication.INSERT_ID_AUTO_INC {
+	if event.Type == replication.INSERT_ID {
 		query = fmt.Sprintf("SET INSERT_ID=%d;", event.Value)
 	} else if event.Type == replication.LAST_INSERT_ID {
 		query = fmt.Sprintf("SET LAST_INSERT_ID=%d;", event.Value)
