@@ -28,7 +28,7 @@ func TestWriteQueryEvent(t *testing.T) {
 	mock.ExpectExec("use service;").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec("INSERT INTO task (ask_id, title, start_date, due_date, description) VALUES ( '2', 'task1', '2021-05-02', '2022-05-02', 'Test Entry');").WillReturnResult(sqlmock.NewResult(1, 1))
 
-	execQueryEventTest(t, mock, mariaDBStream, queryEvent)
+	execQueryEventTest(t, mock, mariaDBStream, queryEvent, true)
 }
 
 func TestWriteQueryEventParseSchema(t *testing.T) {
@@ -41,7 +41,7 @@ func TestWriteQueryEventParseSchema(t *testing.T) {
 	mock.ExpectExec("use service;").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec("INSERT INTO service.task (ask_id, title, start_date, due_date, description) VALUES ( '2', 'task1', '2021-05-02', '2022-05-02', 'Test Entry');").WillReturnResult(sqlmock.NewResult(1, 1))
 
-	execQueryEventTest(t, mock, mariaDBStream, queryEvent)
+	execQueryEventTest(t, mock, mariaDBStream, queryEvent, true)
 }
 
 func TestWriteQueryEventParseSchemaSkipped(t *testing.T) {
@@ -51,7 +51,7 @@ func TestWriteQueryEventParseSchemaSkipped(t *testing.T) {
 		Query:  []byte("INSERT INTO test.task (ask_id, title, start_date, due_date, description) VALUES ( '2', 'task1', '2021-05-02', '2022-05-02', 'Test Entry');"),
 	}
 	// no mock expectations, since this query should be skipped. schema used in query is not in list && parse is enabled
-	execQueryEventTest(t, mock, mariaDBStream, queryEvent)
+	execQueryEventTest(t, mock, mariaDBStream, queryEvent, true)
 }
 
 func TestWriteRowsEventv1FullImage(t *testing.T) {
@@ -510,6 +510,37 @@ func TestUpdateRowsEventV1MinimalImageNoPKNoRowMetadata(t *testing.T) {
 	execRowsEventTest(t, mock, mariaDBStream, replication.UPDATE_ROWS_EVENTv1, rowsEvent)
 }
 
+func TestWriteTxThenQuery(t *testing.T) {
+	mariaDBStream, mock := setup(t, false, false, true)
+	options := testEventOptions{
+		eventType:       replication.WRITE_ROWS_EVENTv1,
+		nullBitmap:      []byte{28},
+		hasFullMetadata: false,
+	}
+	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+		{int32(1), "task1", "2021-05-02", "2022-05-02", ""},
+		{int32(2), "task1", "2021-05-02", "2022-05-02", "Test Entry"},
+		{int32(3), "task1", "2021-05-02", "2022-05-02", nil},
+	})
+
+	mock.ExpectExec("INSERT INTO service.task (ask_id,title,start_date,due_date,description) VALUES (?,?,?,?,?);").WithArgs("1", "task1", "2021-05-02", "2022-05-02", "").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("INSERT INTO service.task (ask_id,title,start_date,due_date,description) VALUES (?,?,?,?,?);").WithArgs("2", "task1", "2021-05-02", "2022-05-02", "Test Entry").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("INSERT INTO service.task (ask_id,title,start_date,due_date,description) VALUES (?,?,?,?,?);").WithArgs("3", "task1", "2021-05-02", "2022-05-02", nil).WillReturnResult(sqlmock.NewResult(1, 1))
+
+	execRowsEventTest(t, mock, mariaDBStream, replication.WRITE_ROWS_EVENTv1, rowsEvent)
+
+	queryEvent := replication.QueryEvent{
+		Schema: []byte("service"),
+		Query:  []byte("INSERT INTO task (ask_id, title, start_date, due_date, description) VALUES ( '2', 'task1', '2021-05-02', '2022-05-02', 'Test Entry');"),
+	}
+
+	mock.ExpectExec("use service;").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("INSERT INTO task (ask_id, title, start_date, due_date, description) VALUES ( '2', 'task1', '2021-05-02', '2022-05-02', 'Test Entry');").WillReturnResult(sqlmock.NewResult(1, 1))
+
+	execQueryEventTest(t, mock, mariaDBStream, queryEvent, false)
+
+}
+
 func setup(t *testing.T, parseSQL, hasRowMetadata bool, hasPrimaryKey bool) (mariaDBStream *MariaDBStream, mock sqlmock.Sqlmock) {
 	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
 	if err != nil {
@@ -527,8 +558,8 @@ func setup(t *testing.T, parseSQL, hasRowMetadata bool, hasPrimaryKey bool) (mar
 	// if err != nil {
 	// 	t.Error("test setup failed to create transaction")
 	// }
-	retryTx := newRetryTx(db, &config, "test")
-	if err := retryTx.beginTx(context.TODO()); err != nil {
+	retryHandler := newRetryHandler(db, &config, "test")
+	if err := retryHandler.beginTx(context.TODO()); err != nil {
 		t.Error("test setup failed to create transaction")
 	}
 
@@ -561,7 +592,7 @@ func setup(t *testing.T, parseSQL, hasRowMetadata bool, hasPrimaryKey bool) (mar
 		}
 	}
 
-	mariaDBStream = &MariaDBStream{sqlParser: parser.New(), db: db, retryTx: retryTx, databases: databases, cfg: config, tableMetadata: tableMetadata}
+	mariaDBStream = &MariaDBStream{sqlParser: parser.New(), db: db, retry: retryHandler, databases: databases, cfg: config, tableMetadata: tableMetadata}
 	return
 }
 
@@ -580,14 +611,14 @@ func execRowsEventTest(t *testing.T, mock sqlmock.Sqlmock, mariaDBStream *MariaD
 	}
 
 	mock.ExpectCommit()
-	mariaDBStream.retryTx.commit(context.TODO())
+	mariaDBStream.retry.commit(context.TODO())
 
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("Failed expectations not met: %s", err.Error())
 	}
 }
 
-func execQueryEventTest(t *testing.T, mock sqlmock.Sqlmock, mariaDBStream *MariaDBStream, queryEvent replication.QueryEvent) {
+func execQueryEventTest(t *testing.T, mock sqlmock.Sqlmock, mariaDBStream *MariaDBStream, queryEvent replication.QueryEvent, expectCommit bool) {
 	event := &replication.BinlogEvent{
 		Header: &replication.EventHeader{
 			EventType: replication.QUERY_EVENT,
@@ -601,9 +632,10 @@ func execQueryEventTest(t *testing.T, mock sqlmock.Sqlmock, mariaDBStream *Maria
 		t.FailNow()
 	}
 
-	mock.ExpectCommit()
-	mariaDBStream.retryTx.commit(context.TODO())
-
+	if expectCommit {
+		mock.ExpectCommit()
+		mariaDBStream.retry.commit(context.TODO())
+	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("Failed expectations not met: %s", err.Error())
 	}
