@@ -547,8 +547,7 @@ func (m *MariaDBStream) DownloadBackup(fullBackup Backup) (path string, err erro
 // MaxOpenConns = 5, MaxIdleConns = 5, ConnMaxLifetime = 30 Minutes
 func openDBConnection(user, password, host string, port int, serviceName string) (db *sql.DB, err error) {
 
-	// db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@%s:%d", user, password, host, port))
-	db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", user, password, host, port, serviceName))
+	db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/", user, password, host, port))
 	if err != nil {
 		return nil, fmt.Errorf("error opening db %s: %s", serviceName, err.Error())
 	}
