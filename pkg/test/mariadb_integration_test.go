@@ -118,6 +118,11 @@ func testBackupRestore(t *testing.T, test testCase) {
 			t.FailNow()
 		}
 
+		if len(backups) == 0 {
+			t.Errorf("no backups found for %s", serviceName)
+			t.FailNow()
+		}
+
 		path, err := m.Storage.DownloadBackup(serviceName, backups[0])
 		if err != nil {
 			t.Errorf("failed to get backup from disk, error: %s", err.Error())
