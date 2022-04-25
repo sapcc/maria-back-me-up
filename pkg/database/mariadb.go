@@ -229,6 +229,8 @@ func (m *MariaDB) createMysqlDump(toPath string) (bp LogPosition, err error) {
 		"--host="+m.cfg.Database.Host,
 		"--user="+m.cfg.Database.User,
 		"--password="+m.cfg.Database.Password,
+		"--single-transaction",
+		"--skip-lock-tables",
 		"--all-databases",
 		"--master-data=1",
 	)
