@@ -6,7 +6,8 @@ require (
 	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/aws/aws-sdk-go v1.27.0
 	github.com/coreos/go-oidc v2.1.0+incompatible
-	github.com/go-mysql-org/go-mysql v1.3.0
+	github.com/go-mysql-org/go-mysql v1.4.0
+	github.com/go-sql-driver/mysql v1.5.0
 	github.com/gorilla/sessions v1.2.0
 	github.com/hashicorp/go-multierror v1.0.0
 	github.com/labstack/echo v3.3.10+incompatible
@@ -41,7 +42,6 @@ require (
 	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/imdario/mergo v0.3.5 // indirect
 	github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af // indirect
-	github.com/jmoiron/sqlx v1.3.4 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.3 // indirect
 	github.com/labstack/gommon v0.3.0 // indirect

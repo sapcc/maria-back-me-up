@@ -19,6 +19,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"regexp"
 	"strings"
@@ -38,14 +39,17 @@ import (
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 	"k8s.io/apimachinery/pkg/util/wait"
+
+	"github.com/go-mysql-org/go-mysql/replication"
+	"github.com/go-sql-driver/mysql"
 
 	// blank import of the mysql parser for pingcap/parser
 	_ "github.com/pingcap/parser/test_driver"
+
 	// blank import of mysql driver for database/sql
-	_ "github.com/go-mysql-org/go-mysql/driver"
-	"github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/go-mysql-org/go-mysql/replication"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 // MariaDBStream struct is ...
@@ -58,7 +62,7 @@ type MariaDBStream struct {
 	sqlParser     *parser.Parser
 	serviceName   string
 	statusError   map[string]string
-	retryTx       *retryTransaction
+	retry         *retryHandler
 	tableMetadata map[string]map[string]map[int]columnDefinition
 }
 
@@ -96,7 +100,7 @@ func NewMariaDBStream(c config.MariaDBStream, serviceName string) (m *MariaDBStr
 		databases:     databases,
 		sqlParser:     sqlParser,
 		serviceName:   serviceName,
-		retryTx:       newRetryTx(db, &c, serviceName),
+		retry:         newRetryHandler(db, &c, serviceName),
 		tableMetadata: tableMetadata,
 	}, nil
 
@@ -117,7 +121,7 @@ func (m *MariaDBStream) WriteChannel(name, mimeType string, body <-chan StreamEv
 	ctx := context.Background()
 
 	defer func() error {
-		if err := m.retryTx.commit(ctx); err != nil {
+		if err := m.retry.commit(ctx); err != nil {
 			return fmt.Errorf("error committing transaction: %s", err.Error())
 		}
 		return nil
@@ -237,13 +241,13 @@ func (m *MariaDBStream) ProcessBinlogEvent(ctx context.Context, event *replicati
 		return m.handleIntVarEvent(ctx, e)
 
 	case *replication.MariadbGTIDEvent:
-		return m.retryTx.beginTx(ctx)
+		return m.retry.beginTx(ctx)
 
 	case *replication.XIDEvent:
-		return m.retryTx.commit(ctx)
+		return m.retry.commit(ctx)
 
 	case *replication.RotateEvent:
-		return m.retryTx.commit(ctx)
+		return m.retry.commit(ctx)
 
 	default:
 		// Only QueryEvent and ROWS_EVENT contain queries which must be replicated
@@ -254,7 +258,7 @@ func (m *MariaDBStream) ProcessBinlogEvent(ctx context.Context, event *replicati
 func (m *MariaDBStream) handleIntVarEvent(ctx context.Context, event *replication.IntVarEvent) (err error) {
 	var query string
 
-	if event.Type == replication.INSERT_ID_AUTO_INC {
+	if event.Type == replication.INSERT_ID {
 		query = fmt.Sprintf("SET INSERT_ID=%d;", event.Value)
 	} else if event.Type == replication.LAST_INSERT_ID {
 		query = fmt.Sprintf("SET LAST_INSERT_ID=%d;", event.Value)
@@ -262,7 +266,7 @@ func (m *MariaDBStream) handleIntVarEvent(ctx context.Context, event *replicatio
 		return fmt.Errorf("error IntVarEvent has unsupported type")
 	}
 
-	err = m.retryTx.execContext(ctx, query, nil)
+	err = m.retry.execContext(ctx, query, nil)
 	if err != nil {
 		return fmt.Errorf("error setting insert id: %s", err.Error())
 	}
@@ -297,20 +301,20 @@ func (m *MariaDBStream) handleQueryEvent(ctx context.Context, event *replication
 func (m *MariaDBStream) replicateQuery(ctx context.Context, query string, schema string) (err error) {
 
 	if schema != "" {
-		err = m.retryTx.execContext(ctx, fmt.Sprintf("use %s;", schema), nil)
+		err = m.retry.execContext(ctx, fmt.Sprintf("use %s;", schema), nil)
 		if err != nil {
 			switch err := errors.Cause(err).(type) {
-			case *mysql.MyError:
-				if err.Code == 1049 {
+			case *mysql.MySQLError:
+				if err.Number == 1049 {
 					// Unknown database, unset DB. This can be a `create database` query
-					m.retryTx.execContext(ctx, "use dummy;", nil)
+					m.retry.execContext(ctx, "use dummy;", nil)
 				} else {
 					return fmt.Errorf("cannot change schema: %v", err.Error())
 				}
 			}
 		}
 	}
-	err = m.retryTx.execContext(ctx, query, nil)
+	err = m.retry.execContext(ctx, query, nil)
 
 	if err != nil {
 		return fmt.Errorf("execution of query failed: %v", err.Error())
@@ -393,7 +397,7 @@ func (m *MariaDBStream) handleRowsEvent(ctx context.Context, event *replication.
 			return fmt.Errorf("failed to create query: unsupported rows event %s", eventType)
 		}
 
-		err := m.retryTx.execContext(ctx, query, args)
+		err := m.retry.execContext(ctx, query, args)
 		if err != nil {
 			return fmt.Errorf("error replicating RowsEvent: %s", err.Error())
 		}
@@ -542,7 +546,8 @@ func (m *MariaDBStream) DownloadBackup(fullBackup Backup) (path string, err erro
 // openDBConnection open a DB connection and ping the db
 // MaxOpenConns = 5, MaxIdleConns = 5, ConnMaxLifetime = 30 Minutes
 func openDBConnection(user, password, host string, port int, serviceName string) (db *sql.DB, err error) {
-	db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@%s:%d", user, password, host, port))
+
+	db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/", user, password, host, port))
 	if err != nil {
 		return nil, fmt.Errorf("error opening db %s: %s", serviceName, err.Error())
 	}
@@ -818,120 +823,10 @@ type myQuery struct {
 	args  []interface{}
 }
 
-// retryTransaction structure to hold a tx and its queries
-type retryTransaction struct {
-	db          *sql.DB
-	cfg         *config.MariaDBStream
-	serviceName string
-	tx          *sql.Tx
-	queries     []myQuery
-}
-
-func newRetryTx(db *sql.DB, cfg *config.MariaDBStream, serviceName string) (rtx *retryTransaction) {
-	return &retryTransaction{db: db, cfg: cfg, serviceName: serviceName}
-}
-
-// beginTx tries to commit if tx is non-nil and begins a new tx
-func (rtx *retryTransaction) beginTx(ctx context.Context) (err error) {
-
-	if err = rtx.commit(ctx); err != nil {
-		return err
-	}
-
-	rtx.tx, err = rtx.db.BeginTx(ctx, nil)
-	if err == nil {
-		return
-	}
-
-	if isRetryable(err) {
-		if err := rtx.isDBUp(); err != nil {
-			return err
-		}
-		rtx.reconnect()
-		rtx.tx, err = rtx.db.BeginTx(ctx, nil)
-		if err != nil {
-			return fmt.Errorf("cannot create tx: %s", err)
-		}
-		return nil
-	}
-	return fmt.Errorf("non-retryable error cannot create tx: %s", err)
-}
-
-// commit tries to commit a tx and retries the tx if a retryable error occurs
-func (rtx *retryTransaction) commit(ctx context.Context) (err error) {
-	if rtx.tx == nil {
-		return
-	}
-
-	// reset tx and queries if successful or not
-	defer func() {
-		rtx.tx = nil
-		rtx.queries = nil
-	}()
-
-	err = rtx.tx.Commit()
-	if err != nil {
-		if isRetryable(err) {
-			if err = rtx.retry(ctx); err != nil {
-				return fmt.Errorf("commit retry error: %s", err.Error())
-			}
-			if err = rtx.tx.Commit(); err != nil {
-				return fmt.Errorf("error committing retried transaction: %s", err.Error())
-			}
-		}
-		if ok := errors.Is(err, sql.ErrTxDone); !ok {
-			return fmt.Errorf("non-retryable error committing transaction: %s", err.Error())
-		}
-	}
-	return
-}
-
-// execContext tries to exec a query and retries all queries of the tx if a retryable error occurs
-func (rtx *retryTransaction) execContext(ctx context.Context, query string, args []interface{}) (err error) {
-	rtx.queries = append(rtx.queries, myQuery{query: query, args: args})
-
-	_, err = rtx.tx.ExecContext(ctx, query, args...)
-	if err == nil {
-		return
-	}
-
-	if isRetryable(err) {
-		if err = rtx.retry(ctx); err != nil {
-			return fmt.Errorf("failed to retry: %s", err.Error())
-		}
-		log.Info("successfully retried transaction")
-		return
-	}
-	return fmt.Errorf("non-retryable error: %s", err)
-}
-
-// retry checks if the target DB is up and then retries all queries contained by the retryTx
-func (rtx *retryTransaction) retry(ctx context.Context) (err error) {
-	if err := rtx.isDBUp(); err != nil {
-		return fmt.Errorf("db not reachable: %s", err.Error())
-	}
-
-	if err := rtx.reconnect(); err != nil {
-		return err
-	}
-
-	rtx.tx, err = rtx.db.BeginTx(ctx, nil)
-	if err != nil {
-		return
-	}
-	for _, q := range rtx.queries {
-		_, err = rtx.tx.ExecContext(ctx, q.query, q.args...)
-		if err != nil {
-			return err
-		}
-	}
-	return
-}
-
-// pingDB tries for 90 seconds to connect back with the DB then quits
-func (rtx *retryTransaction) isDBUp() (err error) {
+// isDBUp tries for 90 seconds to connect back with the DB then quits
+func isDBUp(user, password, host string, port int) (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
-		if err = rtx.pingMariaDB(); err != nil {
+		if err = pingMariaDB(user, password, host, port); err != nil {
 			log.Warn(fmt.Sprintf("error pinging mariadb: %s", err.Error()))
 			return false, nil
 		}
@@ -944,23 +839,14 @@ func (rtx *retryTransaction) isDBUp() (err error) {
 	return nil
 }
 
-func (rtx *retryTransaction) reconnect() (err error) {
-	rtx.db.Close()
-	rtx.db, err = openDBConnection(rtx.cfg.User, rtx.cfg.Password, rtx.cfg.Host, rtx.cfg.Port, rtx.serviceName)
-	if err != nil {
-		return fmt.Errorf("error reconnecting to target db: %s", err.Error())
-	}
-	return
-}
-
-func (rtx *retryTransaction) pingMariaDB() (err error) {
+func pingMariaDB(user, password, host string, port int) (err error) {
 	var out []byte
 	if out, err = exec.Command("mysqladmin",
 		"status",
-		"-u"+rtx.cfg.User,
-		"-p"+rtx.cfg.Password,
-		"-h"+rtx.cfg.Host,
-		"-P"+strconv.Itoa(rtx.cfg.Port),
+		"-u"+user,
+		"-p"+password,
+		"-h"+host,
+		"-P"+strconv.Itoa(port),
 	).CombinedOutput(); err != nil {
 		var msg string
 		if out != nil {
@@ -975,13 +861,17 @@ func (rtx *retryTransaction) pingMariaDB() (err error) {
 
 // isRetryable returns true if err is a retryable error
 func isRetryable(err error) bool {
-	if errors.Is(err, mysql.ErrBadConn) {
+	if errors.Is(err, driver.ErrBadConn) {
 		return true
 	}
+	if errors.Is(err, unix.ECONNREFUSED) {
+		return true
+	}
+
 	switch pcerrors.Cause(err).(type) {
-	case *mysql.MyError:
-		if mysqlErr, ok := pcerrors.Cause(err).(*mysql.MyError); ok {
-			if mysqlErr.Code == 1053 || mysqlErr.Code == 1927 {
+	case *mysql.MySQLError:
+		if mysqlErr, ok := pcerrors.Cause(err).(*mysql.MySQLError); ok {
+			if mysqlErr.Number == 1053 || mysqlErr.Number == 1927 {
 				return true
 			}
 		}
@@ -989,4 +879,136 @@ func isRetryable(err error) bool {
 	default:
 		return false
 	}
+}
+
+type retryHandler struct {
+	db          *sql.DB
+	cfg         *config.MariaDBStream
+	tx          *sql.Tx
+	queries     []myQuery
+	serviceName string
+}
+
+func newRetryHandler(db *sql.DB, cfg *config.MariaDBStream, serviceName string) (rh *retryHandler) {
+	return &retryHandler{db: db, cfg: cfg, tx: nil}
+}
+
+func (r *retryHandler) beginTx(ctx context.Context) (err error) {
+
+	if err = r.commit(ctx); err != nil {
+		return err
+	}
+
+	r.tx, err = r.db.BeginTx(ctx, nil)
+	if err == nil {
+		return
+	}
+
+	if isRetryable(err) {
+		if err := isDBUp(r.cfg.User, r.cfg.Password, r.cfg.Host, r.cfg.Port); err != nil {
+			return err
+		}
+
+		r.tx, err = r.db.BeginTx(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("cannot create tx: %s", err)
+		}
+		return nil
+	}
+	return fmt.Errorf("non-retryable error cannot create tx: %s", err)
+
+}
+
+func (r *retryHandler) commit(ctx context.Context) (err error) {
+	if r.tx == nil {
+		return
+	}
+
+	// reset tx and queries if successful or not
+	defer func() {
+		r.tx.Rollback()
+		r.tx = nil
+		r.queries = nil
+	}()
+
+	err = r.tx.Commit()
+	if err != nil {
+		if isRetryable(err) {
+			if err = r.retryTx(ctx); err != nil {
+				return fmt.Errorf("commit retry error: %s", err.Error())
+			}
+			if err = r.tx.Commit(); err != nil {
+				return fmt.Errorf("error committing retried transaction: %s", err.Error())
+			}
+		}
+		if ok := errors.Is(err, sql.ErrTxDone); !ok {
+			return fmt.Errorf("non-retryable error committing transaction: %s", err.Error())
+		}
+	}
+	return
+}
+
+func (r *retryHandler) execContext(ctx context.Context, query string, args []interface{}) (err error) {
+	if r.tx != nil {
+		r.queries = append(r.queries, myQuery{query: query, args: args})
+		_, err = r.tx.ExecContext(ctx, query, args...)
+		if err == nil {
+			return
+		}
+		r.tx.Rollback()
+
+		if isRetryable(err) {
+			if err = r.retryTx(ctx); err != nil {
+				log.Info("failed to retry tx:", err.Error())
+				return err
+			}
+			log.Info("retried tx successfully")
+			return
+		}
+		log.Info("non-retryable tx error:", err.Error())
+		return
+	}
+
+	_, err = r.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		if isRetryable(err) {
+			if err = r.retryQuery(ctx, query, args); err != nil {
+				log.Info("failed to retry query:", err.Error())
+				return err
+			}
+			log.Info("retried query successfully")
+			return
+		}
+		log.Info("non-retryable query error: ", err.Error())
+		return err
+	}
+	return nil
+}
+
+func (r *retryHandler) retryTx(ctx context.Context) (err error) {
+	if err := isDBUp(r.cfg.User, r.cfg.Password, r.cfg.Host, r.cfg.Port); err != nil {
+		return fmt.Errorf("db not reachable: %s", err.Error())
+	}
+
+	r.tx, err = r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return
+	}
+	for _, q := range r.queries {
+		if _, err = r.tx.ExecContext(ctx, q.query, q.args...); err != nil {
+			return err
+		}
+	}
+	return
+}
+
+func (r *retryHandler) retryQuery(ctx context.Context, query string, args []interface{}) (err error) {
+	if err = isDBUp(r.cfg.User, r.cfg.Password, r.cfg.Host, r.cfg.Port); err != nil {
+		return fmt.Errorf("db not reachable: %s", err.Error())
+	}
+
+	if _, err = r.db.ExecContext(ctx, query, args...); err != nil {
+		return err
+	}
+	return
 }
