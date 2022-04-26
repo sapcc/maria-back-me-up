@@ -202,6 +202,7 @@ func (m *MariaDB) createMyDump(toPath string) (bp LogPosition, err error) {
 		//`--regex=^(?!(mysql\.))`,
 		"--compress",
 		"--trx-consistency-only",
+		"--compress-protocol",
 		"--rows=50000",
 		"--threads=8",
 	)
@@ -449,6 +450,9 @@ func (m *MariaDB) restoreDump(backupPath string) (err error) {
 			"--password="+m.cfg.Database.Password,
 			"--directory="+path.Join(backupPath, "dump"),
 			"--overwrite-tables",
+			"--compress-protocol",
+			"--queries-per-transaction=500",
+			"--threads=8",
 		).CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("%s error: %s", config.MyDumper.String(), string(b))
