@@ -201,6 +201,9 @@ func (m *MariaDB) createMyDump(toPath string) (bp LogPosition, err error) {
 		"--outputdir="+toPath,
 		//`--regex=^(?!(mysql\.))`,
 		"--compress",
+		"--trx-consistency-only",
+		"--rows=50000",
+		"--threads=8",
 	)
 
 	err = mydumperCmd.Run()
@@ -665,3 +668,18 @@ func (m *MariaDB) GetDatabaseDiff(c1, c2 config.DatabaseConfig) (out []byte, err
 	out, err = e.CombinedOutput()
 	return
 }
+
+//TODO: additional backup - verification
+// source: https://medium.com/tensult/mydumper-myloader-and-my-experience-of-migrating-to-aws-rds-ff74fc9c1add
+/* Check the tables count in each database
+SELECT table_schema, COUNT(*) as tables_count FROM information_schema.tables group by table_schema;
+# Check the triggers count in each database
+select trigger_schema, COUNT(*) as triggers_count
+from information_schema.triggers group by trigger_schema;
+# Check the routines count in each database
+select routine_schema, COUNT(*) as routines_count
+from information_schema.routines group by routine_schema;
+# Check the events count in each database
+select event_schema, COUNT(*) as events_count
+from information_schema.events group by event_schema;
+*/
