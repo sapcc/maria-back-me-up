@@ -123,8 +123,7 @@ func (s *Swift) WriteFolder(p string) (err error) {
 
 // WriteStream implements interface
 func (s *Swift) WriteStream(name, mimeType string, body io.Reader, tags map[string]string, dlo bool) (err error) {
-	buf := new(bytes.Buffer)
-	buf.ReadFrom(body)
+
 	t := strings.Split(name, "/")
 	var expire time.Time
 	if len(t) == 2 {
@@ -152,7 +151,7 @@ func (s *Swift) WriteStream(name, mimeType string, body io.Reader, tags map[stri
 		if err != nil {
 			return s.handleError(name, err)
 		}
-		_, err = f.Write(buf.Bytes())
+		_, err = io.Copy(f, body)
 		if err != nil {
 			return s.handleError(name, err)
 		}
@@ -174,7 +173,7 @@ func (s *Swift) WriteStream(name, mimeType string, body io.Reader, tags map[stri
 			return s.handleError(name, err)
 		}
 		defer f.Close()
-		_, err = f.Write(buf.Bytes())
+		_, err = io.Copy(f, body)
 		if err != nil {
 			return s.handleError(name, err)
 		}
