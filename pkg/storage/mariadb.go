@@ -466,23 +466,15 @@ func (m *MariaDBStream) extractSchemas(backupPath string) (filteredBackupPath st
 		return "", fmt.Errorf("failed to create file for filtered backup: %s", err.Error())
 	}
 	defer file.Close()
-	bytes, err := m.extractBackupMetadata(backupPath)
+	err = m.extractBackupMetadata(backupPath, file)
 	if err != nil {
 		return "", fmt.Errorf("could not extract metadata from full backup: %s", err.Error())
 	}
-	_, err = file.Write(bytes)
-	if err != nil {
-		return "", fmt.Errorf("failed to write backup metadata: %s", err.Error())
-	}
 
 	for _, s := range m.cfg.Databases {
-		bytes, err := m.extractSchema(backupPath, s)
+		err := m.extractSchema(backupPath, s, file)
 		if err != nil {
 			return "", fmt.Errorf("could not extract schema %s from full backup: %s", s, err.Error())
-		}
-		_, err = file.Write(bytes)
-		if err != nil {
-			return "", fmt.Errorf("failed to write schema %s to file: %s", s, err.Error())
 		}
 	}
 
@@ -490,32 +482,40 @@ func (m *MariaDBStream) extractSchemas(backupPath string) (filteredBackupPath st
 }
 
 // getBackupMetadata extracts the backup metadata from the full dump
-func (m *MariaDBStream) extractBackupMetadata(path string) (bytes []byte, err error) {
+func (m *MariaDBStream) extractBackupMetadata(path string, target *os.File) (err error) {
 	cmd := exec.Command(
 		"sed",
 		"-n", "/^-- MariaDB dump /,/^-- Current Database: `/p",
 		path,
 	)
-	out, err := cmd.Output()
+	cmd.Stdout = target
 
-	if err != nil {
-		return nil, fmt.Errorf("could not extract backup metadata from backup: %s", err.Error())
+	if err = cmd.Start(); err != nil {
+		return fmt.Errorf("could not extract backup metadata from backup: %s", err.Error())
 	}
-	return out, nil
+	if err = cmd.Wait(); err != nil {
+		return err
+	}
+	return
 }
 
 // extractSchema filters the full backup for all statements related to `schema`
-func (m *MariaDBStream) extractSchema(path, schema string) (bytes []byte, err error) {
+func (m *MariaDBStream) extractSchema(path, schema string, target *os.File) (err error) {
 	cmd := exec.Command(
 		"sed",
 		"-n", fmt.Sprintf("/^-- Current Database: `%s`/,/^-- Current Database: `/p", schema),
 		path,
 	)
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("could not extract schema %s from backup: %s", schema, err.Error())
+	cmd.Stdout = target
+
+	if err = cmd.Start(); err != nil {
+		return fmt.Errorf("could not extract schema %s from backup: %s", schema, err.Error())
 	}
-	return out, nil
+	if err = cmd.Wait(); err != nil {
+		return errors.Wrapf(err, "failed extracting schema %s", schema)
+	}
+
+	return
 }
 
 // DownloadLatestBackup implements interface
