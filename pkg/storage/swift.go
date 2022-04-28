@@ -139,6 +139,8 @@ func (s *Swift) WriteStream(name, mimeType string, body io.Reader, tags map[stri
 		headers["X-Object-Meta-"+k] = v
 	}
 	if !dlo {
+		buf := new(bytes.Buffer)
+		buf.ReadFrom(body)
 		f, err := s.connection.ObjectCreate(s.cfg.ContainerName, backupKey, false, "", "", headers)
 		defer func() {
 			f.Close()
@@ -151,7 +153,7 @@ func (s *Swift) WriteStream(name, mimeType string, body io.Reader, tags map[stri
 		if err != nil {
 			return s.handleError(name, err)
 		}
-		_, err = io.Copy(f, body)
+		_, err = f.Write(buf.Bytes())
 		if err != nil {
 			return s.handleError(name, err)
 		}
