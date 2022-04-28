@@ -393,7 +393,7 @@ func (file *largeObjectCreateFile) writeSegment(buf []byte, writeSegmentIdx int,
 		readers = append(readers, tailSegmentReader)
 	}
 	segmentReader := io.MultiReader(readers...)
-	headers, err := file.conn.ObjectPut(file.segmentContainer, segmentName, segmentReader, true, "", file.contentType, nil)
+	headers, err := file.conn.ObjectPut(file.segmentContainer, segmentName, segmentReader, true, "", file.contentType, file.headers)
 	if err != nil {
 		return nil, 0, err
 	}
