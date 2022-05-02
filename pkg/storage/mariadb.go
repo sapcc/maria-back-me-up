@@ -17,6 +17,7 @@
 package storage
 
 import (
+	"bufio"
 	"context"
 	"database/sql"
 	"database/sql/driver"
@@ -71,6 +72,15 @@ type column struct {
 	value      sql.NullString
 	skip       bool
 	isKeyField bool
+}
+
+// schemaFilter defines how to filter out a part of the dump file
+type schemaFilter struct {
+	start         *regexp.Regexp
+	end           *regexp.Regexp
+	hasStarted    bool
+	canMultiMatch bool
+	isDone        bool
 }
 
 // NewMariaDBStream creates a new mariadbstream storage object
@@ -461,60 +471,85 @@ func (m *MariaDBStream) createUpdateQueryFromRow(table *replication.TableMapEven
 // extractSchemas filters the full backup dump.sql and only retains statements for schemas specified in the config
 func (m *MariaDBStream) extractSchemas(backupPath string) (filteredBackupPath string, err error) {
 	filteredBackupPath = filepath.Join(filepath.Dir(backupPath), "dump_filtered.sql")
-	file, err := os.Create(filteredBackupPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to create file for filtered backup: %s", err.Error())
-	}
-	defer file.Close()
-	err = m.extractBackupMetadata(backupPath, file)
-	if err != nil {
-		return "", fmt.Errorf("could not extract metadata from full backup: %s", err.Error())
+
+	filters := make([]schemaFilter, 0)
+
+	// filter to retrieve dump metadata
+	metadataStart := regexp.MustCompile("-- MariaDB dump.*")
+	metadataEnd := regexp.MustCompile("-- Current Database:.*")
+	metadataFilter := schemaFilter{start: metadataStart, end: metadataEnd, canMultiMatch: false}
+	filters = append(filters, metadataFilter)
+
+	// creates a filter for each schema to be restored
+	for _, s := range m.cfg.Databases {
+		schemaStart := regexp.MustCompile(fmt.Sprintf("-- Current Database: `%s`", s))
+		schemaEnd := regexp.MustCompile("-- Current Database:.*")
+		schemaFilter := schemaFilter{start: schemaStart, end: schemaEnd, canMultiMatch: true}
+		filters = append(filters, schemaFilter)
 	}
 
-	for _, s := range m.cfg.Databases {
-		err := m.extractSchema(backupPath, s, file)
-		if err != nil {
-			return "", fmt.Errorf("could not extract schema %s from full backup: %s", s, err.Error())
-		}
+	// filter the dump file based on the filter provided
+	err = m.filterDump(backupPath, filteredBackupPath, filters)
+	if err != nil {
+		return "", err
 	}
 
 	return filteredBackupPath, nil
 }
 
-// getBackupMetadata extracts the backup metadata from the full dump
-func (m *MariaDBStream) extractBackupMetadata(path string, target *os.File) (err error) {
-	cmd := exec.Command(
-		"sed",
-		"-n", "/^-- MariaDB dump /,/^-- Current Database: `/p",
-		path,
-	)
-	cmd.Stdout = target
-
-	if err = cmd.Start(); err != nil {
-		return fmt.Errorf("could not extract backup metadata from backup: %s", err.Error())
-	}
-	if err = cmd.Wait(); err != nil {
+func (m *MariaDBStream) filterDump(path, targetPath string, filters []schemaFilter) (err error) {
+	file, err := os.Open(path)
+	if err != nil {
 		return err
 	}
-	return
-}
+	defer file.Close()
 
-// extractSchema filters the full backup for all statements related to `schema`
-func (m *MariaDBStream) extractSchema(path, schema string, target *os.File) (err error) {
-	cmd := exec.Command(
-		"sed",
-		"-n", fmt.Sprintf("/^-- Current Database: `%s`/,/^-- Current Database: `/p", schema),
-		path,
-	)
-	cmd.Stdout = target
-
-	if err = cmd.Start(); err != nil {
-		return fmt.Errorf("could not extract schema %s from backup: %s", schema, err.Error())
+	target, err := os.Create(targetPath)
+	if err != nil {
+		return fmt.Errorf("failed to create file for filtered backup: %s", err.Error())
 	}
-	if err = cmd.Wait(); err != nil {
-		return errors.Wrapf(err, "failed extracting schema %s", schema)
-	}
+	defer target.Close()
 
+	maxCapacity := m.cfg.DumpFilterBufferSizeMB * 1024 * 1024
+
+	scanner := bufio.NewScanner(file)
+
+	buf := make([]byte, maxCapacity)
+	scanner.Buffer(buf, maxCapacity)
+
+	lines := 0
+	for scanner.Scan() {
+
+		lines += 1
+		line := scanner.Bytes()
+		for i, f := range filters {
+			if f.isDone {
+				continue
+			}
+			if f.hasStarted {
+				if matched := f.end.Match(line); matched {
+					if f.canMultiMatch {
+						filters[i].hasStarted = false
+					} else {
+						filters[i].isDone = true
+					}
+				} else {
+					target.Write(line)
+					target.Write([]byte{'\n'})
+				}
+			} else {
+				matched := f.start.Match(line)
+				if matched {
+					filters[i].hasStarted = true
+					target.Write(line)
+					target.Write([]byte{'\n'})
+				}
+			}
+		}
+	}
+	if scanner.Err() != nil {
+		return scanner.Err()
+	}
 	return
 }
 

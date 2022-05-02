@@ -131,14 +131,15 @@ type Disk struct {
 
 // MariaDBStream holds info for the replication to another MariaDB
 type MariaDBStream struct {
-	Name        string `yaml:"name"`
-	Host        string `yaml:"host"`
-	Port        int    `yaml:"port"`
-	User        string `yaml:"user"`
-	Password    string `yaml:"password"`
-	DumpTool    DumpTools
-	Databases   []string `yaml:"databases"`
-	ParseSchema bool     `yaml:"parse_schema"`
+	Name                   string `yaml:"name"`
+	Host                   string `yaml:"host"`
+	Port                   int    `yaml:"port"`
+	User                   string `yaml:"user"`
+	Password               string `yaml:"password"`
+	DumpTool               DumpTools
+	Databases              []string `yaml:"databases"`
+	ParseSchema            bool     `yaml:"parse_schema"`
+	DumpFilterBufferSizeMB int      `yaml:"dump_filter_buffer_size_mb"`
 }
 
 // OAuth holds info for the api oauth middleware
@@ -183,5 +184,11 @@ func GetConfig(opts Options) (cfg Config, err error) {
 func setDefaults(cfg Config) {
 	if cfg.Backup.BinlogMaxReconnectAttempts == 0 {
 		cfg.Backup.BinlogMaxReconnectAttempts = 10
+	}
+
+	for i, m := range cfg.Storages.MariaDB {
+		if m.DumpFilterBufferSizeMB == 0 {
+			cfg.Storages.MariaDB[i].DumpFilterBufferSizeMB = 2
+		}
 	}
 }

@@ -91,14 +91,15 @@ func Setup(t *testing.T, opts *SetupOptions) (m *backup.Manager, cfg config.Conf
 
 	if opts.StreamStorage.Enabled {
 		cfg.Storages.MariaDB = []config.MariaDBStream{{
-			Name:        "StreamingTest",
-			Host:        "127.0.0.1",
-			Port:        3307,
-			User:        "root",
-			Password:    "streaming",
-			DumpTool:    opts.DumpTool,
-			Databases:   opts.StreamStorage.Databases,
-			ParseSchema: opts.StreamStorage.ParseSQL,
+			Name:                   "StreamingTest",
+			Host:                   "127.0.0.1",
+			Port:                   3307,
+			User:                   "root",
+			Password:               "streaming",
+			DumpTool:               opts.DumpTool,
+			Databases:              opts.StreamStorage.Databases,
+			ParseSchema:            opts.StreamStorage.ParseSQL,
+			DumpFilterBufferSizeMB: 2,
 		}}
 	}
 

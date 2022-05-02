@@ -24,6 +24,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/constants"
+	"github.com/sapcc/maria-back-me-up/pkg/log"
 )
 
 func TestFilterBackup(t *testing.T) {
@@ -42,8 +43,15 @@ func TestFilterBackup(t *testing.T) {
 		t.Errorf("could not start backup: %s", err.Error())
 		t.FailNow()
 	}
-
-	time.Sleep(time.Second * 10)
+	for i := 0; i < 15; i++ {
+		stats := m.GetHealthStatus()
+		if stats.FullBackup["StreamingTest"] == 1 {
+			break
+		} else {
+			log.Info("Backup not done - waiting 1 second")
+			time.Sleep(1 * time.Second)
+		}
+	}
 
 	// Create DB client
 	conn, err := createConnection(cfg.Database.User, cfg.Database.Password, cfg.Database.Host, "", cfg.Database.Port)

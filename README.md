@@ -134,6 +134,7 @@ storages:
       full_dump_tool: # dump tool used to restore the full dump
       databases: # if specified, only the listed databases are replicated
       parse_schema: # if true, the schema is parsed from the SQL Statement of a QueryEvent
+      dump_filter_buffer_size_mb: # buffer used for reading from dump, default 2mb
   disk:
     - name: # name of the storage
       base_path: # root folder for the backups
