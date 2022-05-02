@@ -62,6 +62,7 @@ type BackupService struct {
 	EnableInitRestore          bool   `yaml:"enable_init_restore"`
 	EnableRestoreOnDBFailure   bool   `yaml:"enable_restore_on_db_failure"`
 	DisableBinlogPurgeOnRotate bool   `yaml:"disable_binlog_purge_on_rotate"`
+	BinlogMaxReconnectAttempts int    `yaml:"binlog_max_reconnect_attempts"`
 }
 
 // DatabaseConfig holds info for the database to back up
@@ -173,5 +174,14 @@ func GetConfig(opts Options) (cfg Config, err error) {
 		cfg.Storages.MariaDB[i].DumpTool = cfg.Database.DumpTool
 	}
 
+	setDefaults(cfg)
+
 	return cfg, nil
+}
+
+// setDefaults sets default values for config keys
+func setDefaults(cfg Config) {
+	if cfg.Backup.BinlogMaxReconnectAttempts == 0 {
+		cfg.Backup.BinlogMaxReconnectAttempts = 10
+	}
 }

@@ -69,6 +69,7 @@ backup:
   enable_init_restore: # Enables a automatic restore if one of the databases (in MariaDB.databases) are missing.
   enable_restore_on_db_failure: # Enables automatic restore if the db is unhealthy.\
   disable_binlog_purge_on_rotate: # Boolean to disable binlog purging. Purging is enabled by detault
+  binlog_max_reconnect_attempts: # Number of reconnect attempts by the binlog syncer, default is 10
   outh:
     enabled: # enables OAuth to access the API (openID)\
     provider_url: # Url of the openID provider (e.g. Dex)\

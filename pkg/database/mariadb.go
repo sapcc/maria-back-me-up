@@ -272,7 +272,7 @@ func (m *MariaDB) StartIncBackup(ctx context.Context, mp LogPosition, dir string
 		Port:                 uint16(m.cfg.Database.Port),
 		User:                 m.cfg.Database.User,
 		Password:             m.cfg.Database.Password,
-		MaxReconnectAttempts: 10,
+		MaxReconnectAttempts: m.cfg.Backup.BinlogMaxReconnectAttempts,
 		DumpCommandFlag:      2,
 	}
 	syncer := replication.NewBinlogSyncer(cfg)
