@@ -237,6 +237,7 @@ func (m *MariaDB) createMysqlDump(toPath string) (bp LogPosition, err error) {
 		"--quick",
 		"--all-databases",
 		"--master-data=1",
+		"--max_allowed_packet=512M",
 	)
 	cmd.Stdout = outfile
 	err = cmd.Run()
