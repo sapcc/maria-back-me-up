@@ -1,9 +1,12 @@
 # maria-back-me-up
+
 MariaDB backup tool
 
 ## Features
+
 List of features currently available:
-- Full dump via mydumper or mysqldump (invertal can be configured)
+
+- Full dump via MyDumper or mysqldump (invertal can be configured)
 - Incremental backups via binlog (invertal can be configured)
 - Supported backup storage
   - S3
@@ -19,10 +22,12 @@ List of features currently available:
   - verification of this replica is not supported
 
 ## UI
+
 The UI is available via localhost:8081/
 It shows a list of available full backups in S3. Any full backup contains 1 or more incremental backups, which can be selected to perform a complete restore!\
 The color of an incremental backups shows the state of the backup verification:\
-```
+
+```text
 # backup verfication not yet executed
 - backup verfication failed
 ! Backup verfication partly succeeded. A restore was successful, however the table checksum failed
@@ -30,16 +35,19 @@ The color of an incremental backups shows the state of the backup verification:\
 ```
 
 ## Full logical backups
-Are done either via the mysql_dump **(default)** or the [mydumper tool](https://github.com/maxbube/mydumper).
-Mydumper can use multiple threads to dump and restore tables, makes it therefore suitable for databases with a huge number of tables.
-```
+
+Are done either via the mysql_dump **(default)** or the [MyDumper tool](https://github.com/maxbube/mydumper).
+MyDumper can use multiple threads to dump and restore tables, makes it therefore suitable for databases with a huge number of tables.
+
+```text
 full_dump_tool=mysqldump/mydumper
 ```
 
 ## Incremental backups via binlogs
 This backup tool uses binlogs to make incremental backups.\
 Therefore the binlog needs to be enabled in the MariaDB config
-```
+
+```text
 log-bin=bin.log      # Binlog folder and name
 binlog_format=MIXED  # Formant, described below
 expire_logs_days=3   # After x days binlog files get purged. Important! Otherwise volume could be filling up fast
@@ -47,10 +55,12 @@ server_id=1          # Unique server id. Used for replication
 ```
 
 ## Binlog
+
 The tool acts like a replication slave and receives all the binlog events. This allows it to check if any real changes have been made to the database.\
 If no changes have been detected, no incremental backup will be created and saved to S3.
 
 ## Binlog Format
+
 By default MariaDB will use the MIXED format (since 10.2.4). It is a mix of ROW and STATEMENT.\
 ROW will capture the actual change made to a table. The binlog files therefor can get very large.\
 e.g. an update to a table column of 1000 rows will create 1000 row changes.
@@ -65,7 +75,7 @@ sidecar: # boolean
 backup:
   full_backup_interval_in_hours: # Interval for full MariaDB dumps in hours
   incremental_backup_interval_in_minutes: # Interval for saving incremental backups, one continous increment if < 0
-  purge_binlog_after_minutes: # if > 0 binlog files are kept on the primary db until they are older 
+  purge_binlog_after_minutes: # if > 0 binlog files are kept on the primary db until they are older
   enable_init_restore: # Enables a automatic restore if one of the databases (in MariaDB.databases) are missing.
   enable_restore_on_db_failure: # Enables automatic restore if the db is unhealthy.\
   disable_binlog_purge_on_rotate: # Boolean to disable binlog purging. Purging is enabled by detault
@@ -77,17 +87,17 @@ backup:
 database: # database config
     type: # either 'mariadb' or 'postgres'
     version: # MariaDB version e.g.: "10.4.0"
-    full_dump_tool: 
+    full_dump_tool:
     log_name_format: # prefix of the binlog files
     user: # user with admin rights (to drop and restart MariaDB)
     password: # user password
     host: # host of the MariaDB instance. If running as a sidecar within the MariaDB pod: 127.0.0.1
     port: # MariaDB port number
-    server_id: # server_uuid/server_id of the binlog syncer connecting to the host 
+    server_id: # server_uuid/server_id of the binlog syncer connecting to the host
     data_dir: # data directory of the MariaDB instance
     databases: # list of databases (used for health checks and restores)
       - database_name
-      - ... 
+      - ...
     verify_tables: # list of tables for the backup verification check. If none are provided the checksum verification is skipped!
       - database_name.table_name
       - ...
