@@ -517,10 +517,8 @@ func (m *MariaDBStream) filterDump(path, targetPath string, filters []schemaFilt
 	buf := make([]byte, maxCapacity)
 	scanner.Buffer(buf, maxCapacity)
 
-	lines := 0
 	for scanner.Scan() {
 
-		lines += 1
 		line := scanner.Bytes()
 		for i, f := range filters {
 			if f.isDone {
@@ -547,10 +545,7 @@ func (m *MariaDBStream) filterDump(path, targetPath string, filters []schemaFilt
 			}
 		}
 	}
-	if scanner.Err() != nil {
-		return scanner.Err()
-	}
-	return
+	return scanner.Err()
 }
 
 // DownloadLatestBackup implements interface
