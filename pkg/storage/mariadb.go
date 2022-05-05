@@ -532,15 +532,23 @@ func (m *MariaDBStream) filterDump(path, targetPath string, filters []schemaFilt
 						filters[i].isDone = true
 					}
 				} else {
-					target.Write(line)
-					target.Write([]byte{'\n'})
+					if _, err = target.Write(line); err != nil {
+						return err
+					}
+					if _, err = target.Write([]byte{'\n'}); err != nil {
+						return err
+					}
 				}
 			} else {
 				matched := f.start.Match(line)
 				if matched {
 					filters[i].hasStarted = true
-					target.Write(line)
-					target.Write([]byte{'\n'})
+					if _, err = target.Write(line); err != nil {
+						return err
+					}
+					if _, err = target.Write([]byte{'\n'}); err != nil {
+						return err
+					}
 				}
 			}
 		}
