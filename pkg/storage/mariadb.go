@@ -232,14 +232,18 @@ func (m *MariaDBStream) WriteFolder(p string) (err error) {
 		return fmt.Errorf("unsupported dump tool '%s'", m.cfg.DumpTool)
 	}
 
+	args := []string{
+		"--port=" + strconv.Itoa(m.cfg.Port),
+		"--host=" + m.cfg.Host,
+		"--user=" + m.cfg.User,
+		"--password=" + m.cfg.Password,
+		"--analyze",
+		"--databases"}
+	args = append(args, m.cfg.Databases...)
+
 	cmd := exec.Command(
 		"mysqlcheck",
-		"--port="+strconv.Itoa(m.cfg.Port),
-		"--host="+m.cfg.Host,
-		"--user="+m.cfg.User,
-		"--password="+m.cfg.Password,
-		"--analyze",
-		"--databases", strings.Join(m.cfg.Databases, " "),
+		args...,
 	)
 	b, err := cmd.CombinedOutput()
 	if err != nil {
