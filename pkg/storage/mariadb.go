@@ -211,6 +211,7 @@ func (m *MariaDBStream) WriteFolder(p string) (err error) {
 		if err != nil {
 			return fmt.Errorf("mysql error: %s", string(b))
 		}
+		log.Debug("mysql restore finished")
 	case config.MyDumper:
 		err = filterMyDumperBackupDir(p, m.cfg.Databases)
 
@@ -226,11 +227,25 @@ func (m *MariaDBStream) WriteFolder(p string) (err error) {
 		if err != nil {
 			return fmt.Errorf("myloader error: %s", string(b))
 		}
+		log.Debug("myloader restore finished")
 	default:
 		return fmt.Errorf("unsupported dump tool '%s'", m.cfg.DumpTool)
 	}
 
-	log.Debug("myloader restore finished")
+	cmd := exec.Command(
+		"mysqlcheck",
+		"--port="+strconv.Itoa(m.cfg.Port),
+		"--host="+m.cfg.Host,
+		"--user="+m.cfg.User,
+		"--password="+m.cfg.Password,
+		"--analyze",
+		"--databases", strings.Join(m.cfg.Databases, " "),
+	)
+	b, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("mysql error: %s", string(b))
+	}
+	log.Debug("mysqlcheck finished analyzing tables")
 	return
 }
 
