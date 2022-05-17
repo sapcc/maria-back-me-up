@@ -173,6 +173,12 @@ func (m *Manager) scheduleBackup(ctx context.Context) {
 	if ctx.Err() != nil {
 		return
 	}
+
+	// reset update status for all storages before next full backup cycle
+	// this will show hanging backups in the metrics
+	m.setUpdateStatus(m.updateSts.FullBackup, m.Storage.GetStorageServicesKeys(), false)
+	m.setUpdateStatus(m.updateSts.IncBackup, m.Storage.GetStorageServicesKeys(), false)
+
 	lp, err := m.createFullBackup(bpath)
 	m.setUpdateStatus(m.updateSts.FullBackup, m.Storage.GetStorageServicesKeys(), true)
 	if err != nil {
