@@ -983,13 +983,15 @@ func (r *retryHandler) commit(ctx context.Context) (err error) {
 
 	// reset tx and queries if successful or not
 	defer func() {
-		r.tx.Rollback()
 		r.tx = nil
 		r.queries = nil
 	}()
 
 	err = r.tx.Commit()
 	if err != nil {
+		if errors.Is(err, sql.ErrTxDone) {
+			return
+		}
 		if isRetryable(err) {
 			if err = r.retryTx(ctx); err != nil {
 				return fmt.Errorf("commit retry error: %s", err.Error())
@@ -998,7 +1000,7 @@ func (r *retryHandler) commit(ctx context.Context) (err error) {
 				return fmt.Errorf("error committing retried transaction: %s", err.Error())
 			}
 		}
-		if ok := errors.Is(err, sql.ErrTxDone); !ok {
+		if !errors.Is(err, sql.ErrTxDone) {
 			return fmt.Errorf("non-retryable error committing transaction: %s", err.Error())
 		}
 	}
