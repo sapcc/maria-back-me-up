@@ -91,6 +91,10 @@ func NewMariaDBStream(c config.MariaDBStream, serviceName string) (m *MariaDBStr
 		return m, fmt.Errorf("failed to init MariaDBStream: %s", err.Error())
 	}
 
+	if _, err := cleanupLocks(db, &c); err != nil {
+		return m, fmt.Errorf("failed to cleanup locks: %w", err)
+	}
+
 	databases := initDatabaseMap(c.Databases)
 
 	tableMetadata, err := queryTableMetadata(c, db)
@@ -618,6 +622,87 @@ func openDBConnection(user, password, host string, port int, serviceName string)
 	db.SetConnMaxLifetime(time.Minute * 15)
 
 	return
+}
+
+// cleanupLocks checks if any old connection with locks is present
+// old locks can block the
+func cleanupLocks(db *sql.DB, cfg *config.MariaDBStream) (removedLocks int, err error) {
+	ctx := context.TODO()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Close()
+
+	// check if METADATA_LOCK_INFO plugin is enabled
+	var lockInfoActive string
+	pluginQuery := "select PLUGIN_STATUS from INFORMATION_SCHEMA.PLUGINS where PLUGIN_NAME = 'METADATA_LOCK_INFO';"
+	if err := conn.QueryRowContext(ctx, pluginQuery).Scan(&lockInfoActive); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			log.Info("cannot cleanup locks. 'METADATA_LOCK_INFO' plugin is not installed")
+			return 0, nil
+		} else {
+			return 0, err
+		}
+	}
+
+	if lockInfoActive != "ACTIVE" {
+		log.Info("cannot cleanup locks. 'METADATA_LOCK_INFO' plugin is not enabled")
+		return 0, nil
+	}
+
+	// get current connection ID
+	var connID int64
+	if err = conn.QueryRowContext(ctx, "select connection_id();").Scan(&connID); err != nil {
+		return 0, err
+	}
+
+	// get all metadata locks
+
+	lockQuery := "select THREAD_ID, LOCK_MODE, TABLE_SCHEMA from INFORMATION_SCHEMA.METADATA_LOCK_INFO;"
+	rows, err := conn.QueryContext(ctx, lockQuery)
+
+	locks := make(map[int64]struct{}, 0)
+	for rows.Next() {
+		r := metadataLockInfo{}
+		if err := rows.Scan(&r.threadID, &r.lockMode, &r.tableSchema); err != nil {
+			return 0, err
+		}
+		// only keep those from a another connection
+		if r.threadID == connID {
+			continue
+		}
+		// only keep problematic looks
+		if r.lockMode == "MDL_SHARED_NO_READ_WRITE" || r.lockMode == "MDL_EXCLUSIVE" || r.lockMode == "MDL_INTENTION_EXCLUSIVE" {
+			// only keep locks of relevant schemas
+			for _, db := range cfg.Databases {
+				if r.tableSchema == db {
+					if _, ok := locks[r.threadID]; !ok {
+						locks[r.threadID] = struct{}{}
+					}
+				}
+			}
+		}
+	}
+
+	// kill all relevant connections whith locks
+	for id := range locks {
+		if _, err := conn.ExecContext(ctx, fmt.Sprintf("kill connection %v;", id)); err != nil {
+			return 0, err
+		}
+	}
+	log.Info(fmt.Sprintf("removed %v locks from %v", len(locks), cfg.Name))
+	return len(locks), err
+}
+
+type metadataLockInfo struct {
+	threadID    int64
+	lockMode    string
+	tableSchema string
+}
+
+func (m *metadataLockInfo) Scan(src interface{}) error {
+	return nil
 }
 
 // initDatabaseMap copies the db names from a slice to a map.

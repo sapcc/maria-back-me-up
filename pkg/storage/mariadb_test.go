@@ -541,6 +541,89 @@ func TestWriteTxThenQuery(t *testing.T) {
 
 }
 
+func TestCleanupLocksPluginNoLocks(t *testing.T) {
+
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
+	if err != nil {
+		t.Errorf("test setup failed: %v", err.Error())
+		t.FailNow()
+	}
+
+	cfg := &config.MariaDBStream{
+		Name:      "test",
+		Databases: []string{"test"},
+	}
+
+	mock.ExpectQuery("select PLUGIN_STATUS from INFORMATION_SCHEMA.PLUGINS where PLUGIN_NAME = 'METADATA_LOCK_INFO';").WillReturnRows(sqlmock.NewRows([]string{"PLUGIN_STATUS"}).AddRow("ACTIVE"))
+
+	mock.ExpectQuery("select connection_id();").WillReturnRows(sqlmock.NewRows([]string{"connection_id()"}).AddRow(123))
+
+	lockInfoResult := sqlmock.NewRows([]string{"THREAD_ID", "LOCK_MODE", "TABLE_SCHEMA"})
+	// same connection
+	lockInfoResult.AddRow(123, "MDL_EXCLUSIVE", "test")
+	// different connection, unrelevant schema
+	lockInfoResult.AddRow(100, "MDL_EXCLUSIVE", "something")
+
+	mock.ExpectQuery("select THREAD_ID, LOCK_MODE, TABLE_SCHEMA from INFORMATION_SCHEMA.METADATA_LOCK_INFO;").WillReturnRows(lockInfoResult)
+
+	actRemovedLocks, err := cleanupLocks(db, cfg)
+	if err != nil {
+		t.Errorf("test setup failed: %v", err.Error())
+		t.FailNow()
+	}
+
+	if actRemovedLocks != 0 {
+		t.Errorf("Expected 1 lock to be removed, actual : %v", actRemovedLocks)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("Failed expectations not met: %s", err.Error())
+	}
+}
+
+func TestCleanupLocksPluginRemoveLock(t *testing.T) {
+
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
+	if err != nil {
+		t.Errorf("test setup failed: %v", err.Error())
+		t.FailNow()
+	}
+
+	cfg := &config.MariaDBStream{
+		Name:      "test",
+		Databases: []string{"test"},
+	}
+
+	mock.ExpectQuery("select PLUGIN_STATUS from INFORMATION_SCHEMA.PLUGINS where PLUGIN_NAME = 'METADATA_LOCK_INFO';").WillReturnRows(sqlmock.NewRows([]string{"PLUGIN_STATUS"}).AddRow("ACTIVE"))
+
+	mock.ExpectQuery("select connection_id();").WillReturnRows(sqlmock.NewRows([]string{"connection_id()"}).AddRow(123))
+
+	lockInfoResult := sqlmock.NewRows([]string{"THREAD_ID", "LOCK_MODE", "TABLE_SCHEMA"})
+	// same connection
+	lockInfoResult.AddRow(123, "MDL_EXCLUSIVE", "test")
+	// different connection, unrelevant schema
+	lockInfoResult.AddRow(100, "MDL_EXCLUSIVE", "something")
+	// different connection, relevant schema
+	lockInfoResult.AddRow(101, "MDL_EXCLUSIVE", "test")
+
+	mock.ExpectQuery("select THREAD_ID, LOCK_MODE, TABLE_SCHEMA from INFORMATION_SCHEMA.METADATA_LOCK_INFO;").WillReturnRows(lockInfoResult)
+
+	mock.ExpectExec("kill connection 101;").WillReturnResult(sqlmock.NewResult(0, 0))
+
+	actRemovedLocks, err := cleanupLocks(db, cfg)
+	if err != nil {
+		t.Errorf("test setup failed: %v", err.Error())
+		t.FailNow()
+	}
+
+	if actRemovedLocks != 1 {
+		t.Errorf("Expected 1 lock to be removed, actual : %v", actRemovedLocks)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("Failed expectations not met: %s", err.Error())
+	}
+}
+
 func setup(t *testing.T, parseSQL, hasRowMetadata bool, hasPrimaryKey bool) (mariaDBStream *MariaDBStream, mock sqlmock.Sqlmock) {
 	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
 	if err != nil {
@@ -554,10 +637,6 @@ func setup(t *testing.T, parseSQL, hasRowMetadata bool, hasPrimaryKey bool) (mar
 		ParseSchema: parseSQL,
 	}
 	mock.ExpectBegin()
-	// tx, err := db.BeginTx(context.TODO(), nil)
-	// if err != nil {
-	// 	t.Error("test setup failed to create transaction")
-	// }
 	retryHandler := newRetryHandler(db, &config, "test")
 	if err := retryHandler.beginTx(context.TODO()); err != nil {
 		t.Error("test setup failed to create transaction")
