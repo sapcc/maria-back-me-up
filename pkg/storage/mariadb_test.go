@@ -637,7 +637,7 @@ func setup(t *testing.T, parseSQL, hasRowMetadata bool, hasPrimaryKey bool) (mar
 		ParseSchema: parseSQL,
 	}
 	mock.ExpectBegin()
-	retryHandler := newRetryHandler(db, &config, "test")
+	retryHandler := newRetryHandler(db, &config)
 	if err := retryHandler.beginTx(context.TODO()); err != nil {
 		t.Error("test setup failed to create transaction")
 	}
