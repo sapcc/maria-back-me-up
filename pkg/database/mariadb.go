@@ -160,11 +160,12 @@ func (m *MariaDB) GetCheckSumForTable(verifyTables []string, withIP bool) (cs Ch
 	if err != nil {
 		return
 	}
+
+	defer conn.Close()
 	if err = conn.Ping(); err != nil {
 		return
 	}
 
-	defer conn.Close()
 	m.FlushIncBackup()
 	rs, err := conn.Execute(fmt.Sprintf("CHECKSUM TABLE %s", strings.Join(verifyTables, ", ")))
 	if err != nil {
