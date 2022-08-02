@@ -77,6 +77,8 @@ func purgeBinlogsBefore(c config.DatabaseConfig, minutes int) (err error) {
 		return
 	}
 
+	defer conn.Close()
+
 	if err = conn.Ping(); err != nil {
 		return
 	}
@@ -110,6 +112,8 @@ func purgeBinlogsTo(c config.DatabaseConfig, log string) (err error) {
 		return
 	}
 
+	defer conn.Close()
+
 	if err = conn.Ping(); err != nil {
 		return
 	}
@@ -126,6 +130,8 @@ func resetSlave(c config.DatabaseConfig) (err error) {
 	if err != nil {
 		return fmt.Errorf("connection for slave reset failed: %s", err.Error())
 	}
+
+	defer conn.Close()
 
 	if err = conn.Ping(); err != nil {
 		return
