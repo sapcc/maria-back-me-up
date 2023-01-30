@@ -20,6 +20,9 @@ List of features currently available:
   - only QueryEvents are supported
   - restore from this replicas MariaDB is not supported
   - verification of this replica is not supported
+  
+## Architecture
+<img width="605" alt="maria-backup" src="https://user-images.githubusercontent.com/566649/215467649-ac049663-c6fa-4e0e-b21f-25b9af6c187c.png">
 
 ## UI
 
