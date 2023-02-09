@@ -26,14 +26,22 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
+type slowQueryLogState string
+
+const (
+	slowQueryLogON  slowQueryLogState = "ON"
+	slowQueryLogOFF slowQueryLogState = "OFF"
+)
+
 type (
 	// MariaDB database struct
 	MariaDB struct {
-		cfg         config.Config
-		storage     *storage.Manager
-		kub         *k8s.Database
-		logPosition LogPosition
-		flushTimer  *time.Timer
+		cfg               config.Config
+		storage           *storage.Manager
+		kub               *k8s.Database
+		logPosition       LogPosition
+		flushTimer        *time.Timer
+		slowQueryLogState slowQueryLogState
 	}
 	metadata struct {
 		Status binlog `yaml:"SHOW MASTER STATUS"`
@@ -48,9 +56,10 @@ type (
 // NewMariaDB creates a mariadb databse instance
 func NewMariaDB(c config.Config, sm *storage.Manager, k *k8s.Database) (Database, error) {
 	return &MariaDB{
-		cfg:     c,
-		storage: sm,
-		kub:     k,
+		cfg:               c,
+		storage:           sm,
+		kub:               k,
+		slowQueryLogState: slowQueryLogON,
 	}, nil
 }
 
@@ -59,6 +68,17 @@ func (m *MariaDB) CreateFullBackup(path string) (bp LogPosition, err error) {
 	if path == "" {
 		return bp, fmt.Errorf("no path given")
 	}
+	defer func() {
+		if err = m.setSlowQueryLog(slowQueryLogOFF); err != nil {
+			log.Error(fmt.Errorf("error enabling slow_query_log: %s", err.Error()))
+		}
+	}()
+
+	if err = m.setSlowQueryLog(slowQueryLogON); err != nil {
+		log.Error(fmt.Errorf("error disabling slow_query_log: %s", err.Error()))
+		// dont stop fullbackup because of toggling slow_query_log
+	}
+
 	switch m.cfg.Database.DumpTool {
 	case config.Mysqldump:
 		bp, err = m.createMysqlDump(path)
@@ -619,6 +639,21 @@ func (m *MariaDB) restartMariaDB() (err error) {
 		return true, nil
 	})
 	return wait.Poll(5*time.Second, 30*time.Second, cf)
+}
+
+func (m *MariaDB) setSlowQueryLog(state slowQueryLogState) (err error) {
+	conn, err := client.Connect(fmt.Sprintf("%s:%s", m.cfg.Database.Host, strconv.Itoa(m.cfg.Database.Port)), m.cfg.Database.User, m.cfg.Database.Password, "")
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+	if m.slowQueryLogState != state {
+		_, err = conn.Execute(fmt.Sprintf("set global slow_query_log = '%s'", state))
+		if err == nil {
+			m.slowQueryLogState = state
+		}
+	}
+	return
 }
 
 func getMyDumpBinlog(p string) (mp mysql.Position, err error) {
