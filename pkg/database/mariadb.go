@@ -29,19 +29,19 @@ import (
 type slowQueryLogState string
 
 const (
-	slowQeryLogON  slowQueryLogState = "ON"
-	slowQeryLogOFF slowQueryLogState = "OFF"
+	slowQueryLogON  slowQueryLogState = "ON"
+	slowQueryLogOFF slowQueryLogState = "OFF"
 )
 
 type (
 	// MariaDB database struct
 	MariaDB struct {
-		cfg              config.Config
-		storage          *storage.Manager
-		kub              *k8s.Database
-		logPosition      LogPosition
-		flushTimer       *time.Timer
-		slowQeryLogState slowQueryLogState
+		cfg               config.Config
+		storage           *storage.Manager
+		kub               *k8s.Database
+		logPosition       LogPosition
+		flushTimer        *time.Timer
+		slowQueryLogState slowQueryLogState
 	}
 	metadata struct {
 		Status binlog `yaml:"SHOW MASTER STATUS"`
@@ -56,10 +56,10 @@ type (
 // NewMariaDB creates a mariadb databse instance
 func NewMariaDB(c config.Config, sm *storage.Manager, k *k8s.Database) (Database, error) {
 	return &MariaDB{
-		cfg:              c,
-		storage:          sm,
-		kub:              k,
-		slowQeryLogState: slowQeryLogON,
+		cfg:               c,
+		storage:           sm,
+		kub:               k,
+		slowQueryLogState: slowQueryLogON,
 	}, nil
 }
 
@@ -69,12 +69,12 @@ func (m *MariaDB) CreateFullBackup(path string) (bp LogPosition, err error) {
 		return bp, fmt.Errorf("no path given")
 	}
 	defer func() {
-		if err = m.setSlowQueryLog(slowQeryLogOFF); err != nil {
+		if err = m.setSlowQueryLog(slowQueryLogOFF); err != nil {
 			log.Error(fmt.Errorf("error enabling slow_query_log: %s", err.Error()))
 		}
 	}()
 
-	if err = m.setSlowQueryLog(slowQeryLogON); err != nil {
+	if err = m.setSlowQueryLog(slowQueryLogON); err != nil {
 		log.Error(fmt.Errorf("error disabling slow_query_log: %s", err.Error()))
 		// dont stop fullbackup because of toggling slow_query_log
 	}
@@ -644,10 +644,10 @@ func (m *MariaDB) setSlowQueryLog(state slowQueryLogState) (err error) {
 		return
 	}
 	defer conn.Close()
-	if m.slowQeryLogState != state {
+	if m.slowQueryLogState != state {
 		_, err = conn.Execute(fmt.Sprintf("set global slow_query_log = '%s'", state))
 		if err == nil {
-			m.slowQeryLogState = state
+			m.slowQueryLogState = state
 		}
 	}
 	return
