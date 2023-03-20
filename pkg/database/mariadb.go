@@ -69,12 +69,12 @@ func (m *MariaDB) CreateFullBackup(path string) (bp LogPosition, err error) {
 		return bp, fmt.Errorf("no path given")
 	}
 	defer func() {
-		if err = m.setSlowQueryLog(slowQueryLogOFF); err != nil {
+		if err = m.setSlowQueryLog(slowQueryLogON); err != nil {
 			log.Error(fmt.Errorf("error enabling slow_query_log: %s", err.Error()))
 		}
 	}()
 
-	if err = m.setSlowQueryLog(slowQueryLogON); err != nil {
+	if err = m.setSlowQueryLog(slowQueryLogOFF); err != nil {
 		log.Error(fmt.Errorf("error disabling slow_query_log: %s", err.Error()))
 		// dont stop fullbackup because of toggling slow_query_log
 	}
