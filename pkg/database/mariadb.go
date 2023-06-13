@@ -398,7 +398,14 @@ func (m *MariaDB) handleWriteErrors(ctx context.Context, eg *errgroup.Group, ch 
 func (m *MariaDB) flushLogs(binlogFile string) (err error) {
 	defer func() {
 		m.flushTimer = nil
+		if err = m.setSlowQueryLog(slowQueryLogON); err != nil {
+			log.Error(fmt.Errorf("error enabling slow_query_log: %s", err.Error()))
+		}
 	}()
+	if err = m.setSlowQueryLog(slowQueryLogOFF); err != nil {
+		log.Error(fmt.Errorf("error disabling slow_query_log: %s", err.Error()))
+		// dont stop because of toggling slow_query_log
+	}
 	flushLogs := exec.Command(
 		"mysqladmin",
 		"flush-logs",
