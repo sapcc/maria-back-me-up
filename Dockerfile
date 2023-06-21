@@ -4,7 +4,7 @@ RUN apk add --no-cache make git
 COPY . /src
 RUN make -C /src install PREFIX=/pkg GO_BUILDFLAGS='-mod vendor'
 
-FROM keppel.eu-de-1.cloud.sap/ccloud-dockerhub-mirror/library/alpine:3.18
+FROM keppel.eu-de-1.cloud.sap/ccloud-dockerhub-mirror/library/alpine:3.15.9
 LABEL maintainer="Stefan Hipfel <stefan.hipfel@sap.com>"
 LABEL source_repository="https://github.com/sapcc/maria-back-me-up"
 
@@ -14,9 +14,9 @@ ENV PACKAGES="mysql-client mariadb curl python2" \
     BUILD_PATH="/opt/mydumper-src/"
 
 RUN apk --no-cache add \
-          $PACKAGES \
-          $BUILD_PACKAGES \
-          $LIB_PACKAGES \
+    $PACKAGES \
+    $BUILD_PACKAGES \
+    $LIB_PACKAGES \
     && \
     git clone https://github.com/maxbube/mydumper.git $BUILD_PATH && \
     cd $BUILD_PATH && \
@@ -38,8 +38,8 @@ RUN rm -rf /tmp/mysql-utilities-1.6.5/
 
 WORKDIR /
 RUN curl -Lo /bin/dumb-init https://github.com/Yelp/dumb-init/releases/download/v1.2.2/dumb-init_1.2.2_amd64 \
-	&& chmod +x /bin/dumb-init \
-	&& dumb-init -V
+    && chmod +x /bin/dumb-init \
+    && dumb-init -V
 
 COPY --from=builder /pkg/ /usr/
 COPY static /static/
