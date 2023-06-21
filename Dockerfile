@@ -4,7 +4,7 @@ RUN apk add --no-cache make git
 COPY . /src
 RUN make -C /src install PREFIX=/pkg GO_BUILDFLAGS='-mod vendor'
 
-FROM keppel.eu-de-1.cloud.sap/ccloud-dockerhub-mirror/library/alpine:3.12
+FROM keppel.eu-de-1.cloud.sap/ccloud-dockerhub-mirror/library/alpine:3.18
 LABEL maintainer="Stefan Hipfel <stefan.hipfel@sap.com>"
 LABEL source_repository="https://github.com/sapcc/maria-back-me-up"
 
