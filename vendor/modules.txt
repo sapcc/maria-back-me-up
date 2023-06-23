@@ -1,8 +1,8 @@
 # github.com/DATA-DOG/go-sqlmock v1.5.0
 ## explicit
 github.com/DATA-DOG/go-sqlmock
-# github.com/aws/aws-sdk-go v1.27.0
-## explicit
+# github.com/aws/aws-sdk-go v1.34.0
+## explicit; go 1.11
 github.com/aws/aws-sdk-go/aws
 github.com/aws/aws-sdk-go/aws/arn
 github.com/aws/aws-sdk-go/aws/awserr
@@ -22,6 +22,7 @@ github.com/aws/aws-sdk-go/aws/endpoints
 github.com/aws/aws-sdk-go/aws/request
 github.com/aws/aws-sdk-go/aws/session
 github.com/aws/aws-sdk-go/aws/signer/v4
+github.com/aws/aws-sdk-go/internal/context
 github.com/aws/aws-sdk-go/internal/ini
 github.com/aws/aws-sdk-go/internal/s3err
 github.com/aws/aws-sdk-go/internal/sdkio
@@ -29,6 +30,9 @@ github.com/aws/aws-sdk-go/internal/sdkmath
 github.com/aws/aws-sdk-go/internal/sdkrand
 github.com/aws/aws-sdk-go/internal/sdkuri
 github.com/aws/aws-sdk-go/internal/shareddefaults
+github.com/aws/aws-sdk-go/internal/strings
+github.com/aws/aws-sdk-go/internal/sync/singleflight
+github.com/aws/aws-sdk-go/private/checksum
 github.com/aws/aws-sdk-go/private/protocol
 github.com/aws/aws-sdk-go/private/protocol/eventstream
 github.com/aws/aws-sdk-go/private/protocol/eventstream/eventstreamapi
@@ -111,8 +115,8 @@ github.com/hashicorp/go-multierror
 # github.com/imdario/mergo v0.3.5
 ## explicit
 github.com/imdario/mergo
-# github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af
-## explicit
+# github.com/jmespath/go-jmespath v0.3.0
+## explicit; go 1.14
 github.com/jmespath/go-jmespath
 # github.com/json-iterator/go v1.1.12
 ## explicit; go 1.12
