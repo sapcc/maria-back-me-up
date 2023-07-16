@@ -70,10 +70,10 @@ func With(fields ...zap.Field) *zap.Logger {
 
 // SetLevel alters the logging level.
 func SetLevel(l zapcore.Level) {
-	_globalP.Load().(*ZapProperties).Level.SetLevel(l)
+	globalProperties.Load().(*ZapProperties).Level.SetLevel(l)
 }
 
 // GetLevel gets the logging level.
 func GetLevel() zapcore.Level {
-	return _globalP.Load().(*ZapProperties).Level.Level()
+	return globalProperties.Load().(*ZapProperties).Level.Level()
 }

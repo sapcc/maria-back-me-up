@@ -74,10 +74,6 @@ type ZapProperties struct {
 	Level  zap.AtomicLevel
 }
 
-func newZapTextEncoder(cfg *Config) zapcore.Encoder {
-	return NewTextEncoder(cfg)
-}
-
 func (cfg *Config) buildOptions(errSink zapcore.WriteSyncer) []zap.Option {
 	opts := []zap.Option{zap.ErrorOutput(errSink)}
 
