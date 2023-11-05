@@ -8,7 +8,7 @@ require (
 	github.com/coreos/go-oidc v2.1.0+incompatible
 	github.com/go-mysql-org/go-mysql v1.4.0
 	github.com/go-sql-driver/mysql v1.5.0
-	github.com/gorilla/sessions v1.2.0
+	github.com/gorilla/sessions v1.2.2
 	github.com/hashicorp/go-multierror v1.0.0
 	github.com/labstack/echo v3.3.10+incompatible
 	github.com/namsral/flag v1.7.4-pre
@@ -37,9 +37,9 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
-	github.com/google/gofuzz v1.1.0 // indirect
+	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/googleapis/gnostic v0.5.5 // indirect
-	github.com/gorilla/securecookie v1.1.1 // indirect
+	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/imdario/mergo v0.3.5 // indirect
 	github.com/jmespath/go-jmespath v0.3.0 // indirect
