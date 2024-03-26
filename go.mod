@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-sdk-go v1.34.0
 	github.com/coreos/go-oidc v2.1.0+incompatible
 	github.com/go-mysql-org/go-mysql v1.4.0
-	github.com/go-sql-driver/mysql v1.5.0
+	github.com/go-sql-driver/mysql v1.8.1
 	github.com/gorilla/sessions v1.2.0
 	github.com/hashicorp/go-multierror v1.0.0
 	github.com/labstack/echo v3.3.10+incompatible
@@ -30,6 +30,7 @@ require (
 )
 
 require (
+	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
