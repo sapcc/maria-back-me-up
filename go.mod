@@ -1,6 +1,6 @@
 module github.com/sapcc/maria-back-me-up
 
-go 1.17
+go 1.22
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.0
