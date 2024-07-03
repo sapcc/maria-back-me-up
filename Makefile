@@ -11,11 +11,19 @@ GO_BUILDFLAGS = -mod vendor
 GO_LDFLAGS = -X github.com/sapcc/maria-back-me-up/pkg/maria-back-me-up.VERSION=$(shell git rev-parse --verify HEAD | head -c 8)
 GO_TESTENV = 
 
+
+# These definitions are overridable, e.g. to provide fixed version/commit values when
+# no .git directory is present or to provide a fixed build date for reproducibility.
+BININFO_VERSION     ?= $(shell git describe --tags --always --abbrev=7)
+BININFO_COMMIT_HASH ?= $(shell git rev-parse --verify HEAD)
+BININFO_BUILD_DATE  ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+
 build/backup: FORCE
-	go build $(GO_BUILDFLAGS) -ldflags '-s -w $(GO_LDFLAGS)' -o build/backup ./cmd/backup
+	go build $(GO_BUILDFLAGS) -ldflags '-s -w -X github.com/sapcc/go-api-declarations/bininfo.binName=backup -X github.com/sapcc/go-api-declarations/bininfo.version=$(BININFO_VERSION) -X github.com/sapcc/go-api-declarations/bininfo.commit=$(BININFO_COMMIT_HASH) -X github.com/sapcc/go-api-declarations/bininfo.buildDate=$(BININFO_BUILD_DATE) $(GO_LDFLAGS)' -o build/backup ./cmd/backup
 
 build/verification: FORCE
-	go build $(GO_BUILDFLAGS) -ldflags '-s -w $(GO_LDFLAGS)' -o build/verification ./cmd/verification
+	go build $(GO_BUILDFLAGS) -ldflags '-s -w -X github.com/sapcc/go-api-declarations/bininfo.binName=verification -X github.com/sapcc/go-api-declarations/bininfo.version=$(BININFO_VERSION) -X github.com/sapcc/go-api-declarations/bininfo.commit=$(BININFO_COMMIT_HASH) -X github.com/sapcc/go-api-declarations/bininfo.buildDate=$(BININFO_BUILD_DATE) $(GO_LDFLAGS)' -o build/verification ./cmd/verification
 
 DESTDIR =
 ifeq ($(shell uname -s),Darwin)
