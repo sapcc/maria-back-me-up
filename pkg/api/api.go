@@ -31,11 +31,11 @@ import (
 	"github.com/sapcc/maria-back-me-up/pkg/backup"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/constants"
-	"github.com/sapcc/maria-back-me-up/pkg/errgroup"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/websocket"
+	"golang.org/x/sync/errgroup"
 )
 
 type jsonResponse struct {
