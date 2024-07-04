@@ -19,15 +19,11 @@ package database
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	dberror "github.com/sapcc/maria-back-me-up/pkg/error"
-	"github.com/sapcc/maria-back-me-up/pkg/log"
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
-	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 type (
@@ -126,6 +122,7 @@ func (m *MockDB) FlushIncBackup() (err error) {
 	return
 }
 
+/*
 func (m *MockDB) checkBackupDirExistsAndCreate() (p string, err error) {
 	if _, err := os.Stat(m.cfg.Backup.BackupDir); os.IsNotExist(err) {
 		err = os.MkdirAll(m.cfg.Backup.BackupDir, os.ModePerm)
@@ -133,12 +130,14 @@ func (m *MockDB) checkBackupDirExistsAndCreate() (p string, err error) {
 	}
 	return
 }
+*/
 
 // Up implements interface
 func (m *MockDB) Up(timeout time.Duration, withIP bool) (err error) {
 	return
 }
 
+/*
 func (m *MockDB) deleteMariaDBDataDir() (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
 		for _, d := range m.cfg.Database.Databases {
@@ -157,6 +156,7 @@ func (m *MockDB) deleteMariaDBDataDir() (err error) {
 	}
 	return
 }
+*/
 
 // GetDatabaseDiff implements interface
 func (m *MockDB) GetDatabaseDiff(c1, c2 config.DatabaseConfig) (out []byte, err error) {

@@ -19,7 +19,6 @@ package test
 import (
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"testing"
 	"time"
@@ -29,6 +28,7 @@ import (
 	"github.com/sapcc/maria-back-me-up/pkg/constants"
 )
 
+/*
 func testFullBackup(t *testing.T) {
 	m, cfg := Setup(t, &SetupOptions{
 		DBType:   constants.MARIADB,
@@ -53,6 +53,8 @@ func testFullBackup(t *testing.T) {
 	}
 	Cleanup(t)
 }
+
+*/
 
 type testCase struct {
 	WithDisk   bool

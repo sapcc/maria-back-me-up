@@ -1,10 +1,26 @@
+/**
+ * Copyright 2024 SAP SE
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package database
 
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -187,7 +203,10 @@ func (m *MariaDB) GetCheckSumForTable(verifyTables []string, withIP bool) (cs Ch
 		return
 	}
 
-	m.FlushIncBackup()
+	err = m.FlushIncBackup()
+	if err != nil {
+		return
+	}
 	rs, err := conn.Execute(fmt.Sprintf("CHECKSUM TABLE %s", strings.Join(verifyTables, ", ")))
 	if err != nil {
 		return
@@ -247,8 +266,17 @@ func (m *MariaDB) createMysqlDump(toPath string) (bp LogPosition, err error) {
 	var myBp mysql.Position
 	log.Debug("running mysqldump...")
 	err = os.MkdirAll(toPath, os.ModePerm)
+	if err != nil {
+		return
+	}
 	outfile, err := os.Create(filepath.Join(toPath, "dump.sql"))
-	defer outfile.Close()
+	if err != nil {
+		return
+	}
+	defer func() {
+		err = errors.Join(err, outfile.Close())
+	}()
+
 	cmd := exec.Command(
 		"mysqldump",
 		"--port="+strconv.Itoa(m.cfg.Database.Port),
@@ -267,7 +295,12 @@ func (m *MariaDB) createMysqlDump(toPath string) (bp LogPosition, err error) {
 		return bp, fmt.Errorf("could not create full backup: %v", err)
 	}
 	dump, err := os.Open(filepath.Join(toPath, "dump.sql"))
-	defer dump.Close()
+	if err != nil {
+		return
+	}
+	defer func() {
+		err = errors.Join(err, dump.Close())
+	}()
 	scanner := bufio.NewScanner(dump)
 	for scanner.Scan() {
 		if strings.Contains(scanner.Text(), "MASTER_LOG_FILE") {
@@ -395,14 +428,14 @@ func (m *MariaDB) handleWriteErrors(ctx context.Context, eg *errgroup.Group, ch 
 	ch <- err
 }
 
-func (m *MariaDB) flushLogs(binlogFile string) (err error) {
+func (m *MariaDB) flushLogs(binlogFile string) {
 	defer func() {
 		m.flushTimer = nil
-		if err = m.setSlowQueryLog(slowQueryLogON); err != nil {
+		if err := m.setSlowQueryLog(slowQueryLogON); err != nil {
 			log.Error(fmt.Errorf("error enabling slow_query_log: %s", err.Error()))
 		}
 	}()
-	if err = m.setSlowQueryLog(slowQueryLogOFF); err != nil {
+	if err := m.setSlowQueryLog(slowQueryLogOFF); err != nil {
 		log.Error(fmt.Errorf("error disabling slow_query_log: %s", err.Error()))
 		// dont stop because of toggling slow_query_log
 	}
@@ -414,7 +447,7 @@ func (m *MariaDB) flushLogs(binlogFile string) (err error) {
 		"--user="+m.cfg.Database.User,
 		"--password="+m.cfg.Database.Password,
 	)
-	_, err = flushLogs.CombinedOutput()
+	_, err := flushLogs.CombinedOutput()
 	if err != nil {
 		log.Error("Error flushing binlogs: ", err)
 		return
@@ -433,7 +466,6 @@ func (m *MariaDB) flushLogs(binlogFile string) (err error) {
 			}
 		}
 	}
-	return
 }
 
 func (m *MariaDB) restoreDump(backupPath string) (err error) {
@@ -494,7 +526,7 @@ func (m *MariaDB) restoreDump(backupPath string) (err error) {
 
 func (m *MariaDB) restoreIncBackup(p string) (err error) {
 	var binlogFiles []string
-	filepath.Walk(p, func(p string, f os.FileInfo, err error) error {
+	err = filepath.Walk(p, func(p string, f os.FileInfo, err error) error {
 		if f.IsDir() && f.Name() == "dump" {
 			return filepath.SkipDir
 		}
@@ -504,6 +536,9 @@ func (m *MariaDB) restoreIncBackup(p string) (err error) {
 		}
 		return nil
 	})
+	if err != nil {
+		return
+	}
 	if len(binlogFiles) == 0 {
 		return
 	}
@@ -532,6 +567,7 @@ func (m *MariaDB) restoreIncBackup(p string) (err error) {
 	return mysqlPipe.Wait()
 }
 
+/*
 func (m *MariaDB) checkBackupDirExistsAndCreate() (p string, err error) {
 	if _, err := os.Stat(m.cfg.Backup.BackupDir); os.IsNotExist(err) {
 		err = os.MkdirAll(m.cfg.Backup.BackupDir, os.ModePerm)
@@ -539,6 +575,7 @@ func (m *MariaDB) checkBackupDirExistsAndCreate() (p string, err error) {
 	}
 	return
 }
+*/
 
 // Up checks if the mariadb is up and recieving requests
 func (m *MariaDB) Up(timeout time.Duration, withIP bool) (err error) {
@@ -554,6 +591,7 @@ func (m *MariaDB) Up(timeout time.Duration, withIP bool) (err error) {
 	return wait.Poll(5*time.Second, timeout, cf)
 }
 
+/*
 func (m *MariaDB) waitMariaDBHealthy(timeout time.Duration) (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
 		s, err := mariaHealthCheck(m.cfg.Database)
@@ -566,6 +604,7 @@ func (m *MariaDB) waitMariaDBHealthy(timeout time.Duration) (err error) {
 	})
 	return wait.Poll(5*time.Second, timeout, cf)
 }
+*/
 
 func (m *MariaDB) deleteMariaDBDataDir() (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
@@ -665,13 +704,13 @@ func (m *MariaDB) setSlowQueryLog(state slowQueryLogState) (err error) {
 
 func getMyDumpBinlog(p string) (mp mysql.Position, err error) {
 	meta := metadata{}
-	yamlBytes, err := ioutil.ReadFile(path.Join(p, "/metadata"))
+	yamlBytes, err := os.ReadFile(path.Join(p, "/metadata"))
 	if err != nil {
 		return mp, fmt.Errorf("read config file: %s", err.Error())
 	}
 	//turn string to valid yaml
 	yamlCorrect := strings.ReplaceAll(string(yamlBytes), "\t", "  ")
-	r, _ := regexp.Compile("([a-zA-Z])[\\:]([^\\s])")
+	r, _ := regexp.Compile(`([a-zA-Z])[\:]([^\s])`)
 	err = yaml.Unmarshal([]byte(r.ReplaceAllString(yamlCorrect, `$1: $2`)), &meta)
 	if err != nil {
 		return mp, fmt.Errorf("parse config file: %s", err.Error())
@@ -683,7 +722,7 @@ func getMyDumpBinlog(p string) (mp mysql.Position, err error) {
 }
 
 func getMysqlDumpBinlog(s string) (mp mysql.Position, err error) {
-	var rex = regexp.MustCompile("(\\w+)=([^;,]*)")
+	var rex = regexp.MustCompile(`(\w+)=([^;,]*)`)
 	data := rex.FindAllStringSubmatch(s, -1)
 	res := make(map[string]string)
 	for _, kv := range data {

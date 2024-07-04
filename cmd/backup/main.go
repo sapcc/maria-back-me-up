@@ -61,7 +61,7 @@ func main() {
 	ctx, cancel := context.WithCancel(ctx)
 
 	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGSTOP)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 
 	sm, err := storage.NewManager(cfg.Storages, cfg.ServiceName, cfg.Backup.RestoreDir, cfg.Database.LogNameFormat)
 	if err != nil {

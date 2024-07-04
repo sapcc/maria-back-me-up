@@ -1,6 +1,8 @@
 package mysql
 
 import (
+	"bytes"
+	"compress/zlib"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
@@ -13,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Masterminds/semver"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/hack"
 )
@@ -91,6 +94,24 @@ func EncryptPassword(password string, seed []byte, pub *rsa.PublicKey) ([]byte, 
 	return rsa.EncryptOAEP(sha1v, rand.Reader, pub, plain, nil)
 }
 
+func DecompressMariadbData(data []byte) ([]byte, error) {
+	// algorithm always 0=zlib
+	// algorithm := (data[pos] & 0x07) >> 4
+	headerSize := int(data[0] & 0x07)
+	uncompressedDataSize := BFixedLengthInt(data[1 : 1+headerSize])
+	uncompressedData := make([]byte, uncompressedDataSize)
+	r, err := zlib.NewReader(bytes.NewReader(data[1+headerSize:]))
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+	_, err = io.ReadFull(r, uncompressedData)
+	if err != nil {
+		return nil, err
+	}
+	return uncompressedData, nil
+}
+
 // AppendLengthEncodedInteger: encodes a uint64 value and appends it to the given bytes slice
 func AppendLengthEncodedInteger(b []byte, n uint64) []byte {
 	switch {
@@ -107,14 +128,14 @@ func AppendLengthEncodedInteger(b []byte, n uint64) []byte {
 		byte(n>>32), byte(n>>40), byte(n>>48), byte(n>>56))
 }
 
-func RandomBuf(size int) ([]byte, error) {
+func RandomBuf(size int) []byte {
 	buf := make([]byte, size)
 	mrand.Seed(time.Now().UTC().UnixNano())
 	min, max := 30, 127
 	for i := 0; i < size; i++ {
 		buf[i] = byte(min + mrand.Intn(max-min))
 	}
-	return buf, nil
+	return buf
 }
 
 // FixedLengthInt: little endian
@@ -377,6 +398,23 @@ func ErrorEqual(err1, err2 error) bool {
 	}
 
 	return e1.Error() == e2.Error()
+}
+
+func CompareServerVersions(a, b string) (int, error) {
+	var (
+		aVer, bVer *semver.Version
+		err        error
+	)
+
+	if aVer, err = semver.NewVersion(a); err != nil {
+		return 0, fmt.Errorf("cannot parse %q as semver: %w", a, err)
+	}
+
+	if bVer, err = semver.NewVersion(b); err != nil {
+		return 0, fmt.Errorf("cannot parse %q as semver: %w", b, err)
+	}
+
+	return aVer.Compare(bVer), nil
 }
 
 var encodeRef = map[byte]byte{
