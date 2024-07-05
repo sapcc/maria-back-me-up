@@ -21,8 +21,5 @@ dockerfile:
 golang:
   setGoModVersion: true
 
-variables:
-  GO_LDFLAGS: '-X github.com/sapcc/maria-back-me-up/pkg/maria-back-me-up.VERSION=$(shell git rev-parse --verify HEAD | head -c 8)'
-
 golangciLint:
   createConfig: false

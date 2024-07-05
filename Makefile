@@ -20,7 +20,7 @@ prepare-static-check: FORCE
 	@if ! hash addlicense 2>/dev/null; then  printf "\e[1;36m>> Installing addlicense...\e[0m\n";  go install github.com/google/addlicense@latest; fi
 
 GO_BUILDFLAGS = -mod vendor
-GO_LDFLAGS = -X github.com/sapcc/maria-back-me-up/pkg/maria-back-me-up.VERSION=$(shell git rev-parse --verify HEAD | head -c 8)
+GO_LDFLAGS =
 GO_TESTENV =
 
 # These definitions are overridable, e.g. to provide fixed version/commit values when
