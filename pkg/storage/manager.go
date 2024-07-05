@@ -1,3 +1,19 @@
+/**
+ * Copyright 2024 SAP SE
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package storage
 
 import (
@@ -147,7 +163,10 @@ func (m *Manager) WriteStreamAll(name, mimeType string, body <-chan StreamEvent,
 			}
 			// write bytes all io.Reader consumer
 			if len(streamConsumer) > 0 {
-				writer.Write(v.ToByte())
+				_, err := writer.Write(v.ToByte())
+				if err != nil {
+					logger.Errorf("Error  write bytes all io.Reader consumer stream: %s", err.Error())
+				}
 			}
 			// send the event as is to all channel consumer
 			for _, c := range channels {
@@ -262,15 +281,13 @@ func (m *Manager) updateErroStatus() {
 	ticker := time.NewTicker(5 * time.Minute)
 	go func() {
 		for {
-			select {
-			case <-ticker.C:
-				for svc, s := range m.storageServices {
-					for k := range s.GetStatusError() {
-						fp := path.Join(k, backupIncomplete)
-						logger.Infof("Trying to save error status: %s", k)
-						if err := m.WriteStream(svc, fp, "", bytes.NewReader([]byte("ERROR")), nil, false); err == nil {
-							delete(s.GetStatusError(), k)
-						}
+			<-ticker.C
+			for svc, s := range m.storageServices {
+				for k := range s.GetStatusError() {
+					fp := path.Join(k, backupIncomplete)
+					logger.Infof("Trying to save error status: %s", k)
+					if err := m.WriteStream(svc, fp, "", bytes.NewReader([]byte("ERROR")), nil, false); err == nil {
+						delete(s.GetStatusError(), k)
 					}
 				}
 			}

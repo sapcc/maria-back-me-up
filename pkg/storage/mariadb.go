@@ -217,7 +217,9 @@ func (m *MariaDBStream) WriteFolder(p string) (err error) {
 		log.Debug("mysql restore finished")
 	case config.MyDumper:
 		err = filterMyDumperBackupDir(p, m.cfg.Databases)
-
+		if err != nil {
+			return fmt.Errorf("error creating filterMyDumperBackupDir: %s", err)
+		}
 		b, err := exec.Command(
 			"myloader",
 			"--port="+strconv.Itoa(m.cfg.Port),

@@ -145,6 +145,9 @@ func (s *S3) DownloadBackupWithLogPosition(fullBackupPath, binlog string) (path 
 	svc := s3.New(s.session)
 	untils := strings.Split(binlog, ".")
 	untilBinlog, err := strconv.Atoi(untils[1])
+	if err != nil {
+		return path, s.handleError("", err)
+	}
 	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(fullBackupPath)})
 	if err != nil {
 		return path, s.handleError("", err)

@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"strings"
@@ -69,7 +68,8 @@ func NewVerification(serviceName string, s storage.Storage, cv config.Verificati
 
 // Start a verification process
 func (v *Verification) Start(ctx context.Context) (err error) {
-	for c := time.Tick(time.Duration(10) * time.Minute); ; {
+	d := time.NewTicker(time.Duration(10) * time.Minute)
+	for {
 		b, err := v.getLatestBackup()
 		if err != nil {
 			logger.Error(err)
@@ -95,11 +95,12 @@ func (v *Verification) Start(ctx context.Context) (err error) {
 			v.totalVerifications = totalInc / v.cfg.RunAfterIncBackups
 		}
 		select {
-		case <-c:
+		case <-d.C:
 			continue
 		case <-ctx.Done():
 			return err
 		}
+
 	}
 }
 
@@ -129,7 +130,10 @@ func (v *Verification) verifyLatestBackup(latestBackup storage.Backup) (err erro
 		if len(path) < 1 {
 			return fmt.Errorf("wrong backup path")
 		}
-		v.createTableChecksum(path[1])
+		err = v.createTableChecksum(path[1])
+		if err != nil {
+			return
+		}
 		restoreFolder, err = v.downloadBackup(latestBackup)
 		if err != nil {
 			return
@@ -266,13 +270,13 @@ func (v *Verification) createTableChecksum(backupTime string) (err error) {
 }
 
 func (v *Verification) loadChecksums(restorePath string) (cs database.Checksum, err error) {
-	files, err := ioutil.ReadDir(restorePath)
+	files, err := os.ReadDir(restorePath)
 	if err != nil {
 		return
 	}
 	for _, f := range files {
 		if strings.Contains(f.Name(), "tablesChecksum") {
-			by, err := ioutil.ReadFile(path.Join(restorePath, f.Name()))
+			by, err := os.ReadFile(path.Join(restorePath, f.Name()))
 			if err != nil {
 				return cs, err
 			}

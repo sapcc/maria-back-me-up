@@ -22,20 +22,20 @@ package zapcore
 
 import (
 	"fmt"
-	"sync"
 
 	"go.uber.org/zap/buffer"
 	"go.uber.org/zap/internal/bufferpool"
+	"go.uber.org/zap/internal/pool"
 )
 
-var _sliceEncoderPool = sync.Pool{
-	New: func() interface{} {
-		return &sliceArrayEncoder{elems: make([]interface{}, 0, 2)}
-	},
-}
+var _sliceEncoderPool = pool.New(func() *sliceArrayEncoder {
+	return &sliceArrayEncoder{
+		elems: make([]interface{}, 0, 2),
+	}
+})
 
 func getSliceEncoder() *sliceArrayEncoder {
-	return _sliceEncoderPool.Get().(*sliceArrayEncoder)
+	return _sliceEncoderPool.Get()
 }
 
 func putSliceEncoder(e *sliceArrayEncoder) {
@@ -56,7 +56,7 @@ type consoleEncoder struct {
 // encoder configuration, it will omit any element whose key is set to the empty
 // string.
 func NewConsoleEncoder(cfg EncoderConfig) Encoder {
-	if len(cfg.ConsoleSeparator) == 0 {
+	if cfg.ConsoleSeparator == "" {
 		// Use a default delimiter of '\t' for backwards compatibility
 		cfg.ConsoleSeparator = "\t"
 	}
@@ -125,11 +125,7 @@ func (c consoleEncoder) EncodeEntry(ent Entry, fields []Field) (*buffer.Buffer, 
 		line.AppendString(ent.Stack)
 	}
 
-	if c.LineEnding != "" {
-		line.AppendString(c.LineEnding)
-	} else {
-		line.AppendString(DefaultLineEnding)
-	}
+	line.AppendString(c.LineEnding)
 	return line, nil
 }
 

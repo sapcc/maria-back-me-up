@@ -18,7 +18,7 @@ package config
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"gopkg.in/yaml.v2"
 )
@@ -162,7 +162,7 @@ func GetConfig(opts Options) (cfg Config, err error) {
 	if opts.ConfigFilePath == "" {
 		return cfg, fmt.Errorf("no config file provided")
 	}
-	yamlBytes, err := ioutil.ReadFile(opts.ConfigFilePath)
+	yamlBytes, err := os.ReadFile(opts.ConfigFilePath)
 	if err != nil {
 		return cfg, fmt.Errorf("read config file: %s", err.Error())
 	}

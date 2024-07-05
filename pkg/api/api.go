@@ -35,12 +35,8 @@ import (
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/websocket"
+	"golang.org/x/sync/errgroup"
 )
-
-//TemplateRenderer is
-type TemplateRenderer struct {
-	templates *template.Template
-}
 
 type jsonResponse struct {
 	Time   string `json:"time"`
@@ -110,7 +106,7 @@ var funcMap = template.FuncMap{
 	"getVerifyBackupState": getVerifyBackupState,
 }
 
-//GetRoot renders the index.html
+// GetRoot renders the index.html
 func GetRoot(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		var tmpl = template.New("index.html").Funcs(funcMap)
@@ -127,7 +123,7 @@ func GetRoot(m *backup.Manager) echo.HandlerFunc {
 	}
 }
 
-//GetBackup renders the backup.html
+// GetBackup renders the backup.html
 func GetBackup(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		s := c.QueryParam("storage")
@@ -136,6 +132,9 @@ func GetBackup(m *backup.Manager) echo.HandlerFunc {
 		}
 		var tmpl = template.New("backup.html").Funcs(funcMap)
 		t, err := tmpl.ParseFiles(constants.BACKUP)
+		if err != nil {
+			return sendJSONResponse(c, "Error parsing template file", err.Error())
+		}
 		var backups backupSlice
 		backups, err = m.Storage.GetFullBackups(s)
 		sort.Stable(backups)
@@ -151,7 +150,7 @@ func GetBackup(m *backup.Manager) echo.HandlerFunc {
 	}
 }
 
-//GetRestore renders the restore.html
+// GetRestore renders the restore.html
 func GetRestore(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		k := c.QueryParam("key")
@@ -161,7 +160,9 @@ func GetRestore(m *backup.Manager) echo.HandlerFunc {
 		}
 		var tmpl = template.New("restore.html").Funcs(funcMap)
 		t, err := tmpl.ParseFiles(constants.RESTORE)
-
+		if err != nil {
+			return sendJSONResponse(c, "Error parsing templating", err.Error())
+		}
 		var incBackups incBackupSlice
 		incBackups, err = m.Storage.GetIncBackupsFromDump(s, k)
 		sort.Stable(incBackups)
@@ -176,7 +177,7 @@ func GetRestore(m *backup.Manager) echo.HandlerFunc {
 	}
 }
 
-//PostRestoreDownload handles restore download requests
+// PostRestoreDownload handles restore download requests
 func PostRestoreDownload(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		os.RemoveAll(path.Join(m.GetConfig().Backup.RestoreDir, m.GetConfig().ServiceName))
@@ -202,13 +203,15 @@ func PostRestoreDownload(m *backup.Manager) echo.HandlerFunc {
 		if err != nil {
 			return sendJSONResponse(c, "Error downloading backup", err.Error())
 		}
-		c.Stream(http.StatusOK, "application/x-gzip", pr)
-
+		err = c.Stream(http.StatusOK, "application/x-gzip", pr)
+		if err != nil {
+			return sendJSONResponse(c, "Error streaming backup file", err.Error())
+		}
 		return
 	}
 }
 
-//PostRestore handles backup restore requests
+// PostRestore handles backup restore requests
 func PostRestore(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -241,25 +244,30 @@ func PostRestore(m *backup.Manager) echo.HandlerFunc {
 			return sendJSONResponse(c, "Error downloading backup", err.Error())
 		}
 
-		sendJSONResponse(c, "Stopping backup...", "")
+		_ = sendJSONResponse(c, "Stopping backup...", "")
 		m.Stop()
 		time.Sleep(time.Duration(1 * time.Second))
 
 		s, err := m.Db.HealthCheck()
 		if err != nil || !s.Ok {
-			sendJSONResponse(c, "Database not healthy. Trying to restore!", "")
+			_ = sendJSONResponse(c, "Database not healthy. Trying to restore!", "")
 		}
-		sendJSONResponse(c, "Starting restore...", "")
+		_ = sendJSONResponse(c, "Starting restore...", "")
 
 		if err = m.Restore(backupPath); err != nil {
-			sendJSONResponse(c, "Error during restore!", err.Error())
+			_ = sendJSONResponse(c, "Error during restore!", err.Error())
 		}
-		go m.Start()
+		var eg errgroup.Group
+		eg.Go(m.Start)
+		if err = eg.Wait(); err != nil {
+			_ = sendJSONResponse(c, "Error starting a backup cycle", err.Error())
+		}
+
 		return sendJSONResponse(c, "Restore finished!", "")
 	}
 }
 
-//GetBackupStatus handles backup status requests
+// GetBackupStatus handles backup status requests
 func GetBackupStatus(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		websocket.Handler(func(ws *websocket.Conn) {
@@ -289,25 +297,28 @@ func GetBackupStatus(m *backup.Manager) echo.HandlerFunc {
 	}
 }
 
-//StartStopBackup handles stop backup requests
+// StartStopBackup handles stop backup requests
 func StartStopBackup(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		if c.Path() == "/api/backup/stop" {
 			ctx := m.Stop()
-			select {
-			case <-ctx.Done():
-				return c.JSON(http.StatusOK, "Stopped")
-			}
+			<-ctx.Done()
+			return c.JSON(http.StatusOK, "Stopped")
 
 		} else if c.Path() == "/api/backup/start" {
-			go m.Start()
+			var eg errgroup.Group
+			eg.Go(m.Start)
+			if err = eg.Wait(); err != nil {
+				c.Error(err)
+				return
+			}
 			return c.JSON(http.StatusOK, "Started")
 		}
 		return
 	}
 }
 
-//CreateIncBackup handles create inc backup requests
+// CreateIncBackup handles create inc backup requests
 func CreateIncBackup(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		if err := m.CreateIncBackup(); err != nil {
@@ -317,7 +328,7 @@ func CreateIncBackup(m *backup.Manager) echo.HandlerFunc {
 	}
 }
 
-//GetReadiness handles readiness pod requests
+// GetReadiness handles readiness pod requests
 func GetReadiness(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		if c.Path() == "/health/readiness" {

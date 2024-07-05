@@ -26,6 +26,7 @@ import (
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/database"
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
+	"golang.org/x/sync/errgroup"
 )
 
 const backupDir = "./testDir"
@@ -33,7 +34,12 @@ const backupDir = "./testDir"
 func TestManagerCron(t *testing.T) {
 	m, _, _ := setup(t)
 
-	m.Start()
+	var eg errgroup.Group
+	eg.Go(m.Start)
+	if err := eg.Wait(); err != nil {
+		t.Errorf("cannot start backup cycle: %s.", err.Error())
+	}
+
 	c := m.cronBackup.Entries()
 	if len(c) != 1 {
 		t.Errorf("expected 1 cron entry, but got: %d.", len(c))

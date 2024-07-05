@@ -141,7 +141,10 @@ func (m *Manager) startBackup(ctx context.Context) (err error) {
 	}
 	go m.scheduleBackup(ctx)
 	m.cronBackup = cron.New()
-	m.cronBackup.AddFunc(m.cfg.Backup.FullBackupCronSchedule, func() { m.scheduleBackup(ctx) })
+	_, err = m.cronBackup.AddFunc(m.cfg.Backup.FullBackupCronSchedule, func() { m.scheduleBackup(ctx) })
+	if err != nil {
+		return
+	}
 	m.cronBackup.Start()
 	return
 }
@@ -162,7 +165,11 @@ func (m *Manager) scheduleBackup(ctx context.Context) {
 	if err := m.Db.Up(2*time.Minute, false); err != nil {
 		log.Error("cannot connect to database")
 		m.Stop()
-		m.Start()
+		err = m.Start()
+		if err != nil {
+			log.Error("cannot start backup cycle")
+			return
+		}
 		return
 	}
 	m.lastBackupTime = time.Now().Format(time.RFC3339)
@@ -224,7 +231,10 @@ func (m *Manager) createIncBackup(lp database.LogPosition, backupTime string) {
 	})
 	go func() {
 		if err := eg.Wait(); err != nil {
-			m.handleBackupError(err, m.updateSts.IncBackup)
+			hErr := m.handleBackupError(err, m.updateSts.IncBackup)
+			if hErr != nil {
+				logger.Errorf("error handling backup error: %s", hErr.Error())
+			}
 			m.setUpdateStatus(m.updateSts.IncBackup, m.Storage.GetStorageServicesKeys(), false)
 			m.errCh <- err
 		}
@@ -394,12 +404,14 @@ func (m *Manager) readErrorChannel() {
 		if err == nil {
 			continue
 		}
-		if err != nil {
-			m.updateSts.Restarts.Inc()
-			logger.Error(fmt.Sprintf("cannot handle backup error: %s. -> Restarting in 2min", err.Error()))
-			m.Stop()
-			time.Sleep(time.Duration(2) * time.Minute)
-			m.Start()
+		m.updateSts.Restarts.Inc()
+		logger.Error(fmt.Sprintf("cannot handle backup error: %s. -> Restarting in 2min", err.Error()))
+		m.Stop()
+		time.Sleep(time.Duration(2) * time.Minute)
+		var eg errgroup.Group
+		eg.Go(m.Start)
+		if err = eg.Wait(); err != nil {
+			logger.Error(fmt.Sprintf("cannot start backup cycle: %s.", err.Error()))
 		}
 	}
 }

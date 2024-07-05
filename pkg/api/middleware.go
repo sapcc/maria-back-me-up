@@ -36,19 +36,21 @@ import (
 
 var (
 	oauth2Config         oauth2.Config
-	provider             *oidc.Provider
 	idTokenVerifier      *oidc.IDTokenVerifier
 	oauthStateCookieName = "oauth_state"
 	sessionCookieName    = "oauth_session"
 	store                *sessions.CookieStore
 )
 
-//InitOAuth inits oauth config
+// InitOAuth inits oauth config
 func InitOAuth(m *backup.Manager, opts config.Options) (err error) {
 	ctx := oidc.ClientContext(context.Background(), http.DefaultClient)
 	key := make([]byte, 64)
 
 	_, err = rand.Read(key)
+	if err != nil {
+		return
+	}
 	store = sessions.NewCookieStore([]byte(opts.CookieSecret)) //TODO: load via env vars
 	store.Options = &sessions.Options{
 		Path: "/",
@@ -80,7 +82,7 @@ func InitOAuth(m *backup.Manager, opts config.Options) (err error) {
 	return
 }
 
-//Oauth middleware is used to start an OAuth2 flow with the dex server.
+// Oauth middleware is used to start an OAuth2 flow with the dex server.
 func Oauth(cfg config.OAuth, opts config.Options) echo.MiddlewareFunc {
 	if cfg.Middleware {
 		return func(next echo.HandlerFunc) echo.HandlerFunc {
@@ -106,7 +108,7 @@ func Oauth(cfg config.OAuth, opts config.Options) echo.MiddlewareFunc {
 	}
 }
 
-//Restore middleware is used to check if a database restore is in progress
+// Restore middleware is used to check if a database restore is in progress
 func Restore(m *backup.Manager) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) (err error) {
@@ -144,7 +146,7 @@ func updateSessionStore(w http.ResponseWriter, r *http.Request, token string, us
 	return session.Save(r, w)
 }
 
-//HandleOAuth2Callback handles oauth callbacks
+// HandleOAuth2Callback handles oauth callbacks
 func HandleOAuth2Callback(opts config.Options) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		ctx := c.Request().Context()
@@ -188,6 +190,10 @@ func HandleOAuth2Callback(opts config.Options) echo.HandlerFunc {
 		}
 
 		session, err := store.Get(c.Request(), sessionCookieName)
+		if err != nil {
+			logger.Error(err.Error())
+			return
+		}
 		url := session.Values["url"].(string)
 
 		if err = updateSessionStore(c.Response(), c.Request(), rawIDToken, claims.Email, ""); err != nil {

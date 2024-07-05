@@ -22,7 +22,6 @@ import (
 
 	"fmt"
 	"html/template"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -47,12 +46,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-var deletePolicy = metav1.DeletePropagationForeground
-
-var k8sDatabase = map[string]string{
-	constants.MARIADB: constants.MARIADEPLOYMENT,
-}
-
 // Database a k8s database representation
 type Database struct {
 	client *kubernetes.Clientset
@@ -75,7 +68,7 @@ func New(ns string) (m *Database, err error) {
 		})
 		if home := homeDir(); home != "" && kubeconfig == nil {
 			kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-		} else if &kubeconfig == nil {
+		} else if kubeconfig == nil {
 			kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
 		}
 
@@ -208,7 +201,7 @@ func (m *Database) unmarshalYamlFile(p string, into runtime.Object, vl interface
 	var tpl bytes.Buffer
 	s := json.NewYAMLSerializer(json.DefaultMetaFactory, scheme.Scheme,
 		scheme.Scheme)
-	yamlBytes, err := ioutil.ReadFile(p)
+	yamlBytes, err := os.ReadFile(p)
 	if err != nil {
 		return
 	}
@@ -219,7 +212,7 @@ func (m *Database) unmarshalYamlFile(p string, into runtime.Object, vl interface
 	if err = t.Execute(&tpl, vl); err != nil {
 		return
 	}
-	_, _, err = s.Decode([]byte(tpl.String()), &schema.GroupVersionKind{Version: "v1"}, into)
+	_, _, err = s.Decode((tpl.Bytes()), &schema.GroupVersionKind{Version: "v1"}, into)
 	if err != nil {
 		return
 	}

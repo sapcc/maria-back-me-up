@@ -1,3 +1,19 @@
+/**
+ * Copyright 2024 SAP SE
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package storage
 
 import (
@@ -140,7 +156,10 @@ func (s *Swift) WriteStream(name, mimeType string, body io.Reader, tags map[stri
 	}
 	if !dlo {
 		buf := new(bytes.Buffer)
-		buf.ReadFrom(body)
+		_, err = buf.ReadFrom(body)
+		if err != nil {
+			return s.handleError(name, err)
+		}
 		f, err := s.connection.ObjectCreate(s.cfg.ContainerName, backupKey, false, "", "", headers)
 		defer func() {
 			f.Close()
@@ -189,6 +208,9 @@ func (s *Swift) DownloadLatestBackup() (path string, err error) {
 	var b bytes.Buffer
 	wr := bufio.NewWriter(&b)
 	headers, err := s.connection.ObjectGet(s.cfg.ContainerName, filepath.Join(s.serviceName, LastSuccessfulBackupFile), wr, true, nil)
+	if err != nil {
+		return
+	}
 	meta := headers.ObjectMetadata()
 	binlog, isset := meta["binlog"]
 	if !isset {

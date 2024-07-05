@@ -273,7 +273,10 @@ func TestBackupRetention(t *testing.T) {
 		t.Errorf("could not create backup file: %s", err.Error())
 	}
 
-	disk.WriteFolder(folder)
+	err = disk.WriteFolder(folder)
+	if err != nil {
+		t.Errorf("could not create backup folder: %s", err.Error())
+	}
 
 	afterBackups, _ := disk.GetFullBackups()
 

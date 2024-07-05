@@ -1,3 +1,19 @@
+/**
+ * Copyright 2024 SAP SE
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package backup
 
 import (
@@ -16,7 +32,7 @@ func (m *Manager) CreateIncBackup() (err error) {
 	e := m.cronBackup.Entries()
 	if len(e) == 1 {
 		t := e[0].Next
-		d := t.Sub(time.Now())
+		d := time.Until(t)
 		if d.Minutes() > 1 {
 			return m.Db.FlushIncBackup()
 		}
@@ -32,10 +48,7 @@ func (m *Manager) GetConfig() config.Config {
 
 // GetBackupActive returns if a backup is currently active
 func (m *Manager) GetBackupActive() bool {
-	if m.cronBackup == nil {
-		return false
-	}
-	return true
+	return m.cronBackup != nil
 }
 
 // GetHealthStatus returns the current backup health status
