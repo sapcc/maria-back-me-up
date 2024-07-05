@@ -23,6 +23,7 @@ import (
 	"syscall"
 
 	"github.com/namsral/flag"
+	"github.com/sapcc/go-api-declarations/bininfo"
 	"github.com/sapcc/maria-back-me-up/pkg/backup"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/constants"
@@ -38,6 +39,7 @@ import (
 var opts config.Options
 
 func init() {
+	bininfo.HandleVersionArgument()
 	flag.StringVar(&opts.ConfigFilePath, "CONFIG_FILE", "./etc/config/config.yaml", "Path to the config file")
 	flag.StringVar(&opts.ClientID, "OAUTH_CLIENT_ID", "", "Oauth provider client id")
 	flag.StringVar(&opts.ClientSecret, "OAUTH_CLIENT_SECRET", "", "Oauth provider client secret")
@@ -56,6 +58,8 @@ func main() {
 	if err != nil {
 		log.Fatal("cannot load config file", err.Error())
 	}
+
+	log.Info("running version: ", bininfo.Version())
 
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
