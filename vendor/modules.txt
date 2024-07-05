@@ -233,6 +233,9 @@ github.com/prometheus/procfs/internal/util
 # github.com/robfig/cron/v3 v3.0.1
 ## explicit; go 1.12
 github.com/robfig/cron/v3
+# github.com/sapcc/go-api-declarations v1.11.3
+## explicit; go 1.21
+github.com/sapcc/go-api-declarations/bininfo
 # github.com/shopspring/decimal v1.2.0
 ## explicit; go 1.13
 github.com/shopspring/decimal
