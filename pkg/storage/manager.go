@@ -18,6 +18,7 @@ package storage
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"path"
@@ -111,7 +112,6 @@ func (m *Manager) GetStorageServices() map[string]Storage {
 
 // WriteStreamAll writes Events either as a byte stream or in channel to all available storage services
 func (m *Manager) WriteStreamAll(name, mimeType string, body <-chan StreamEvent, dlo bool) (errs error) {
-
 	var eg errgroup.Group
 	streamConsumer := make(map[string]Storage, len(m.storageServices))
 	chanConsumer := make(map[string]ChannelWriter, len(m.storageServices))
@@ -182,7 +182,7 @@ func (m *Manager) WriteStreamAll(name, mimeType string, body <-chan StreamEvent,
 func (m *Manager) WriteStream(storageService, name, mimeType string, body io.Reader, tags map[string]string, dlo bool) (errs error) {
 	s, ok := m.storageServices[storageService]
 	if !ok {
-		return fmt.Errorf("unknown storage service")
+		return errors.New("unknown storage service")
 	}
 
 	return s.WriteStream(name, mimeType, body, tags, dlo)
@@ -202,7 +202,7 @@ func (m *Manager) WriteFolderAll(path string) (errs error) {
 func (m *Manager) DownloadLatestBackup(storageService string) (path string, err error) {
 	s, ok := m.storageServices[storageService]
 	if !ok {
-		return path, fmt.Errorf("unknown storage service")
+		return path, errors.New("unknown storage service")
 	}
 	return s.DownloadLatestBackup()
 }
@@ -211,7 +211,7 @@ func (m *Manager) DownloadLatestBackup(storageService string) (path string, err 
 func (m *Manager) DownloadBackup(storageService string, fullBackup Backup) (path string, err error) {
 	s, ok := m.storageServices[storageService]
 	if !ok {
-		return path, fmt.Errorf("unknown storage service")
+		return path, errors.New("unknown storage service")
 	}
 	return s.DownloadBackup(fullBackup)
 }
@@ -220,7 +220,7 @@ func (m *Manager) DownloadBackup(storageService string, fullBackup Backup) (path
 func (m *Manager) GetFullBackups(storageService string) (bl []Backup, err error) {
 	s, ok := m.storageServices[storageService]
 	if !ok {
-		return bl, fmt.Errorf("unknown storage service")
+		return bl, errors.New("unknown storage service")
 	}
 	return s.GetFullBackups()
 }
@@ -229,7 +229,7 @@ func (m *Manager) GetFullBackups(storageService string) (bl []Backup, err error)
 func (m *Manager) GetIncBackupsFromDump(storageService, key string) (bl []Backup, err error) {
 	s, ok := m.storageServices[storageService]
 	if !ok {
-		return bl, fmt.Errorf("unknown storage service")
+		return bl, errors.New("unknown storage service")
 	}
 	if st := s.GetStatusErrorByKey(key); st != "" {
 		return bl, fmt.Errorf("backup is incomplete, due to: %s", st)
@@ -242,7 +242,7 @@ func (m *Manager) GetIncBackupsFromDump(storageService, key string) (bl []Backup
 func (m *Manager) DownloadBackupWithLogPosition(storageService, fullBackupPath string, binlog string) (path string, err error) {
 	s, ok := m.storageServices[storageService]
 	if !ok {
-		return path, fmt.Errorf("unknown storage service")
+		return path, errors.New("unknown storage service")
 	}
 	return s.DownloadBackupWithLogPosition(fullBackupPath, binlog)
 }
@@ -266,7 +266,6 @@ func (m *Manager) createIOReaders(count int) ([]io.Reader, io.Writer, io.Closer)
 }
 
 func (m *Manager) createChannels(count int) []chan StreamEvent {
-
 	channels := make([]chan StreamEvent, 0, count)
 	if count == 0 {
 		return channels

@@ -17,6 +17,7 @@
 package backup
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -27,7 +28,7 @@ import (
 // CreateIncBackup creates inc backups
 func (m *Manager) CreateIncBackup() (err error) {
 	if m.cronBackup == nil {
-		return fmt.Errorf("no backup running")
+		return errors.New("no backup running")
 	}
 	e := m.cronBackup.Entries()
 	if len(e) == 1 {
@@ -36,9 +37,9 @@ func (m *Manager) CreateIncBackup() (err error) {
 		if d.Minutes() > 1 {
 			return m.Db.FlushIncBackup()
 		}
-		return fmt.Errorf("can't create inc backup as full backup is about to be scheduled")
+		return errors.New("can't create inc backup as full backup is about to be scheduled")
 	}
-	return fmt.Errorf("no backup running")
+	return errors.New("no backup running")
 }
 
 // GetConfig returns the config

@@ -18,7 +18,7 @@ package verification
 
 import (
 	"context"
-	"fmt"
+	"errors"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
@@ -75,7 +75,7 @@ func NewManager(c config.Config) (m *Manager, err error) {
 	}
 
 	if len(verifications) == 0 {
-		return nil, fmt.Errorf("no verifications created")
+		return nil, errors.New("no verifications created")
 	}
 
 	prometheus.MustRegister(NewMetricsCollector(sts))

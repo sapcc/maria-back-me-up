@@ -109,7 +109,7 @@ func NewManager(s *storage.Manager, db database.Database, k *k8s.Database, c con
 // Start a backup cycle
 func (m *Manager) Start() (err error) {
 	if m.cronBackup != nil {
-		return fmt.Errorf("backup already running")
+		return errors.New("backup already running")
 	}
 
 	ctx := context.Background()
@@ -189,7 +189,7 @@ func (m *Manager) scheduleBackup(ctx context.Context) {
 	lp, err := m.createFullBackup(bpath)
 	m.setUpdateStatus(m.updateSts.FullBackup, m.Storage.GetStorageServicesKeys(), true)
 	if err != nil {
-		logger.Error(fmt.Sprintf("error creating full backup: %s", err.Error()))
+		logger.Error("error creating full backup: ", err.Error())
 		if err = m.handleBackupError(err, m.updateSts.FullBackup); err != nil {
 			m.setUpdateStatus(m.updateSts.FullBackup, m.Storage.GetStorageServicesKeys(), false)
 			m.errCh <- err
@@ -265,7 +265,7 @@ func (m *Manager) handleBackupError(err error, backup map[string]int) error {
 			}
 		}
 		if errors.As(errb, &eb) {
-			return fmt.Errorf("cannot restore. no backup available")
+			return errors.New("cannot restore. no backup available")
 		}
 		if errb != nil {
 			return fmt.Errorf("cannot do init restore. err: %s", errb.Error())

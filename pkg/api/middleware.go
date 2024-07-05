@@ -22,7 +22,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"fmt"
+	"errors"
 	"net/http"
 
 	"github.com/coreos/go-oidc"
@@ -67,7 +67,7 @@ func InitOAuth(m *backup.Manager, opts config.Options) (err error) {
 	}
 
 	if opts.ClientID == "" || opts.ClientSecret == "" {
-		return fmt.Errorf("cannot setup oauth provider: clientID, clientSecret not set")
+		return errors.New("cannot setup oauth provider: clientID, clientSecret not set")
 	}
 
 	oauth2Config = oauth2.Config{

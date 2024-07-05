@@ -153,7 +153,7 @@ func (m *Database) GetPodIP(labelSelector string) (ip string, err error) {
 		return ip, err
 	}
 	if len(p.Items) > 1 || len(p.Items) == 0 {
-		return ip, fmt.Errorf("wrong number of database pods found")
+		return ip, errors.New("wrong number of database pods found")
 	}
 	return p.Items[0].Status.PodIP, nil
 }
@@ -166,7 +166,7 @@ func (m *Database) CheckPodNotReady(labelSelector string) (err error) {
 			return false, err
 		}
 		if len(p.Items) > 1 || len(p.Items) == 0 {
-			return false, fmt.Errorf("wrong number of database pods found")
+			return false, errors.New("wrong number of database pods found")
 		}
 		for c := range p.Items[0].Status.Conditions {
 			if p.Items[0].Status.Conditions[c].Type == v1.PodReady {
@@ -179,7 +179,7 @@ func (m *Database) CheckPodNotReady(labelSelector string) (err error) {
 	})
 	//Check for 1 minute if pod is in state  NotReady
 	if err = wait.Poll(5*time.Second, 1*time.Minute, cf); err != nil {
-		return fmt.Errorf("Wait Timed out for pod readiness: %s", err.Error())
+		return fmt.Errorf("wait Timed out for pod readiness: %s", err.Error())
 	}
 
 	return

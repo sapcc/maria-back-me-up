@@ -17,6 +17,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -160,7 +161,7 @@ type VerificationService struct {
 // GetConfig returns the config struct from a yaml file
 func GetConfig(opts Options) (cfg Config, err error) {
 	if opts.ConfigFilePath == "" {
-		return cfg, fmt.Errorf("no config file provided")
+		return cfg, errors.New("no config file provided")
 	}
 	yamlBytes, err := os.ReadFile(opts.ConfigFilePath)
 	if err != nil {

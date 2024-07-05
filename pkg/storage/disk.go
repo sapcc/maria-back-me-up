@@ -157,7 +157,6 @@ func (d *Disk) DownloadLatestBackup() (path string, err error) {
 // Walks the backup basepath and list all full backups.
 // Only backups which contain a dump.tar are listed
 func (d *Disk) GetFullBackups() (bl []Backup, err error) {
-
 	backupPath := filepath.Join(d.cfg.BasePath, d.serviceName)
 
 	if _, err := os.Stat(backupPath); errors.Is(err, os.ErrNotExist) {
@@ -196,7 +195,6 @@ func (d *Disk) GetTotalIncBackupsFromDump(key string) (t int, err error) {
 
 // GetIncBackupsFromDump implements interface
 func (d *Disk) GetIncBackupsFromDump(key string) (bl []Backup, err error) {
-
 	backupPath := filepath.Join(d.cfg.BasePath, key)
 
 	info, err := os.Stat(backupPath)

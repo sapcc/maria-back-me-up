@@ -85,7 +85,6 @@ type schemaFilter struct {
 
 // NewMariaDBStream creates a new mariadbstream storage object
 func NewMariaDBStream(c config.MariaDBStream, serviceName string) (m *MariaDBStream, err error) {
-
 	db, err := openDBConnection(c.User, c.Password, c.Host, c.Port, serviceName)
 	if err != nil {
 		return m, fmt.Errorf("failed to init MariaDBStream: %s", err.Error())
@@ -185,7 +184,6 @@ func (m *MariaDBStream) GetTotalIncBackupsFromDump(key string) (t int, err error
 
 // WriteFolder implements interface
 func (m *MariaDBStream) WriteFolder(p string) (err error) {
-
 	switch m.cfg.DumpTool {
 	case config.Mysqldump:
 		log.Debug("SQL dump path: ", p)
@@ -263,7 +261,6 @@ func (m *MariaDBStream) WriteFolder(p string) (err error) {
 // - Only replicates all schemas or those set in the config
 // - If schemas are filtered and the schema is set the event will be ignored
 func (m *MariaDBStream) ProcessBinlogEvent(ctx context.Context, event *replication.BinlogEvent) (err error) {
-
 	switch e := event.Event.(type) {
 	case *replication.QueryEvent:
 		return m.handleQueryEvent(ctx, e)
@@ -297,7 +294,7 @@ func (m *MariaDBStream) handleIntVarEvent(ctx context.Context, event *replicatio
 	} else if event.Type == replication.LAST_INSERT_ID {
 		query = fmt.Sprintf("SET LAST_INSERT_ID=%d;", event.Value)
 	} else {
-		return fmt.Errorf("error IntVarEvent has unsupported type")
+		return errors.New("error IntVarEvent has unsupported type")
 	}
 
 	err = m.retry.execContext(ctx, query, nil)
@@ -441,7 +438,6 @@ func (m *MariaDBStream) handleRowsEvent(ctx context.Context, event *replication.
 // createInsertQueryFromRow returns an INSERT query with placeholders for the VALUES clause.
 // Args contains the values for the placeholders.
 func (m *MariaDBStream) createInsertQueryFromRow(table *replication.TableMapEvent, columns []column) (query string, args []interface{}, err error) {
-
 	columnExpression := ""
 	valuePlaceholders := ""
 	for _, col := range columns {
@@ -519,8 +515,8 @@ func (m *MariaDBStream) extractSchemas(backupPath string) (filteredBackupPath st
 	return filteredBackupPath, nil
 }
 
-func (m *MariaDBStream) filterDump(path, targetPath string, filters []schemaFilter) (err error) {
-	file, err := os.Open(path)
+func (m *MariaDBStream) filterDump(backupPath, targetPath string, filters []schemaFilter) (err error) {
+	file, err := os.Open(backupPath)
 	if err != nil {
 		return err
 	}
@@ -659,6 +655,9 @@ func cleanupLocks(db *sql.DB, cfg *config.MariaDBStream) (removedLocks int, err 
 
 	lockQuery := "select THREAD_ID, LOCK_MODE, TABLE_SCHEMA from INFORMATION_SCHEMA.METADATA_LOCK_INFO;"
 	rows, err := conn.QueryContext(ctx, lockQuery)
+	if err != nil {
+		return 0, err
+	}
 
 	locks := make(map[int64]struct{}, 0)
 	for rows.Next() {
@@ -759,11 +758,10 @@ func (m *MariaDBStream) determineSchema(event *replication.QueryEvent) (string, 
 	if v.schema != "" {
 		return v.schema, nil
 	}
-	return "", fmt.Errorf("could not determine schema")
+	return "", errors.New("could not determine schema")
 }
 
 func newNullString(value interface{}, nullable bool) sql.NullString {
-
 	if value == nil && nullable {
 		return sql.NullString{
 			String: "",
@@ -798,7 +796,6 @@ func newNullString(value interface{}, nullable bool) sql.NullString {
 }
 
 func createWhereCondition(columns []column, hasPrimaryKey bool) (condition string, args []interface{}) {
-
 	if hasPrimaryKey {
 		for _, col := range columns {
 			if col.isKeyField {
@@ -939,7 +936,7 @@ func filterMyDumperBackupDir(path string, databases []string) error {
 
 	files, err := filepath.Glob(fmt.Sprintf("%s/*", path))
 	if err != nil {
-		return fmt.Errorf("could not list db directory")
+		return errors.New("could not list db directory")
 	}
 	regex, err := regexp.Compile(pattern)
 	if err != nil {
@@ -974,7 +971,7 @@ func isDBUp(user, password, host string, port int) (err error) {
 		return true, nil
 	})
 	if err = wait.Poll(5*time.Second, time.Duration(90)*time.Second, cf); err != nil {
-		return fmt.Errorf("pinging target mariadb failed. aborting tx retry")
+		return errors.New("pinging target mariadb failed. aborting tx retry")
 	}
 	return nil
 }

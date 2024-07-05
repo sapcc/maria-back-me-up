@@ -18,7 +18,7 @@ package database
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"time"
 
 	"github.com/sapcc/maria-back-me-up/pkg/config"
@@ -71,5 +71,5 @@ func NewDatabase(c config.Config, s *storage.Manager, k *k8s.Database) (Database
 		return NewPostgres(c, s)
 	}
 
-	return nil, fmt.Errorf("unsupported database")
+	return nil, errors.New("unsupported database")
 }

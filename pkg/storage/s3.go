@@ -138,22 +138,22 @@ func (s *S3) WriteStream(fileName, mimeType string, body io.Reader, tags map[str
 }
 
 // DownloadBackupWithLogPosition implements interface
-func (s *S3) DownloadBackupWithLogPosition(fullBackupPath, binlog string) (path string, err error) {
+func (s *S3) DownloadBackupWithLogPosition(fullBackupPath, binlog string) (backupPath string, err error) {
 	if fullBackupPath == "" || binlog == "" {
-		return path, &NoBackupError{}
+		return backupPath, &NoBackupError{}
 	}
 	svc := s3.New(s.session)
 	untils := strings.Split(binlog, ".")
 	untilBinlog, err := strconv.Atoi(untils[1])
 	if err != nil {
-		return path, s.handleError("", err)
+		return backupPath, s.handleError("", err)
 	}
 	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(fullBackupPath)})
 	if err != nil {
-		return path, s.handleError("", err)
+		return backupPath, s.handleError("", err)
 	}
 	if len(listRes.Contents) == 0 {
-		return path, &NoBackupError{}
+		return backupPath, &NoBackupError{}
 	}
 	for _, listObj := range listRes.Contents {
 		if err != nil {
@@ -161,7 +161,7 @@ func (s *S3) DownloadBackupWithLogPosition(fullBackupPath, binlog string) (path 
 		}
 		if strings.Contains(*listObj.Key, "dump.tar") {
 			if err := s.downloadFile(s.restoreFolder, listObj); err != nil {
-				return path, err
+				return backupPath, err
 			}
 			continue
 		}
@@ -173,11 +173,11 @@ func (s *S3) DownloadBackupWithLogPosition(fullBackupPath, binlog string) (path 
 		}
 		if currentBinlog <= untilBinlog {
 			if err := s.downloadFile(s.restoreFolder, listObj); err != nil {
-				return path, err
+				return backupPath, err
 			}
 		}
 	}
-	path = filepath.Join(s.restoreFolder, fullBackupPath)
+	backupPath = filepath.Join(s.restoreFolder, fullBackupPath)
 	return
 }
 

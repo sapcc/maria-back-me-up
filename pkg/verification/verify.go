@@ -110,7 +110,7 @@ func (v *Verification) getLatestBackup() (s storage.Backup, err error) {
 		return
 	}
 	if len(bs) == 0 {
-		return s, fmt.Errorf("no backup found")
+		return s, errors.New("no backup found")
 	}
 	backups := sortBackupsByTime(bs)
 	return backups[len(backups)-1], err
@@ -128,7 +128,7 @@ func (v *Verification) verifyLatestBackup(latestBackup storage.Backup) (err erro
 	} else {
 		path := strings.Split(latestBackup.Key, "/")
 		if len(path) < 1 {
-			return fmt.Errorf("wrong backup path")
+			return errors.New("wrong backup path")
 		}
 		err = v.createTableChecksum(path[1])
 		if err != nil {
@@ -238,7 +238,7 @@ func (v *Verification) verifyChecksums(dbcfg config.DatabaseConfig, restorePath 
 	v.logger.Debugf("successfully loaded checksum %+v", csOrigin)
 
 	if len(csOrigin.TablesChecksum) == 0 {
-		return fmt.Errorf("no checksums found")
+		return errors.New("no checksums found")
 	}
 
 	csBackup, err := db.GetCheckSumForTable(db.GetConfig().VerifyTables, false)

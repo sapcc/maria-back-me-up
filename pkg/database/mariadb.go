@@ -82,7 +82,7 @@ func NewMariaDB(c config.Config, sm *storage.Manager, k *k8s.Database) (Database
 // CreateFullBackup creates a mariadb full backup
 func (m *MariaDB) CreateFullBackup(path string) (bp LogPosition, err error) {
 	if path == "" {
-		return bp, fmt.Errorf("no path given")
+		return bp, errors.New("no path given")
 	}
 	defer func() {
 		if err = m.setSlowQueryLog(slowQueryLogON); err != nil {
@@ -139,12 +139,12 @@ func (m *MariaDB) Restore(path string) (err error) {
 		}()
 	}
 	if err = m.restartMariaDB(); err != nil {
-		//Cant shutdown database. Lets try restore anyway
-		log.Error(fmt.Errorf("Timed out trying to shutdown database, %s", err.Error()))
+		// Cant shutdown database. Lets try restore anyway
+		log.Error(fmt.Errorf("timed out trying to shutdown database, %s", err.Error()))
 	}
 	err = m.Up(5*time.Minute, withIP)
 	if err != nil {
-		log.Error(fmt.Errorf("Timed out waiting for mariadb to boot. Delete data dir"))
+		log.Error(fmt.Errorf("timed out waiting for mariadb to boot. Delete data dir"))
 		if err := m.deleteMariaDBDataDir(); err != nil {
 			return fmt.Errorf("cannot delete data dir %s", err.Error())
 		}
@@ -153,7 +153,7 @@ func (m *MariaDB) Restore(path string) (err error) {
 	}
 
 	if err = m.Up(1*time.Minute, withIP); err != nil {
-		return fmt.Errorf("Timed out waiting for mariadb to boot. Cant perform restore")
+		return errors.New("timed out waiting for mariadb to boot. Cant perform restore")
 	}
 
 	if err = m.restoreDump(path); err != nil {
@@ -165,7 +165,7 @@ func (m *MariaDB) Restore(path string) (err error) {
 	}
 
 	if sts, err := mariaHealthCheck(m.cfg.Database); err != nil || !sts.Ok {
-		return fmt.Errorf("Mariadb health check failed after restore. Tables corrupted: %s", sts.Details)
+		return fmt.Errorf("mariadb health check failed after restore. Tables corrupted: %s", sts.Details)
 	}
 	if err = resetSlave(m.cfg.Database); err != nil {
 		log.Error(fmt.Errorf("cannot call RESET slave: %s", err.Error()))
@@ -176,7 +176,7 @@ func (m *MariaDB) Restore(path string) (err error) {
 // VerifyRestore runs a restore on the mariadb for verification
 func (m *MariaDB) VerifyRestore(path string) (err error) {
 	if err = m.Up(10*time.Minute, false); err != nil {
-		return fmt.Errorf("Timed out waiting for verfiy mariadb to boot. Cant perform verification")
+		return errors.New("timed out waiting for verfiy mariadb to boot. Cant perform verification")
 	}
 	if err = m.restoreDump(path); err != nil {
 		return
@@ -240,7 +240,7 @@ func (m *MariaDB) createMyDump(toPath string) (bp LogPosition, err error) {
 		"--user="+m.cfg.Database.User,
 		"--password="+m.cfg.Database.Password,
 		"--outputdir="+toPath,
-		//`--regex=^(?!(mysql\.))`,
+		// `--regex=^(?!(mysql\.))`,
 		"--compress",
 		"--trx-consistency-only",
 		"--compress-protocol",
@@ -557,7 +557,7 @@ func (m *MariaDB) restoreIncBackup(p string) (err error) {
 	pipe, _ := binlogCMD.StdoutPipe()
 	defer pipe.Close()
 	mysqlPipe.Stdin = pipe
-	//mysqlPipe.Stdout = os.Stdout
+	// mysqlPipe.Stdout = os.Stdout
 	if err = mysqlPipe.Start(); err != nil {
 		return
 	}
@@ -738,7 +738,7 @@ func getMysqlDumpBinlog(s string) (mp mysql.Position, err error) {
 
 // GetDatabaseDiff returns the database diff between two mariadbs
 func (m *MariaDB) GetDatabaseDiff(c1, c2 config.DatabaseConfig) (out []byte, err error) {
-	//mysqldiff --server1=root:pw@localhost:3306 --server2=root:pw@db_backup:3306 test:test
+	// mysqldiff --server1=root:pw@localhost:3306 --server2=root:pw@db_backup:3306 test:test
 	s1 := fmt.Sprintf("%s:%s@%s:%s", c1.User, c1.Password, c1.Host, strconv.Itoa(c1.Port))
 	s2 := fmt.Sprintf("%s:%s@%s:%s", c2.User, c2.Password, c2.Host, strconv.Itoa(c2.Port))
 	dbs := make([]string, 0)
