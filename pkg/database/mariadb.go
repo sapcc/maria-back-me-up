@@ -306,11 +306,15 @@ func (m *MariaDB) createMysqlDump(toPath string) (bp LogPosition, err error) {
 		if strings.Contains(scanner.Text(), "MASTER_LOG_FILE") {
 			s := strings.ReplaceAll(scanner.Text(), "'", "")
 			myBp, err = getMysqlDumpBinlog(s)
-			if err != nil {
-				return bp, err
+			if err == nil && myBp.Pos != 0 {
+				break
 			}
 		}
 	}
+	if myBp.Pos == 0 {
+		return bp, errors.New("no binlog position found")
+	}
+	log.Debug("found binlogPosition: ", myBp.Pos)
 	bp.Pos = myBp.Pos
 	bp.Name = myBp.Name
 	log.Debug("Uploading full backup")
