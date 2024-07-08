@@ -17,6 +17,7 @@
 package test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -86,6 +87,9 @@ func assertDatabaseNotExists(t *testing.T, user, password, host, db string, port
 			if mysqlErr.Code == 1049 {
 				return
 			}
+		}
+		if strings.Contains(err.Error(), "1049") {
+			return
 		}
 		t.Errorf("unexpected error: %s", err.Error())
 		return
