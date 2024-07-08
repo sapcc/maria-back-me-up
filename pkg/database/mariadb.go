@@ -730,7 +730,12 @@ func getMysqlDumpBinlog(s string) (mp mysql.Position, err error) {
 		v := kv[2]
 		res[k] = v
 	}
-	pos, err := strconv.ParseInt(res["MASTER_LOG_POS"], 10, 32)
+	logPos, ok := res["MASTER_LOG_POS"]
+	if !ok {
+		return
+	}
+
+	pos, err := strconv.ParseInt(logPos, 10, 32)
 	mp.Name = res["MASTER_LOG_FILE"]
 	mp.Pos = uint32(pos)
 	return
