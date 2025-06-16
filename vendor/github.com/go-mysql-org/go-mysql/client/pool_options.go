@@ -1,12 +1,13 @@
 package client
 
 import (
+	"log/slog"
 	"time"
 )
 
 type (
 	poolOptions struct {
-		logFunc LogFunc
+		logger *slog.Logger
 
 		minAlive int
 		maxAlive int
@@ -17,7 +18,7 @@ type (
 		password string
 		dbName   string
 
-		connOptions []func(conn *Conn)
+		connOptions []Option
 
 		newPoolPingTimeout time.Duration
 	}
@@ -40,13 +41,13 @@ func WithPoolLimits(minAlive, maxAlive, maxIdle int) PoolOption {
 	}
 }
 
-func WithLogFunc(f LogFunc) PoolOption {
+func WithLogger(logger *slog.Logger) PoolOption {
 	return func(o *poolOptions) {
-		o.logFunc = f
+		o.logger = logger
 	}
 }
 
-func WithConnOptions(options ...func(conn *Conn)) PoolOption {
+func WithConnOptions(options ...Option) PoolOption {
 	return func(o *poolOptions) {
 		o.connOptions = append(o.connOptions, options...)
 	}
