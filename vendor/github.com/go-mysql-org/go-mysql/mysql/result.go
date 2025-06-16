@@ -1,5 +1,7 @@
 package mysql
 
+// Result should be created by NewResultWithoutRows or NewResult. The zero value
+// of Result is invalid.
 type Result struct {
 	Status   uint16
 	Warnings uint16
@@ -8,6 +10,18 @@ type Result struct {
 	AffectedRows uint64
 
 	*Resultset
+}
+
+func NewResult(resultset *Resultset) *Result {
+	return &Result{
+		Resultset: resultset,
+	}
+}
+
+func NewResultReserveResultset(fieldCount int) *Result {
+	return &Result{
+		Resultset: NewResultset(fieldCount),
+	}
 }
 
 type Executer interface {
@@ -19,4 +33,14 @@ func (r *Result) Close() {
 		r.Resultset.returnToPool()
 		r.Resultset = nil
 	}
+}
+
+func (r *Result) HasResultset() bool {
+	if r == nil {
+		return false
+	}
+	if r.Resultset != nil && len(r.Resultset.Fields) > 0 {
+		return true
+	}
+	return false
 }

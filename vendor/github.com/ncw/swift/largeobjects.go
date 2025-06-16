@@ -118,9 +118,8 @@ type LargeObjectFile interface {
 // largeObjectCreate creates a large object at opts.Container, opts.ObjectName.
 //
 // opts.Flags can have the following bits set
-//
-//	os.TRUNC  - remove the contents of the large object if it exists
-//	os.APPEND - write at the end of the large object
+//   os.TRUNC  - remove the contents of the large object if it exists
+//   os.APPEND - write at the end of the large object
 func (c *Connection) largeObjectCreate(opts *LargeObjectOpts) (*largeObjectCreateFile, error) {
 	var (
 		segmentPath      string
@@ -223,7 +222,7 @@ func (c *Connection) LargeObjectDelete(container string, objectName string) erro
 		for i, obj := range objects {
 			filenames[i] = obj[0] + "/" + obj[1]
 		}
-		_, err = c.doBulkDelete(filenames)
+		_, err = c.doBulkDelete(filenames, nil)
 		// Don't fail on ObjectNotFound because eventual consistency
 		// makes this situation normal.
 		if err != nil && err != Forbidden && err != ObjectNotFound {
@@ -394,7 +393,7 @@ func (file *largeObjectCreateFile) writeSegment(buf []byte, writeSegmentIdx int,
 		readers = append(readers, tailSegmentReader)
 	}
 	segmentReader := io.MultiReader(readers...)
-	headers, err := file.conn.ObjectPut(file.segmentContainer, segmentName, segmentReader, true, "", file.contentType, file.headers)
+	headers, err := file.conn.ObjectPut(file.segmentContainer, segmentName, segmentReader, true, "", file.contentType, nil)
 	if err != nil {
 		return nil, 0, err
 	}

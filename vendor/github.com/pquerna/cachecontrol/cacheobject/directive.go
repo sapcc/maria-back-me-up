@@ -32,7 +32,7 @@ var (
 	ErrQuoteMismatch         = errors.New("Missing closing quote")
 	ErrMaxAgeDeltaSeconds    = errors.New("Failed to parse delta-seconds in `max-age`")
 	ErrSMaxAgeDeltaSeconds   = errors.New("Failed to parse delta-seconds in `s-maxage`")
-	ErrMaxStaleDeltaSeconds  = errors.New("Failed to parse delta-seconds in `min-fresh`")
+	ErrMaxStaleDeltaSeconds  = errors.New("Failed to parse delta-seconds in `max-stale`")
 	ErrMinFreshDeltaSeconds  = errors.New("Failed to parse delta-seconds in `min-fresh`")
 	ErrNoCacheNoArgs         = errors.New("Unexpected argument to `no-cache`")
 	ErrNoStoreNoArgs         = errors.New("Unexpected argument to `no-store`")
@@ -132,7 +132,6 @@ func parse(value string, cd cacheDirective) error {
 // time in seconds: http://tools.ietf.org/html/rfc7234#section-1.2.1
 //
 // When set to -1, this means unset.
-//
 type DeltaSeconds int32
 
 // Parser for delta-seconds, a uint31, more or less:
@@ -164,10 +163,9 @@ type cacheDirective interface {
 	addPair(s string, v string) error
 }
 
-// LOW LEVEL API: Repersentation of possible request directives in a `Cache-Control` header: http://tools.ietf.org/html/rfc7234#section-5.2.1
+// LOW LEVEL API: Representation of possible request directives in a `Cache-Control` header: http://tools.ietf.org/html/rfc7234#section-5.2.1
 //
 // Note: Many fields will be `nil` in practice.
-//
 type RequestCacheDirectives struct {
 
 	// max-age(delta seconds): http://tools.ietf.org/html/rfc7234#section-5.2.1.1
@@ -188,7 +186,8 @@ type RequestCacheDirectives struct {
 	// by no more than the specified number of seconds.  If no value is
 	// assigned to max-stale, then the client is willing to accept a stale
 	// response of any age.
-	MaxStale DeltaSeconds
+	MaxStale    DeltaSeconds
+	MaxStaleSet bool
 
 	// min-fresh(delta seconds): http://tools.ietf.org/html/rfc7234#section-5.2.1.3
 	//
@@ -226,6 +225,9 @@ type RequestCacheDirectives struct {
 	// wishes to obtain a stored response.
 	OnlyIfCached bool
 
+	// stale-if-error(delta seconds): https://datatracker.ietf.org/doc/html/rfc5861#section-4
+	StaleIfError DeltaSeconds
+
 	// Extensions: http://tools.ietf.org/html/rfc7234#section-5.2.3
 	//
 	// The Cache-Control header field can be extended through the use of one
@@ -240,10 +242,10 @@ func (cd *RequestCacheDirectives) addToken(token string) error {
 	switch token {
 	case "max-age":
 		err = ErrMaxAgeDeltaSeconds
-	case "max-stale":
-		err = ErrMaxStaleDeltaSeconds
 	case "min-fresh":
 		err = ErrMinFreshDeltaSeconds
+	case "max-stale":
+		cd.MaxStaleSet = true
 	case "no-cache":
 		cd.NoCache = true
 	case "no-store":
@@ -252,6 +254,8 @@ func (cd *RequestCacheDirectives) addToken(token string) error {
 		cd.NoTransform = true
 	case "only-if-cached":
 		cd.OnlyIfCached = true
+	case "stale-if-error":
+		err = ErrMaxAgeDeltaSeconds
 	default:
 		cd.Extensions = append(cd.Extensions, token)
 	}
@@ -285,6 +289,11 @@ func (cd *RequestCacheDirectives) addPair(token string, v string) error {
 		err = ErrNoTransformNoArgs
 	case "only-if-cached":
 		err = ErrOnlyIfCachedNoArgs
+	case "stale-if-error":
+		cd.StaleIfError, err = parseDeltaSeconds(v)
+		if err != nil {
+			err = ErrStaleIfErrorDeltaSeconds
+		}
 	default:
 		// TODO(pquerna): this sucks, making user re-parse
 		cd.Extensions = append(cd.Extensions, token+"="+v)
@@ -311,7 +320,6 @@ func ParseRequestCacheControl(value string) (*RequestCacheDirectives, error) {
 // LOW LEVEL API: Repersentation of possible response directives in a `Cache-Control` header: http://tools.ietf.org/html/rfc7234#section-5.2.2
 //
 // Note: Many fields will be `nil` in practice.
-//
 type ResponseCacheDirectives struct {
 
 	// must-revalidate(bool): http://tools.ietf.org/html/rfc7234#section-5.2.2.1
