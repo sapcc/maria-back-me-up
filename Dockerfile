@@ -4,11 +4,11 @@ RUN apk add --no-cache make git
 COPY . /src
 RUN make -C /src install PREFIX=/pkg GO_BUILDFLAGS='-mod vendor'
 
-FROM keppel.eu-de-1.cloud.sap/ccloud-dockerhub-mirror/library/alpine:3.15.9
+FROM keppel.eu-de-1.cloud.sap/ccloud-dockerhub-mirror/library/alpine:3.22
 LABEL maintainer="Stefan Hipfel <stefan.hipfel@sap.com>"
 LABEL source_repository="https://github.com/sapcc/maria-back-me-up"
 
-ENV PACKAGES="mysql-client mariadb curl python2" \
+ENV PACKAGES="mysql-client mariadb curl" \
     LIB_PACKAGES="glib-dev mariadb-dev zlib-dev pcre-dev libressl-dev" \
     BUILD_PACKAGES="cmake build-base git" \
     BUILD_PATH="/opt/mydumper-src/"
@@ -31,13 +31,8 @@ RUN apk --no-cache add \
     (rm "/tmp/"* 2>/dev/null || true) && \
     (rm -rf /var/cache/apk/* 2>/dev/null || true)
 
-ADD mysql-utilities-1.6.5.tar.gz /tmp/
-WORKDIR /tmp/mysql-utilities-1.6.5/
-RUN python2 setup.py install
-RUN rm -rf /tmp/mysql-utilities-1.6.5/
-
 WORKDIR /
-RUN curl -Lo /bin/dumb-init https://github.com/Yelp/dumb-init/releases/download/v1.2.2/dumb-init_1.2.2_amd64 \
+RUN curl -Lo /bin/dumb-init https://github.com/Yelp/dumb-init/releases/download/v1.2.5/dumb-init_1.2.5_amd64 \
     && chmod +x /bin/dumb-init \
     && dumb-init -V
 

@@ -740,25 +740,121 @@ func getMysqlDumpBinlog(s string) (mp mysql.Position, err error) {
 	return
 }
 
-// GetDatabaseDiff returns the database diff between two mariadbs
-func (m *MariaDB) GetDatabaseDiff(c1, c2 config.DatabaseConfig) (out []byte, err error) {
-	// mysqldiff --server1=root:pw@localhost:3306 --server2=root:pw@db_backup:3306 test:test
-	s1 := fmt.Sprintf("%s:%s@%s:%s", c1.User, c1.Password, c1.Host, strconv.Itoa(c1.Port))
-	s2 := fmt.Sprintf("%s:%s@%s:%s", c2.User, c2.Password, c2.Host, strconv.Itoa(c2.Port))
-	dbs := make([]string, 0)
-	for _, db := range c1.Databases {
-		dbs = append(dbs, fmt.Sprintf("%s:%s", db, db))
+func (m *MariaDB) GetDatabaseDiff(c1, c2 config.DatabaseConfig) ([]byte, error) {
+	conn1, err := client.Connect(fmt.Sprintf("%s:%s", c1.Host, strconv.Itoa(c1.Port)), c1.User, c1.Password, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to database 1: %w", err)
 	}
-	e := exec.Command("mysqldiff",
-		"--skip-table-options",
-		"--server1="+s1,
-		"--server2="+s2,
-		"--difftype=differ",
-	)
-	e.Args = append(e.Args, dbs...)
+	defer conn1.Close()
 
-	out, err = e.CombinedOutput()
-	return
+	conn2, err := client.Connect(fmt.Sprintf("%s:%s", c2.Host, strconv.Itoa(c2.Port)), c2.User, c2.Password, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to database 2: %w", err)
+	}
+	defer conn2.Close()
+
+	for _, dbName := range c1.Databases {
+		if diff, err := m.compareDatabase(conn1, conn2, dbName); err != nil {
+			return nil, fmt.Errorf("error comparing database '%s': %w", dbName, err)
+		} else if diff != "" {
+			return []byte(diff), nil
+		}
+	}
+
+	return nil, nil
+}
+
+func (m *MariaDB) compareDatabase(conn1, conn2 *client.Conn, dbName string) (string, error) {
+	// 1. Compare schema and table existence in one go.
+	schemaQuery := `
+		SELECT table_name,
+		       GROUP_CONCAT(CONCAT(column_name, ':', column_type) ORDER BY ordinal_position) as signature
+		FROM information_schema.columns
+		WHERE table_schema = ?
+		GROUP BY table_name
+		ORDER BY table_name`
+
+	schemas1, err := getSchemas(conn1, schemaQuery, dbName)
+	if err != nil {
+		return "", fmt.Errorf("querying schema from db1: %w", err)
+	}
+	schemas2, err := getSchemas(conn2, schemaQuery, dbName)
+	if err != nil {
+		return "", fmt.Errorf("querying schema from db2: %w", err)
+	}
+
+	if diff := compareMaps(schemas1, schemas2, "Table", "schema"); diff != "" {
+		return diff, nil
+	}
+
+	// 2. Compare data using checksums for all tables at once.
+	var tables []string
+	for table := range schemas1 {
+		tables = append(tables, fmt.Sprintf("`%s`", table))
+	}
+	if len(tables) == 0 {
+		return "", nil
+	}
+
+	checksumQuery := fmt.Sprintf("CHECKSUM TABLE %s", strings.Join(tables, ", "))
+	checksums1, err := getChecksums(conn1, checksumQuery)
+	if err != nil {
+		return "", fmt.Errorf("querying checksums from db1: %w", err)
+	}
+	checksums2, err := getChecksums(conn2, checksumQuery)
+	if err != nil {
+		return "", fmt.Errorf("querying checksums from db2: %w", err)
+	}
+
+	if diff := compareMaps(checksums1, checksums2, "Table", "checksum"); diff != "" {
+		return diff, nil
+	}
+
+	return "", nil
+}
+
+func getSchemas(conn *client.Conn, query, dbName string) (map[string]string, error) {
+	rs, err := conn.Execute(query, dbName)
+	if err != nil {
+		return nil, err
+	}
+	schemas := make(map[string]string, rs.RowNumber())
+	for i := 0; i < rs.RowNumber(); i++ {
+		table, _ := rs.GetString(i, 0)
+		sig, _ := rs.GetString(i, 1)
+		schemas[table] = sig
+	}
+	return schemas, nil
+}
+
+func getChecksums(conn *client.Conn, query string) (map[string]string, error) {
+	rs, err := conn.Execute(query)
+	if err != nil {
+		return nil, err
+	}
+	checksums := make(map[string]string, rs.RowNumber())
+	for i := 0; i < rs.RowNumber(); i++ {
+		table, _ := rs.GetString(i, 0)
+		checksum, _ := rs.GetString(i, 1)
+		checksums[table] = checksum
+	}
+	return checksums, nil
+}
+
+func compareMaps(m1, m2 map[string]string, itemType, diffType string) string {
+	for key, val1 := range m1 {
+		if val2, exists := m2[key]; !exists {
+			return fmt.Sprintf("%s '%s' exists in first db but not in second", itemType, key)
+		} else if val1 != val2 {
+			return fmt.Sprintf("%s '%s' has different %s", itemType, key, diffType)
+		}
+	}
+	for key := range m2 {
+		if _, exists := m1[key]; !exists {
+			return fmt.Sprintf("%s '%s' exists in second db but not in first", itemType, key)
+		}
+	}
+	return ""
 }
 
 //TODO: additional backup - verification
