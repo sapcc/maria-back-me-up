@@ -5,7 +5,7 @@ go 1.24.0
 toolchain go1.24.4
 
 require (
-	github.com/DATA-DOG/go-sqlmock v1.5.0
+	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/aws/aws-sdk-go v1.55.7
 	github.com/coreos/go-oidc v2.3.0+incompatible
 	github.com/go-mysql-org/go-mysql v1.12.0
