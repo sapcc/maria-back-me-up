@@ -1,7 +1,7 @@
 version: '3.5'
 services:
   db_prod:
-    image: mariadb:10.4.12
+    image: mariadb:11.8.2
     restart: on-failure
     environment:
       MYSQL_ROOT_PASSWORD: pw
@@ -12,7 +12,7 @@ services:
       - ./db_prod:/var/lib/mysql
 
   db_backup:
-    image: mariadb:10.4.12
+    image: mariadb:11.8.2
     restart: on-failure
     environment:
       MYSQL_ROOT_PASSWORD: pw
