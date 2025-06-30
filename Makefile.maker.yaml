@@ -19,7 +19,13 @@ dockerfile:
   enabled: false
 
 golang:
+  enableVendoring: true
   setGoModVersion: true
 
 golangciLint:
   createConfig: false
+
+renovate:
+  enabled: true
+  assignees:
+    - stefanhipfel

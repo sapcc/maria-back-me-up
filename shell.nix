@@ -1,4 +1,4 @@
-# Copyright 2024 SAP SE
+# SPDX-FileCopyrightText: 2024 SAP SE or an SAP affiliate company
 # SPDX-License-Identifier: Apache-2.0
 
 { pkgs ? import <nixpkgs> { } }:
@@ -9,9 +9,8 @@ mkShell {
   nativeBuildInputs = [
     addlicense
     go-licence-detector
-    go_1_23
+    go_1_24
     gotools # goimports
-
     # keep this line if you use bash
     bashInteractive
   ];
