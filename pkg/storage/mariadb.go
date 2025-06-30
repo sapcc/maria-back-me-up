@@ -201,7 +201,8 @@ func (m *MariaDBStream) WriteFolder(p string) (err error) {
 			return fmt.Errorf("could not read dump: %s", err.Error())
 		}
 		cmd := exec.Command(
-			"mysql",
+			"mariadb",
+			"--skip-ssl",
 			"--port="+strconv.Itoa(m.cfg.Port),
 			"--host="+m.cfg.Host,
 			"--user="+m.cfg.User,
