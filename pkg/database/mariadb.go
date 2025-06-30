@@ -492,7 +492,8 @@ func (m *MariaDB) restoreDump(backupPath string) (err error) {
 		}
 
 		cmd := exec.Command(
-			"mysql",
+			"mariadb",
+			"--skip-ssl",
 			"--port="+strconv.Itoa(m.cfg.Database.Port),
 			"--host="+m.cfg.Database.Host,
 			"--user="+m.cfg.Database.User,
@@ -548,7 +549,8 @@ func (m *MariaDB) restoreIncBackup(p string) (err error) {
 		"mysqlbinlog", binlogFiles...,
 	)
 	mysqlPipe := exec.Command(
-		"mysql",
+		"mariadb",
+		"--skip-ssl",
 		"--binary-mode",
 		"-u"+m.cfg.Database.User,
 		"-p"+m.cfg.Database.Password,

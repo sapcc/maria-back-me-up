@@ -47,7 +47,7 @@ type StreamStorageOptions struct {
 	ParseSQL  bool
 }
 
-//SetupOptions contains optional arguments for test.Setup().
+// SetupOptions contains optional arguments for test.Setup().
 type SetupOptions struct {
 	DBType           string
 	WithDiskStorage  bool
@@ -159,7 +159,8 @@ func prepareDB(port int, host, user, password, path string) error {
 	}
 
 	cmd := exec.Command(
-		"mysql",
+		"mariadb",
+		"--skip-ssl",
 		"--port="+strconv.Itoa(port),
 		"--host="+host,
 		"--user="+user,
