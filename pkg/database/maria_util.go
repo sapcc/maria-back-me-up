@@ -37,8 +37,9 @@ func mariaHealthCheck(c config.DatabaseConfig) (status Status, err error) {
 	dbs := strings.Join(c.Databases, " -B ")
 	args := strings.Split(fmt.Sprintf("-c -B -q %s -u%s -p%s -h%s -P%s", dbs, c.User, c.Password, c.Host, strconv.Itoa(c.Port)), " ")
 	args = append(args, "--skip-write-binlog")
+	args = append(args, "--skip-ssl")
 	cmd := exec.Command(
-		"mysqlcheck",
+		"mariadb-check",
 		args...,
 	)
 
@@ -52,7 +53,7 @@ func mariaHealthCheck(c config.DatabaseConfig) (status Status, err error) {
 			return status, &dberror.DatabaseConnectionError{}
 		}
 
-		return status, fmt.Errorf("mysqlcheck failed with %s", string(out))
+		return status, fmt.Errorf("mariadb-check failed with %s", string(out))
 	}
 	outa := strings.Fields(string(out))
 	if len(outa) == 0 {

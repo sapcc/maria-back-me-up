@@ -236,6 +236,7 @@ func (m *MariaDBStream) WriteFolder(p string) (err error) {
 	}
 
 	args := []string{
+		"--skip-ssl",
 		"--port=" + strconv.Itoa(m.cfg.Port),
 		"--host=" + m.cfg.Host,
 		"--user=" + m.cfg.User,
@@ -245,14 +246,14 @@ func (m *MariaDBStream) WriteFolder(p string) (err error) {
 	args = append(args, m.cfg.Databases...)
 
 	cmd := exec.Command(
-		"mysqlcheck",
+		"mariadb-check",
 		args...,
 	)
 	b, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("mysql error: %s", string(b))
 	}
-	log.Debug("mysqlcheck finished analyzing tables")
+	log.Debug("mariadb-check finished analyzing tables")
 	return
 }
 
