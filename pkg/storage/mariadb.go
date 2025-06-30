@@ -978,12 +978,13 @@ func isDBUp(user, password, host string, port int) (err error) {
 
 func pingMariaDB(user, password, host string, port int) (err error) {
 	var out []byte
-	if out, err = exec.Command("mysqladmin",
+	if out, err = exec.Command("mariadb-admin",
 		"status",
 		"-u"+user,
 		"-p"+password,
 		"-h"+host,
 		"-P"+strconv.Itoa(port),
+		"--skip-ssl",
 	).CombinedOutput(); err != nil {
 		var msg string
 		if out != nil {
@@ -991,7 +992,7 @@ func pingMariaDB(user, password, host string, port int) (err error) {
 		} else {
 			msg = err.Error() // Error message if command cannot be executed
 		}
-		return fmt.Errorf("mysqladmin status error: %s", msg)
+		return fmt.Errorf("mariadb-admin status error: %s", msg)
 	}
 	return
 }

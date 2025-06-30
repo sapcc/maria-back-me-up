@@ -439,12 +439,13 @@ func (m *MariaDB) flushLogs(binlogFile string) {
 		// dont stop because of toggling slow_query_log
 	}
 	flushLogs := exec.Command(
-		"mysqladmin",
+		"mariadb-admin",
 		"flush-logs",
 		"--port="+strconv.Itoa(m.cfg.Database.Port),
 		"--host="+m.cfg.Database.Host,
 		"--user="+m.cfg.Database.User,
 		"--password="+m.cfg.Database.Password,
+		"--skip-ssl",
 	)
 	_, err := flushLogs.CombinedOutput()
 	if err != nil {
@@ -633,12 +634,13 @@ func (m *MariaDB) pingMariaDB(withIP bool) (err error) {
 		}
 		m.cfg.Database.Host = ip
 	}
-	if out, err = exec.Command("mysqladmin",
+	if out, err = exec.Command("mariadb-admin",
 		"status",
 		"-u"+m.cfg.Database.User,
 		"-p"+m.cfg.Database.Password,
 		"-h"+m.cfg.Database.Host,
 		"-P"+strconv.Itoa(m.cfg.Database.Port),
+		"--skip-ssl",
 	).CombinedOutput(); err != nil {
 		var msg string
 		if out != nil {
@@ -646,7 +648,7 @@ func (m *MariaDB) pingMariaDB(withIP bool) (err error) {
 		} else {
 			msg = err.Error() // Error message if command cannot be executed
 		}
-		return fmt.Errorf("mysqladmin status error: %s", msg)
+		return fmt.Errorf("mariadb-admin status error: %s", msg)
 	}
 	return
 }
@@ -654,27 +656,29 @@ func (m *MariaDB) pingMariaDB(withIP bool) (err error) {
 func (m *MariaDB) dropMariaDBDatabases() {
 	for _, d := range m.cfg.Database.Databases {
 		log.Debug("dropping database: ", d)
-		if err := exec.Command("mysqladmin",
+		if err := exec.Command("mariadb-admin",
 			"-u"+m.cfg.Database.User,
 			"-p"+m.cfg.Database.Password,
 			"-h"+m.cfg.Database.Host,
 			"-P"+strconv.Itoa(m.cfg.Database.Port),
 			"drop", d,
 			"--force",
+			"--skip-ssl",
 		).Run(); err != nil {
-			log.Error(fmt.Errorf("mysqladmin drop table error: %s", err.Error()))
+			log.Error(fmt.Errorf("mariadb-admin drop table error: %s", err.Error()))
 		}
 	}
 
 }
 
 func (m *MariaDB) restartMariaDB() (err error) {
-	cmd := exec.Command("mysqladmin",
+	cmd := exec.Command("mariadb-admin",
 		"shutdown",
 		"-u"+m.cfg.Database.User,
 		"-p"+m.cfg.Database.Password,
 		"-h"+m.cfg.Database.Host,
 		"-P"+strconv.Itoa(m.cfg.Database.Port),
+		"--skip-ssl",
 	)
 	cf := wait.ConditionFunc(func() (bool, error) {
 		err = cmd.Run()
