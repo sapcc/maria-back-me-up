@@ -259,7 +259,7 @@ func (m *MariaDB) createMyDump(toPath string) (bp LogPosition, err error) {
 
 func (m *MariaDB) createMysqlDump(toPath string) (bp LogPosition, err error) {
 	var myBp mysql.Position
-	log.Debug("running mysqldump...")
+	log.Debug("running mariadb-dump...")
 	err = os.MkdirAll(toPath, os.ModePerm)
 	if err != nil {
 		return
@@ -273,11 +273,12 @@ func (m *MariaDB) createMysqlDump(toPath string) (bp LogPosition, err error) {
 	}()
 
 	cmd := exec.Command(
-		"mysqldump",
+		"mariadb-dump",
 		"--port="+strconv.Itoa(m.cfg.Database.Port),
 		"--host="+m.cfg.Database.Host,
 		"--user="+m.cfg.Database.User,
 		"--password="+m.cfg.Database.Password,
+		"--skip-ssl",
 		"--single-transaction",
 		"--quick",
 		"--all-databases",
