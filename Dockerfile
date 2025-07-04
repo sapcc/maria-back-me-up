@@ -12,7 +12,7 @@ ARG MYDUMPER_CMAKE_ARGS="-DWITH_ZSTD=ON"
 ARG MYDUMPER_VERSION="v0.19.1-3"
 
 # libressl-dev has problems with openssl-dev
-ENV PACKAGES="openssh-client ca-certificates bash curl gzip openssl mysql-client " \
+ENV PACKAGES="openssh-client ca-certificates bash curl gzip openssl mariadb-client mariadb" \
     LIB_PACKAGES="glib-dev mariadb-dev zlib-dev pcre-dev gcompat" \
     BUILD_PACKAGES="cmake build-base git" \
     MYDUMPER_BUILD_PATH="/opt/mydumper-src/"
