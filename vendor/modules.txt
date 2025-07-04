@@ -2,8 +2,8 @@
 ## explicit; go 1.20
 filippo.io/edwards25519
 filippo.io/edwards25519/field
-# github.com/DATA-DOG/go-sqlmock v1.5.0
-## explicit
+# github.com/DATA-DOG/go-sqlmock v1.5.2
+## explicit; go 1.15
 github.com/DATA-DOG/go-sqlmock
 # github.com/Masterminds/semver v1.5.0
 ## explicit
@@ -705,4 +705,4 @@ sigs.k8s.io/structured-merge-diff/v4/value
 ## explicit; go 1.12
 sigs.k8s.io/yaml
 sigs.k8s.io/yaml/goyaml.v2
-# github.com/docker/docker => github.com/docker/engine v0.0.0-20190717161051-705d9623b7c1
+# github.com/docker/docker => github.com/docker/engine v0.12.0
