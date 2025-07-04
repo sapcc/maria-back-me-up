@@ -544,9 +544,9 @@ func (m *MariaDB) restoreIncBackup(p string) (err error) {
 	if len(binlogFiles) == 0 {
 		return
 	}
-	log.Debug("start mysqlbinlog", binlogFiles)
+	log.Debug("start mariadb-binlog", binlogFiles)
 	binlogCMD := exec.Command(
-		"mysqlbinlog", binlogFiles...,
+		"mariadb-binlog", binlogFiles...,
 	)
 	mysqlPipe := exec.Command(
 		"mariadb",
@@ -565,7 +565,7 @@ func (m *MariaDB) restoreIncBackup(p string) (err error) {
 		return
 	}
 	if err = binlogCMD.Run(); err != nil {
-		return fmt.Errorf("mysqlbinlog error: %s", err.Error())
+		return fmt.Errorf("mariadb-binlog error: %s", err.Error())
 	}
 	return mysqlPipe.Wait()
 }
