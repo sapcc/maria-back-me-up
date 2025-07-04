@@ -28,7 +28,7 @@ import (
 
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
 	"github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 // Status struct holds the current info of a verifiction process
