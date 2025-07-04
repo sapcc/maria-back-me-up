@@ -39,7 +39,7 @@ import (
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 var (
