@@ -545,9 +545,8 @@ func (m *MariaDB) restoreIncBackup(p string) (err error) {
 		return
 	}
 	log.Debug("start mariadb-binlog", binlogFiles)
-	binlogCMD := exec.Command(
-		"mariadb-binlog", binlogFiles...,
-	)
+	binlogArgs := append([]string{"--skip-gtid-strict-mode"}, binlogFiles...)
+	binlogCMD := exec.Command("mariadb-binlog", binlogArgs...)
 	mysqlPipe := exec.Command(
 		"mariadb",
 		"--skip-ssl",
