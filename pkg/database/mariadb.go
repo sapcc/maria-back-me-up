@@ -232,6 +232,7 @@ func (m *MariaDB) HealthCheck() (status Status, err error) {
 
 func (m *MariaDB) createMyDump(toPath string) (bp LogPosition, err error) {
 	log.Debug("running mydumper...")
+	// #nosec G204
 	mydumperCmd := exec.Command(
 		"mydumper",
 		"--port="+strconv.Itoa(m.cfg.Database.Port),
@@ -276,6 +277,7 @@ func (m *MariaDB) createMysqlDump(toPath string) (bp LogPosition, err error) {
 		err = errors.Join(err, outfile.Close())
 	}()
 
+	// #nosec G204
 	cmd := exec.Command(
 		"mariadb-dump",
 		"--port="+strconv.Itoa(m.cfg.Database.Port),
@@ -443,6 +445,7 @@ func (m *MariaDB) flushLogs(binlogFile string) {
 		log.Error(fmt.Errorf("error disabling slow_query_log: %s", err.Error()))
 		// dont stop because of toggling slow_query_log
 	}
+	// #nosec G204
 	flushLogs := exec.Command(
 		"mariadb-admin",
 		"flush-logs",
@@ -480,6 +483,7 @@ func (m *MariaDB) restoreDump(backupPath string) (err error) {
 		return
 	}
 	log.Debug("tar path: ", path.Join(backupPath, "dump"))
+	// #nosec G204
 	if err = exec.Command(
 		"tar",
 		"-xvf", path.Join(backupPath, "dump.tar"),
@@ -495,6 +499,7 @@ func (m *MariaDB) restoreDump(backupPath string) (err error) {
 			return fmt.Errorf("could not open dump file: %s", err.Error())
 		}
 
+		// #nosec G204
 		cmd := exec.Command(
 			"mariadb",
 			"--skip-ssl",
@@ -510,6 +515,7 @@ func (m *MariaDB) restoreDump(backupPath string) (err error) {
 		}
 		log.Debug(fmt.Sprintf("%s restore finished", config.Mysqldump.String()))
 	case config.MyDumper:
+		// #nosec G204
 		b, err := exec.Command(
 			"myloader",
 			"--port="+strconv.Itoa(m.cfg.Database.Port),
@@ -551,6 +557,7 @@ func (m *MariaDB) restoreIncBackup(p string) (err error) {
 	log.Debug("start mariadb-binlog", binlogFiles)
 	binlogArgs := append([]string{"--skip-gtid-strict-mode"}, binlogFiles...)
 	binlogCMD := exec.Command("mariadb-binlog", binlogArgs...)
+	// #nosec G204
 	mysqlPipe := exec.Command(
 		"mariadb",
 		"--skip-ssl",
@@ -646,6 +653,7 @@ func (m *MariaDB) pingMariaDB(withIP bool) (err error) {
 		}
 		m.cfg.Database.Host = ip
 	}
+	// #nosec G204
 	if out, err = exec.Command("mariadb-admin",
 		"status",
 		"-u"+m.cfg.Database.User,
@@ -668,6 +676,7 @@ func (m *MariaDB) pingMariaDB(withIP bool) (err error) {
 func (m *MariaDB) dropMariaDBDatabases() {
 	for _, d := range m.cfg.Database.Databases {
 		log.Debug("dropping database: ", d)
+		// #nosec G204
 		if err := exec.Command("mariadb-admin",
 			"-u"+m.cfg.Database.User,
 			"-p"+m.cfg.Database.Password,
@@ -684,6 +693,7 @@ func (m *MariaDB) dropMariaDBDatabases() {
 }
 
 func (m *MariaDB) restartMariaDB() (err error) {
+	// #nosec G204
 	cmd := exec.Command("mariadb-admin",
 		"shutdown",
 		"-u"+m.cfg.Database.User,
