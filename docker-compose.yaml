@@ -21,3 +21,25 @@ services:
       - "3009:3306"
     volumes:
       - ./db_backup:/var/lib/mysql
+
+  db_test:
+    image: mariadb:10.11.13
+    restart: on-failure
+    environment:
+      MYSQL_ROOT_PASSWORD: test
+    command: --log-bin --binlog-format=ROW --server-id=3
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./db_test:/var/lib/mysql
+
+  db_streaming:
+    image: mariadb:10.11.13
+    restart: on-failure
+    environment:
+      MYSQL_ROOT_PASSWORD: streaming
+    command: --log-bin --binlog-format=ROW --server-id=3
+    ports:
+      - "3307:3306"
+    volumes:
+      - ./db_streaming:/var/lib/mysql
