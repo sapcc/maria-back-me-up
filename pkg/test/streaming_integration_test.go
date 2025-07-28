@@ -60,7 +60,11 @@ func TestFilterBackup(t *testing.T) {
 		t.Errorf("could not connect to database: %s", err.Error())
 		t.FailNow()
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			t.Errorf("failed to close connection: %v", err)
+		}
+	}()
 
 	_, err = conn.Execute("INSERT INTO service.tasks (title, start_date, due_date, description) VALUES('task5', '2021-05-02', '2022-05-02', 'task info 5');")
 	if err != nil {
@@ -95,5 +99,9 @@ func assertDatabaseNotExists(t *testing.T, user, password, host, db string, port
 		return
 	}
 	t.Errorf("expected an error")
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			t.Errorf("failed to close connection: %v", err)
+		}
+	}()
 }

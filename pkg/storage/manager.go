@@ -154,7 +154,9 @@ func (m *Manager) WriteStreamAll(name, mimeType string, body <-chan StreamEvent,
 			if !ok {
 				// Close all Reader, Writer and channels
 				if closer != nil {
-					closer.Close()
+					if err := closer.Close(); err != nil {
+						logger.Warnf("failed to close stream: %v", err)
+					}
 				}
 				for _, c := range channels {
 					close(c)

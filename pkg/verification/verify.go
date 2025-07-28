@@ -305,7 +305,7 @@ func sortBackupsByTime(backups []storage.Backup) (sorted []storage.Backup) {
 func compareChecksums(cs map[string]int64, with map[string]int64) error {
 	for k, v := range cs {
 		if with[k] != v {
-			return fmt.Errorf("Backup verify table checksum mismatch for table %s", k)
+			return fmt.Errorf("backup verify table checksum mismatch for table %s", k)
 		}
 	}
 	return nil

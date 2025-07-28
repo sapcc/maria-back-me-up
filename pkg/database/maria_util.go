@@ -18,6 +18,7 @@ package database
 
 import (
 	"fmt"
+	"log"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -78,7 +79,11 @@ func purgeBinlogsBefore(c config.DatabaseConfig, minutes int) (err error) {
 		return
 	}
 
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("failed to close connection: %v", err)
+		}
+	}()
 
 	if err = conn.Ping(); err != nil {
 		return
@@ -107,19 +112,23 @@ func purgeBinlogsBefore(c config.DatabaseConfig, minutes int) (err error) {
 	return
 }
 
-func purgeBinlogsTo(c config.DatabaseConfig, log string) (err error) {
-	conn, err := client.Connect(fmt.Sprintf("%s:%s", c.Host, strconv.Itoa(c.Port)), c.User, c.Password, "")
-	if err != nil {
+func purgeBinlogsTo(c config.DatabaseConfig, logName string) (err error) {
+	conn, cerr := client.Connect(fmt.Sprintf("%s:%s", c.Host, strconv.Itoa(c.Port)), c.User, c.Password, "")
+	if cerr != nil {
 		return
 	}
 
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("failed to close connection: %v", err)
+		}
+	}()
 
 	if err = conn.Ping(); err != nil {
 		return
 	}
 
-	_, err = conn.Execute(fmt.Sprintf("PURGE BINARY LOGS TO '%s'", log))
+	_, err = conn.Execute(fmt.Sprintf("PURGE BINARY LOGS TO '%s'", logName))
 	if err != nil {
 		return
 	}
@@ -132,7 +141,11 @@ func resetSlave(c config.DatabaseConfig) (err error) {
 		return fmt.Errorf("connection for slave reset failed: %s", err.Error())
 	}
 
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("failed to close connection: %v", err)
+		}
+	}()
 
 	if err = conn.Ping(); err != nil {
 		return

@@ -101,7 +101,7 @@ func (s *Swift) GetStatusErrorByKey(backupKey string) string {
 // GetTotalIncBackupsFromDump implements interface
 func (s *Swift) GetTotalIncBackupsFromDump(key string) (t int, err error) {
 	t = 0
-	objs, err := s.connection.ObjectsAll(s.cfg.ContainerName, &swift.ObjectsOpts{Prefix: strings.Replace(key, "dump.tar", "", -1)})
+	objs, err := s.connection.ObjectsAll(s.cfg.ContainerName, &swift.ObjectsOpts{Prefix: strings.ReplaceAll(key, "dump.tar", "")})
 	if err != nil {
 		return t, s.handleError("", err)
 	}
@@ -161,17 +161,14 @@ func (s *Swift) WriteStream(name, mimeType string, body io.Reader, tags map[stri
 			return s.handleError(name, err)
 		}
 		f, err := s.connection.ObjectCreate(s.cfg.ContainerName, backupKey, false, "", "", headers)
-		defer func() {
-			f.Close()
-			if err == nil {
-				// swift will not throw ObjectCreate error when container does not exists. check headers instead
-				// only if no other error occurred before
-				_, err = f.Headers()
-			}
-		}()
 		if err != nil {
 			return s.handleError(name, err)
 		}
+		defer func() {
+			if err := f.Close(); err != nil {
+				logrus.Warnf("failed to close swift file: %v", err)
+			}
+		}()
 		_, err = f.Write(buf.Bytes())
 		if err != nil {
 			return s.handleError(name, err)
@@ -193,7 +190,11 @@ func (s *Swift) WriteStream(name, mimeType string, body io.Reader, tags map[stri
 		if err != nil {
 			return s.handleError(name, err)
 		}
-		defer f.Close()
+		defer func() {
+			if err := f.Close(); err != nil {
+				logrus.Warnf("failed to close swift file: %v", err)
+			}
+		}()
 		_, err = io.Copy(f, body)
 		if err != nil {
 			return s.handleError(name, err)
@@ -250,7 +251,7 @@ func (s *Swift) GetIncBackupsFromDump(key string) (bl []Backup, err error) {
 		IncList: make([]IncBackup, 0),
 		Key:     key,
 	}
-	objs, err := s.connection.ObjectsAll(s.cfg.ContainerName, &swift.ObjectsOpts{Prefix: strings.Replace(key, "dump.tar", "", -1)})
+	objs, err := s.connection.ObjectsAll(s.cfg.ContainerName, &swift.ObjectsOpts{Prefix: strings.ReplaceAll(key, "dump.tar", "")})
 	if err != nil {
 		return bl, s.handleError("", err)
 	}
@@ -326,7 +327,7 @@ func (s *Swift) DownloadBackupWithLogPosition(fullBackupPath string, binlog stri
 
 // DownloadBackup implements interface
 func (s *Swift) DownloadBackup(fullBackup Backup) (path string, err error) {
-	objs, err := s.connection.ObjectsAll(s.cfg.ContainerName, &swift.ObjectsOpts{Prefix: strings.Replace(fullBackup.Key, "dump.tar", "", -1)})
+	objs, err := s.connection.ObjectsAll(s.cfg.ContainerName, &swift.ObjectsOpts{Prefix: strings.ReplaceAll(fullBackup.Key, "dump.tar", "")})
 	if err != nil {
 		return path, s.handleError("", err)
 	}
@@ -352,7 +353,11 @@ func (s *Swift) downloadFile(path string, obj *swift.Object) (err error) {
 		return s.handleError("", err)
 	}
 
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			logrus.Warnf("failed to close file: %v", err)
+		}
+	}()
 	// Check if Static Large Object
 	if obj.ObjectType == 1 {
 		_, objs, err := s.connection.LargeObjectGetSegments(s.cfg.ContainerName, obj.Name)

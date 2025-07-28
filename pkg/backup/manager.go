@@ -204,7 +204,11 @@ func (m *Manager) scheduleBackup(ctx context.Context) {
 
 func (m *Manager) createFullBackup(bpath string) (bp database.LogPosition, err error) {
 	logger.Info("creating full backup dump")
-	defer os.RemoveAll(bpath)
+	defer func() {
+		if err := os.RemoveAll(bpath); err != nil {
+			logger.Warnf("failed to remove backup path: %v", err)
+		}
+	}()
 	_, err = m.Db.HealthCheck()
 	if err != nil {
 		return bp, fmt.Errorf("cannot start backup: %w", err)

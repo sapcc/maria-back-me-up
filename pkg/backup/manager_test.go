@@ -52,7 +52,7 @@ func TestManagerCron(t *testing.T) {
 	if m.cronBackup != nil {
 		t.Errorf("expected cronbackup to be nil but got: %+v.", m.cronBackup)
 	}
-	cleanup()
+	cleanup(t)
 }
 
 func TestManagerBackup(t *testing.T) {
@@ -82,7 +82,7 @@ func TestManagerBackup(t *testing.T) {
 	if m.updateSts.IncBackup["s2"] != 1 {
 		t.Errorf("expected incBackup status to be 1, but got: %d.", m.updateSts.IncBackup["s2"])
 	}
-	cleanup()
+	cleanup(t)
 }
 
 func TestManagerFullbackErrorHandling(t *testing.T) {
@@ -114,7 +114,7 @@ func TestManagerFullbackErrorHandling(t *testing.T) {
 		t.Errorf("expected fullBackup status to be 0, but got: %d.", m.updateSts.FullBackup["s2"])
 	}
 
-	cleanup()
+	cleanup(t)
 }
 
 func TestManagerIncbackErrorHandling(t *testing.T) {
@@ -133,7 +133,9 @@ func TestManagerIncbackErrorHandling(t *testing.T) {
 		t.Errorf("expected incBackup status to be 0, but got: %d.", m.updateSts.IncBackup["s2"])
 	}
 	prometheus.Unregister(NewMetricsCollector(&UpdateStatus{}))
-	os.Remove(backupDir)
+	if err := os.Remove(backupDir); err != nil {
+		t.Errorf("failed to remove backupDir: %v", err)
+	}
 }
 
 func TestManagerStorageErrorHandling(t *testing.T) {
@@ -162,7 +164,7 @@ func TestManagerStorageErrorHandling(t *testing.T) {
 	if m.updateSts.IncBackup["s2"] != 1 {
 		t.Errorf("expected incBackup status to be 1, but got: %d.", m.updateSts.IncBackup["s2"])
 	}
-	cleanup()
+	cleanup(t)
 }
 
 func setup(t *testing.T) (m *Manager, db *database.MockDB, cfg config.Config) {
@@ -196,7 +198,9 @@ func setup(t *testing.T) (m *Manager, db *database.MockDB, cfg config.Config) {
 	return
 }
 
-func cleanup() {
+func cleanup(t *testing.T) {
 	prometheus.Unregister(NewMetricsCollector(&UpdateStatus{}))
-	os.Remove(backupDir)
+	if err := os.Remove(backupDir); err != nil {
+		t.Errorf("failed to remove backupDir: %v", err)
+	}
 }

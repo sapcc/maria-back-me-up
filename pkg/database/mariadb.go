@@ -197,7 +197,11 @@ func (m *MariaDB) GetCheckSumForTable(verifyTables []string, withIP bool) (cs Ch
 		return
 	}
 
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Error(fmt.Errorf("failed to close connection: %v", err))
+		}
+	}()
 
 	if err = conn.Ping(); err != nil {
 		return
@@ -346,7 +350,7 @@ func (m *MariaDB) StartIncBackup(ctx context.Context, mp LogPosition, dir string
 	myBp := mysql.Position{Pos: mp.Pos, Name: mp.Name}
 	streamer, err := syncer.StartSync(myBp)
 	if err != nil {
-		return fmt.Errorf("Cannot start binlog stream: %w", err)
+		return fmt.Errorf("cannot start binlog stream: %w", err)
 	}
 	if m.cfg.Backup.IncrementalBackupInMinutes > 0 {
 		m.flushTimer = time.AfterFunc(time.Duration(m.cfg.Backup.IncrementalBackupInMinutes)*time.Minute, func() { m.flushLogs("") })
@@ -357,7 +361,7 @@ func (m *MariaDB) StartIncBackup(ctx context.Context, mp LogPosition, dir string
 			if inerr == ctx.Err() {
 				return nil
 			}
-			return fmt.Errorf("Error reading binlog stream: %w", inerr)
+			return fmt.Errorf("error reading binlog stream: %w", inerr)
 		}
 		offset := ev.Header.LogPos
 
@@ -557,7 +561,9 @@ func (m *MariaDB) restoreIncBackup(p string) (err error) {
 		"-P"+strconv.Itoa(m.cfg.Database.Port),
 	)
 	pipe, _ := binlogCMD.StdoutPipe()
-	defer pipe.Close()
+	defer func() {
+		_ = pipe.Close()
+	}()
 	mysqlPipe.Stdin = pipe
 	// mysqlPipe.Stdout = os.Stdout
 	if err = mysqlPipe.Start(); err != nil {
@@ -590,7 +596,9 @@ func (m *MariaDB) Up(timeout time.Duration, withIP bool) (err error) {
 		log.Debug("Pinging mariadb successful")
 		return true, nil
 	})
-	return wait.Poll(5*time.Second, timeout, cf)
+	return wait.PollUntilContextTimeout(context.Background(), 5*time.Second, timeout, false, func(ctx context.Context) (bool, error) {
+		return cf()
+	})
 }
 
 /*
@@ -622,7 +630,9 @@ func (m *MariaDB) deleteMariaDBDataDir() (err error) {
 		return true, nil
 	})
 	if m.cfg.Database.DataDir != "" {
-		return wait.Poll(1*time.Second, 30*time.Second, cf)
+		return wait.PollUntilContextTimeout(context.Background(), 1*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+			return cf()
+		})
 	}
 	return
 }
@@ -689,7 +699,9 @@ func (m *MariaDB) restartMariaDB() (err error) {
 		}
 		return true, nil
 	})
-	return wait.Poll(5*time.Second, 30*time.Second, cf)
+	return wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+		return cf()
+	})
 }
 
 func (m *MariaDB) setSlowQueryLog(state slowQueryLogState) (err error) {
@@ -697,7 +709,11 @@ func (m *MariaDB) setSlowQueryLog(state slowQueryLogState) (err error) {
 	if err != nil {
 		return
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Error(fmt.Errorf("failed to close connection: %v", err))
+		}
+	}()
 	if m.slowQueryLogState != state {
 		_, err = conn.Execute(fmt.Sprintf("set global slow_query_log = '%s'", state))
 		if err == nil {
@@ -741,6 +757,9 @@ func getMysqlDumpBinlog(s string) (mp mysql.Position, err error) {
 	}
 
 	pos, err := strconv.ParseInt(logPos, 10, 32)
+	if err != nil {
+		return
+	}
 	mp.Name = res["MASTER_LOG_FILE"]
 	mp.Pos = uint32(pos)
 	return

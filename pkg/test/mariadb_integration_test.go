@@ -102,7 +102,11 @@ func testBackupRestore(t *testing.T, test testCase) {
 		t.Errorf("could not connect to database: %s", err.Error())
 		t.FailNow()
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			t.Errorf("failed to close connection: %v", err)
+		}
+	}()
 
 	_, err = conn.Execute("INSERT INTO service.tasks (title, start_date, due_date, description) VALUES('task5', '2021-05-02', '2022-05-02', 'task info 5');")
 	if err != nil {
@@ -168,7 +172,11 @@ func assertTableConsistent(t *testing.T, user, password, host, db string, port i
 		t.Errorf("could not connect to database, error: %s", err.Error())
 		t.FailNow()
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			t.Errorf("failed to close connection: %v", err)
+		}
+	}()
 	// Query from DB to see if all test entries are present
 	result, err := conn.Execute(fmt.Sprintf("select count(*) from %s.%s;", db, table))
 	act := result.Resultset.Values[0][0].AsInt64()

@@ -94,7 +94,9 @@ func (m *Manager) Restore(p string) (err error) {
 	}
 	logger.Info("restore successful")
 	//only remove backup files when restore was succesful, so manual restore is possible!
-	os.RemoveAll(p)
+	if err := os.RemoveAll(p); err != nil {
+		logger.Warnf("failed to remove backup files: %v", err)
+	}
 
 	return
 }
