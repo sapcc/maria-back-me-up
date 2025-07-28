@@ -197,6 +197,7 @@ func (m *MariaDBStream) WriteFolder(p string) (err error) {
 		if err != nil {
 			return fmt.Errorf("could not read dump: %s", err.Error())
 		}
+		// #nosec G204
 		cmd := exec.Command(
 			"mariadb",
 			"--skip-ssl",
@@ -216,6 +217,7 @@ func (m *MariaDBStream) WriteFolder(p string) (err error) {
 		if err != nil {
 			return fmt.Errorf("error creating filterMyDumperBackupDir: %s", err)
 		}
+		// #nosec G204
 		b, err := exec.Command(
 			"myloader",
 			"--port="+strconv.Itoa(m.cfg.Port),
@@ -243,6 +245,7 @@ func (m *MariaDBStream) WriteFolder(p string) (err error) {
 		"--databases"}
 	args = append(args, m.cfg.Databases...)
 
+	// #nosec G204
 	cmd := exec.Command(
 		"mariadb-check",
 		args...,
