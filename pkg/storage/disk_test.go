@@ -336,7 +336,7 @@ func createDummyBackups(path string, numberBackups int, numberEmptyBackups int) 
 		if err != nil {
 			return fmt.Errorf("could not create backup file: %s", err.Error())
 		}
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			err = os.WriteFile(filepath.Join(dir, fmt.Sprintf("mysql-bin.0000%v", i)), []byte{}, os.ModePerm)
 			if err != nil {
 				return fmt.Errorf("could not create binlog file: %s", err.Error())

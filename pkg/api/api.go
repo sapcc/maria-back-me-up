@@ -115,7 +115,7 @@ func GetRoot(m *backup.Manager) echo.HandlerFunc {
 			return fmt.Errorf("error parsing index: %s", err.Error())
 		}
 		s := m.Storage.GetStorageServicesKeys()
-		d := map[string]interface{}{
+		d := map[string]any{
 			"storages": s,
 			"config":   m.GetConfig(),
 		}
@@ -138,7 +138,7 @@ func GetBackup(m *backup.Manager) echo.HandlerFunc {
 		var backups backupSlice
 		backups, err = m.Storage.GetFullBackups(s)
 		sort.Stable(backups)
-		d := map[string]interface{}{
+		d := map[string]any{
 			"backups": backups,
 			"service": m.GetConfig().ServiceName,
 		}
@@ -166,7 +166,7 @@ func GetRestore(m *backup.Manager) echo.HandlerFunc {
 		var incBackups incBackupSlice
 		incBackups, err = m.Storage.GetIncBackupsFromDump(s, k)
 		sort.Stable(incBackups)
-		d := map[string]interface{}{
+		d := map[string]any{
 			"incBackups": incBackups,
 			"service":    m.GetConfig().ServiceName,
 		}
@@ -284,7 +284,7 @@ func GetBackupStatus(m *backup.Manager) echo.HandlerFunc {
 			}()
 			ticker := time.NewTicker(10 * time.Second)
 			for {
-				d := map[string]interface{}{
+				d := map[string]any{
 					"active": m.GetBackupActive(),
 					"health": m.GetHealthStatus(),
 				}

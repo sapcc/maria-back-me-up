@@ -25,6 +25,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"slices"
 	"sync"
 	"time"
 
@@ -303,12 +304,7 @@ func (m *Manager) handleBackupError(err error, backup map[string]int) error {
 
 func (m *Manager) setUpdateStatus(field map[string]int, storages []string, up bool) {
 	find := func(i string) bool {
-		for _, v := range storages {
-			if v == i {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(storages, i)
 	}
 	m.updateSts.Lock()
 	defer m.updateSts.Unlock()

@@ -131,7 +131,7 @@ func (m *Database) CreateDatabaseService(name string, c config.DatabaseConfig) (
 	return
 }
 
-func (m *Database) createDeployment(p string, cfg interface{}) (deploy *appsv1.Deployment, err error) {
+func (m *Database) createDeployment(p string, cfg any) (deploy *appsv1.Deployment, err error) {
 	deploy = &appsv1.Deployment{}
 	if err = m.unmarshalYamlFile(p, deploy, cfg); err != nil {
 		return
@@ -140,7 +140,7 @@ func (m *Database) createDeployment(p string, cfg interface{}) (deploy *appsv1.D
 	return m.client.AppsV1().Deployments(m.ns).Create(context.Background(), deploy, metav1.CreateOptions{})
 }
 
-func (m *Database) createService(p string, cfg interface{}) (svc *v1.Service, err error) {
+func (m *Database) createService(p string, cfg any) (svc *v1.Service, err error) {
 	svc = &v1.Service{}
 	if err = m.unmarshalYamlFile(p, svc, cfg); err != nil {
 		return
@@ -202,7 +202,7 @@ func (m *Database) ScaleDatabaseResources(name string, scale int32) (err error) 
 	return
 }
 
-func (m *Database) unmarshalYamlFile(p string, into runtime.Object, vl interface{}) (err error) {
+func (m *Database) unmarshalYamlFile(p string, into runtime.Object, vl any) (err error) {
 	var tpl bytes.Buffer
 	s := json.NewYAMLSerializer(json.DefaultMetaFactory, scheme.Scheme,
 		scheme.Scheme)
