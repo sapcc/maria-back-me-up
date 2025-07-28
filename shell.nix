@@ -10,6 +10,7 @@ mkShell {
     addlicense
     go-licence-detector
     go_1_24
+    golangci-lint
     gotools # goimports
     # keep this line if you use bash
     bashInteractive
