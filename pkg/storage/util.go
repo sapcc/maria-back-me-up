@@ -19,6 +19,7 @@ package storage
 import (
 	"archive/tar"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 )
@@ -29,7 +30,11 @@ func ZipFolderPath(pathToZip string) (pr *io.PipeReader, err error) {
 	if err != nil {
 		return
 	}
-	defer dir.Close()
+	defer func() {
+		if err := dir.Close(); err != nil {
+			log.Printf("failed to close dir: %v", err)
+		}
+	}()
 
 	// get list of files
 	files, err := dir.Readdir(0)
@@ -50,7 +55,11 @@ func ZipFolderPath(pathToZip string) (pr *io.PipeReader, err error) {
 			if err != nil {
 				return
 			}
-			defer file.Close()
+			defer func() {
+				if err := file.Close(); err != nil {
+					log.Printf("failed to close file: %v", err)
+				}
+			}()
 
 			// prepare the tar header
 			header := new(tar.Header)
@@ -69,8 +78,12 @@ func ZipFolderPath(pathToZip string) (pr *io.PipeReader, err error) {
 				return
 			}
 		}
-		tarfileWriter.Close()
-		pw.Close()
+		if err := tarfileWriter.Close(); err != nil {
+			log.Printf("failed to close tarfileWriter: %v", err)
+		}
+		if err := pw.Close(); err != nil {
+			log.Printf("failed to close pipe writer: %v", err)
+		}
 	}()
 	return
 }

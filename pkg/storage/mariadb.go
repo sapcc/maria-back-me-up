@@ -48,9 +48,6 @@ import (
 
 	// blank import of the mysql parser for pingcap/parser
 	_ "github.com/pingcap/parser/test_driver"
-
-	// blank import of mysql driver for database/sql
-	_ "github.com/go-sql-driver/mysql"
 )
 
 // MariaDBStream struct is ...
@@ -291,11 +288,12 @@ func (m *MariaDBStream) ProcessBinlogEvent(ctx context.Context, event *replicati
 func (m *MariaDBStream) handleIntVarEvent(ctx context.Context, event *replication.IntVarEvent) (err error) {
 	var query string
 
-	if event.Type == replication.INSERT_ID {
+	switch event.Type {
+	case replication.INSERT_ID:
 		query = fmt.Sprintf("SET INSERT_ID=%d;", event.Value)
-	} else if event.Type == replication.LAST_INSERT_ID {
+	case replication.LAST_INSERT_ID:
 		query = fmt.Sprintf("SET LAST_INSERT_ID=%d;", event.Value)
-	} else {
+	default:
 		return errors.New("error IntVarEvent has unsupported type")
 	}
 
@@ -522,13 +520,21 @@ func (m *MariaDBStream) filterDump(backupPath, targetPath string, filters []sche
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			fmt.Printf("failed to close file: %v\n", err)
+		}
+	}()
 
 	target, err := os.Create(targetPath)
 	if err != nil {
 		return fmt.Errorf("failed to create file for filtered backup: %s", err.Error())
 	}
-	defer target.Close()
+	defer func() {
+		if err := target.Close(); err != nil {
+			fmt.Printf("failed to close target: %v\n", err)
+		}
+	}()
 
 	maxCapacity := m.cfg.DumpFilterBufferSizeMB * 1024 * 1024
 
@@ -629,7 +635,11 @@ func cleanupLocks(db *sql.DB, cfg *config.MariaDBStream) (removedLocks int, err 
 	if err != nil {
 		return 0, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			fmt.Printf("failed to close DB connection: %v\n", err)
+		}
+	}()
 
 	// check if METADATA_LOCK_INFO plugin is enabled
 	var lockInfoActive string
@@ -660,6 +670,11 @@ func cleanupLocks(db *sql.DB, cfg *config.MariaDBStream) (removedLocks int, err 
 	if err != nil {
 		return 0, err
 	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			fmt.Printf("failed to close rows: %v\n", err)
+		}
+	}()
 
 	locks := make(map[int64]struct{}, 0)
 	for rows.Next() {
@@ -887,7 +902,11 @@ func queryTableMetadata(cfg config.MariaDBStream, db *sql.DB) (metadata map[stri
 		if err != nil {
 			return metadata, fmt.Errorf("error querying info schema: %s", err.Error())
 		}
-		defer rows.Close()
+		defer func() {
+			if err := rows.Close(); err != nil {
+				fmt.Printf("failed to close rows: %v\n", err)
+			}
+		}()
 
 		var tableName, columnName, columnKey, nullable string
 		var ordinalPosition int
@@ -972,7 +991,10 @@ func isDBUp(user, password, host string, port int) (err error) {
 		log.Debug("pinging mariadb successful")
 		return true, nil
 	})
-	if err = wait.Poll(5*time.Second, time.Duration(90)*time.Second, cf); err != nil {
+	c := func(ctx context.Context) (bool, error) {
+		return cf()
+	}
+	if err = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, time.Duration(90)*time.Second, false, c); err != nil {
 		return errors.New("pinging target mariadb failed. aborting tx retry")
 	}
 	return nil
@@ -1075,7 +1097,7 @@ func (r *retryHandler) commit(ctx context.Context) (err error) {
 			return
 		}
 		if isRetryable(err) {
-			if err = r.retryTx(ctx); err != nil {
+			if err := r.retryTx(ctx); err != nil {
 				return fmt.Errorf("commit retry error: %s", err.Error())
 			}
 			if err = r.tx.Commit(); err != nil {

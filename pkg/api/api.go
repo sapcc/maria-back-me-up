@@ -112,7 +112,7 @@ func GetRoot(m *backup.Manager) echo.HandlerFunc {
 		var tmpl = template.New("index.html").Funcs(funcMap)
 		t, err := tmpl.ParseFiles(constants.INDEX)
 		if err != nil {
-			return fmt.Errorf("Error parsing index: %s", err.Error())
+			return fmt.Errorf("error parsing index: %s", err.Error())
 		}
 		s := m.Storage.GetStorageServicesKeys()
 		d := map[string]interface{}{
@@ -180,7 +180,9 @@ func GetRestore(m *backup.Manager) echo.HandlerFunc {
 // PostRestoreDownload handles restore download requests
 func PostRestoreDownload(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
-		os.RemoveAll(path.Join(m.GetConfig().Backup.RestoreDir, m.GetConfig().ServiceName))
+		if err := os.RemoveAll(path.Join(m.GetConfig().Backup.RestoreDir, m.GetConfig().ServiceName)); err != nil {
+			log.Error(fmt.Errorf("failed to remove restore dir: %w", err))
+		}
 		res := c.Response()
 		params, err := c.FormParams()
 		res.WriteHeader(http.StatusOK)
@@ -198,7 +200,11 @@ func PostRestoreDownload(m *backup.Manager) echo.HandlerFunc {
 		if err != nil {
 			return sendJSONResponse(c, "Error downloading backup", err.Error())
 		}
-		defer os.RemoveAll(backupPath)
+		defer func() {
+			if err := os.RemoveAll(backupPath); err != nil {
+				log.Error(fmt.Errorf("failed to remove backup path: %w", err))
+			}
+		}()
 		pr, err := storage.ZipFolderPath(backupPath)
 		if err != nil {
 			return sendJSONResponse(c, "Error downloading backup", err.Error())
@@ -271,7 +277,11 @@ func PostRestore(m *backup.Manager) echo.HandlerFunc {
 func GetBackupStatus(m *backup.Manager) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		websocket.Handler(func(ws *websocket.Conn) {
-			defer ws.Close()
+			defer func() {
+				if err := ws.Close(); err != nil {
+					log.Error(fmt.Errorf("failed to close websocket: %w", err))
+				}
+			}()
 			ticker := time.NewTicker(10 * time.Second)
 			for {
 				d := map[string]interface{}{

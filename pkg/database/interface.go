@@ -65,9 +65,10 @@ func NewDatabase(c config.Config, s *storage.Manager, k *k8s.Database) (Database
 	if c.SideCar == nil || *c.SideCar {
 		c.Database.Host = "127.0.0.1"
 	}
-	if c.Database.Type == constants.MARIADB {
+	switch c.Database.Type {
+	case constants.MARIADB:
 		return NewMariaDB(c, s, k)
-	} else if c.Database.Type == constants.POSTGRES {
+	case constants.POSTGRES:
 		return NewPostgres(c, s)
 	}
 

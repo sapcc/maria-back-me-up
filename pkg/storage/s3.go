@@ -185,7 +185,7 @@ func (s *S3) DownloadBackupWithLogPosition(fullBackupPath, binlog string) (backu
 func (s *S3) GetTotalIncBackupsFromDump(key string) (t int, err error) {
 	t = 0
 	svc := s3.New(s.session)
-	list, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.Replace(key, "dump.tar", "", -1))})
+	list, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.ReplaceAll(key, "dump.tar", ""))})
 	if err != nil {
 		return t, s.handleError("", err)
 	}
@@ -206,7 +206,7 @@ func (s *S3) GetIncBackupsFromDump(key string) (bl []Backup, err error) {
 		Key:     key,
 	}
 
-	list, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.Replace(key, "dump.tar", "", -1))})
+	list, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.ReplaceAll(key, "dump.tar", ""))})
 	if err != nil {
 		return bl, s.handleError("", err)
 	}
@@ -270,7 +270,7 @@ func (s *S3) GetFullBackups() (bl []Backup, err error) {
 // DownloadBackup implements interface
 func (s *S3) DownloadBackup(fullBackup Backup) (path string, err error) {
 	svc := s3.New(s.session)
-	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.Replace(fullBackup.Key, "dump.tar", "", -1))})
+	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.ReplaceAll(fullBackup.Key, "dump.tar", ""))})
 	if err != nil {
 		return path, s.handleError("", err)
 	}
@@ -322,7 +322,11 @@ func (s *S3) downloadFile(path string, obj *s3.Object) error {
 		return s.handleError("", err)
 	}
 
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			logger.Warnf("failed to close file: %v", err)
+		}
+	}()
 	// Create a downloader with the session and custom options
 	downloader := s3manager.NewDownloader(s.session, func(d *s3manager.Downloader) {
 		d.PartSize = 64 * 1024 * 1024 // 64MB per part

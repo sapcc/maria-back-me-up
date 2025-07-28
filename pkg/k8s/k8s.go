@@ -94,9 +94,10 @@ func New(ns string) (m *Database, err error) {
 // CreateDatabaseDeployment creates a k8s database deployment, based on a yaml file
 func (m *Database) CreateDatabaseDeployment(name string, c config.DatabaseConfig) (deploy *appsv1.Deployment, err error) {
 	var tpl string
-	if c.Type == constants.MARIADB {
+	switch c.Type {
+	case constants.MARIADB:
 		tpl = constants.MARIADEPLOYMENT
-	} else if c.Type == constants.POSTGRES {
+	case constants.POSTGRES:
 		tpl = constants.POSTGRESDEPLOYMENT
 	}
 	deploy, err = m.createDeployment(tpl, c)
@@ -114,9 +115,10 @@ func (m *Database) CreateDatabaseDeployment(name string, c config.DatabaseConfig
 // CreateDatabaseService creates a k8s database service, based on a yaml file
 func (m *Database) CreateDatabaseService(name string, c config.DatabaseConfig) (svc *v1.Service, err error) {
 	var tpl string
-	if c.Type == constants.MARIADB {
+	switch c.Type {
+	case constants.MARIADB:
 		tpl = constants.MARIASERIVCE
-	} else if c.Type == constants.POSTGRES {
+	case constants.POSTGRES:
 		tpl = constants.POSTGRESSERIVCE
 	}
 	svc, err = m.createService(tpl, c)
@@ -177,8 +179,11 @@ func (m *Database) CheckPodNotReady(labelSelector string) (err error) {
 		}
 		return false, nil
 	})
+	c := func(ctx context.Context) (bool, error) {
+		return cf()
+	}
 	//Check for 1 minute if pod is in state  NotReady
-	if err = wait.Poll(5*time.Second, 1*time.Minute, cf); err != nil {
+	if err = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 1*time.Minute, false, c); err != nil {
 		return fmt.Errorf("wait Timed out for pod readiness: %s", err.Error())
 	}
 
