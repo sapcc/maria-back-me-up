@@ -99,7 +99,7 @@ func (m *Manager) GetStorage(s string) Storage {
 func (m *Manager) GetStorageServicesKeys() (svc []string) {
 	keys := reflect.ValueOf(m.storageServices).MapKeys()
 	svc = make([]string, len(keys))
-	for i := 0; i < len(keys); i++ {
+	for i := range keys {
 		svc[i] = keys[i].String()
 	}
 	return
@@ -257,7 +257,7 @@ func (m *Manager) createIOReaders(count int) ([]io.Reader, io.Writer, io.Closer)
 	pipeWriters := make([]io.Writer, 0, count)
 	pipeClosers := make([]io.Closer, 0, count)
 
-	for i := 0; i < count; i++ {
+	for range count {
 		pr, pw := io.Pipe()
 		readers = append(readers, pr)
 		pipeWriters = append(pipeWriters, pw)
@@ -272,7 +272,7 @@ func (m *Manager) createChannels(count int) []chan StreamEvent {
 	if count == 0 {
 		return channels
 	}
-	for i := 0; i < count; i++ {
+	for range count {
 		channels = append(channels, make(chan StreamEvent, 1))
 	}
 	return channels

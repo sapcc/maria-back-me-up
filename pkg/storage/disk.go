@@ -307,7 +307,7 @@ func (d *Disk) enforceBackupRetention() error {
 
 	// delete all backups that are more than the retention allow, starting with the oldest
 	deletions := len(backups) - d.cfg.Retention
-	for i := 0; i < deletions; i++ {
+	for range deletions {
 		backupKey := backups[len(backups)-1].Key
 		err := os.RemoveAll(filepath.Join(d.cfg.BasePath, backupKey))
 		if err != nil {

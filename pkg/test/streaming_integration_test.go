@@ -44,7 +44,7 @@ func TestFilterBackup(t *testing.T) {
 		t.Errorf("could not start backup: %s", err.Error())
 		t.FailNow()
 	}
-	for i := 0; i < 15; i++ {
+	for range 15 {
 		stats := m.GetHealthStatus()
 		if stats.FullBackup["StreamingTest"] == 1 {
 			break

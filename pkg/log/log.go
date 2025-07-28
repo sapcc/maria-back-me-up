@@ -67,7 +67,7 @@ func SetFormatter(formatter logrus.Formatter) {
 }
 
 // Debug logs a message at level Debug on the standard logger.
-func Debug(args ...interface{}) {
+func Debug(args ...any) {
 	if logger.log.Level >= logrus.DebugLevel {
 		logger.Lock()
 		defer logger.Unlock()
@@ -77,7 +77,7 @@ func Debug(args ...interface{}) {
 }
 
 // Info logs a message at level Info on the standard logger.
-func Info(args ...interface{}) {
+func Info(args ...any) {
 	if logger.log.Level >= logrus.InfoLevel {
 		logger.Lock()
 		defer logger.Unlock()
@@ -87,7 +87,7 @@ func Info(args ...interface{}) {
 }
 
 // Warn logs a message at level Warn on the standard logger.
-func Warn(args ...interface{}) {
+func Warn(args ...any) {
 	if logger.log.Level >= logrus.WarnLevel {
 		logger.Lock()
 		defer logger.Unlock()
@@ -97,7 +97,7 @@ func Warn(args ...interface{}) {
 }
 
 // Error logs a message at level Error on the standard logger.
-func Error(args ...interface{}) {
+func Error(args ...any) {
 	if logger.log.Level >= logrus.ErrorLevel {
 		logger.Lock()
 		defer logger.Unlock()
@@ -107,7 +107,7 @@ func Error(args ...interface{}) {
 }
 
 // Fatal logs a message at level Fatal on the standard logger.
-func Fatal(args ...interface{}) {
+func Fatal(args ...any) {
 	if logger.log.Level >= logrus.FatalLevel {
 		logger.Lock()
 		defer logger.Unlock()
@@ -117,7 +117,7 @@ func Fatal(args ...interface{}) {
 }
 
 // Panic logs a message at level Panic on the standard logger.
-func Panic(args ...interface{}) {
+func Panic(args ...any) {
 	if logger.log.Level >= logrus.PanicLevel {
 		logger.Lock()
 		defer logger.Unlock()

@@ -78,7 +78,7 @@ func TestWriteRowsEventv1FullImage(t *testing.T) {
 		nullBitmap:      []byte{28},
 		hasFullMetadata: true,
 	}
-	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+	rowsEvent := createRowsTestEvent(1, options, [][]any{
 		{int32(1), "task1", "2021-05-02", "2022-05-02", ""},
 		{int32(2), "task1", "2021-05-02", "2022-05-02", "Test Entry"},
 		{int32(3), "task1", "2021-05-02", "2022-05-02", nil},
@@ -101,7 +101,7 @@ func TestWriteRowsEventv1MinimalImage(t *testing.T) {
 		hasFullMetadata: true,
 	}
 
-	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+	rowsEvent := createRowsTestEvent(1, options, [][]any{
 		{int32(1), "task1", "2021-05-02", "2022-05-02", ""},
 		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry"},
 	})
@@ -125,7 +125,7 @@ func TestWriteRowsEventv1MinimalImageNullCols(t *testing.T) {
 		hasFullMetadata: true,
 	}
 
-	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+	rowsEvent := createRowsTestEvent(1, options, [][]any{
 		{int32(1), "task1", nil, nil, ""},
 		{int32(1), "task1", nil, nil, nil},
 	})
@@ -146,7 +146,7 @@ func TestDeleteRowsEventV1FullImageWithPK(t *testing.T) {
 		hasFullMetadata: true,
 	}
 
-	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+	rowsEvent := createRowsTestEvent(1, options, [][]any{
 		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry"},
 	})
 
@@ -163,7 +163,7 @@ func TestDeleteRowsEventV1FullImageNoPK(t *testing.T) {
 		hasFullMetadata: true,
 	}
 
-	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+	rowsEvent := createRowsTestEvent(1, options, [][]any{
 		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry"},
 	})
 
@@ -182,7 +182,7 @@ func TestDeleteRowsEventV1MinimalImageWithPK(t *testing.T) {
 		hasFullMetadata: true,
 	}
 
-	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+	rowsEvent := createRowsTestEvent(1, options, [][]any{
 		{int32(1), nil, nil, nil, nil},
 	})
 
@@ -200,7 +200,7 @@ func TestDeleteRowsEventV1MinimalImageNoPK(t *testing.T) {
 		hasFullMetadata: true,
 	}
 
-	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+	rowsEvent := createRowsTestEvent(1, options, [][]any{
 		{int32(1), nil, nil, nil, nil},
 	})
 
@@ -218,7 +218,7 @@ func TestUpdateRowsEventV1FullImageWithPK(t *testing.T) {
 		hasFullMetadata: true,
 	}
 
-	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+	rowsEvent := createRowsTestEvent(1, options, [][]any{
 		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry Old"},
 		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry New"},
 		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry Old"},
@@ -240,7 +240,7 @@ func TestUpdateRowsEventV1FullImageNoPK(t *testing.T) {
 		hasFullMetadata: true,
 	}
 
-	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+	rowsEvent := createRowsTestEvent(1, options, [][]any{
 		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry Old"},
 		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry New"},
 		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry Old"},
@@ -268,7 +268,7 @@ func TestUpdateRowsEventV1MinimalImageWithPK(t *testing.T) {
 		hasFullMetadata: true,
 	}
 
-	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+	rowsEvent := createRowsTestEvent(1, options, [][]any{
 		{int32(1), nil, nil, nil, nil},
 		{nil, nil, nil, nil, "Test Entry New"},
 	})
@@ -290,7 +290,7 @@ func TestUpdateRowsEventV1MinimalImageNoPK(t *testing.T) {
 		hasFullMetadata: true,
 	}
 
-	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+	rowsEvent := createRowsTestEvent(1, options, [][]any{
 		{int32(1), nil, nil, nil, nil},
 		{nil, nil, nil, nil, "Test Entry New"},
 	})
@@ -306,7 +306,7 @@ func TestWriteRowsEventv1FullImageNoRowMetadata(t *testing.T) {
 		nullBitmap:      []byte{28},
 		hasFullMetadata: false,
 	}
-	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+	rowsEvent := createRowsTestEvent(1, options, [][]any{
 		{int32(1), "task1", "2021-05-02", "2022-05-02", ""},
 		{int32(2), "task1", "2021-05-02", "2022-05-02", "Test Entry"},
 		{int32(3), "task1", "2021-05-02", "2022-05-02", nil},
@@ -328,7 +328,7 @@ func TestWriteRowsEventv1MinimalImageNoRowMetadata(t *testing.T) {
 		hasFullMetadata: false,
 	}
 
-	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+	rowsEvent := createRowsTestEvent(1, options, [][]any{
 		{int32(1), "task1", "2021-05-02", "2022-05-02", ""},
 		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry"},
 	})
@@ -352,7 +352,7 @@ func TestWriteRowsEventv1MinimalImageNullColsNoRowMetadata(t *testing.T) {
 		hasFullMetadata: false,
 	}
 
-	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+	rowsEvent := createRowsTestEvent(1, options, [][]any{
 		{int32(1), "task1", nil, nil, ""},
 		{int32(1), "task1", nil, nil, nil},
 	})
@@ -373,7 +373,7 @@ func TestDeleteRowsEventV1FullImageWithPKNoRowMetadata(t *testing.T) {
 		hasFullMetadata: false,
 	}
 
-	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+	rowsEvent := createRowsTestEvent(1, options, [][]any{
 		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry"},
 	})
 
@@ -390,7 +390,7 @@ func TestDeleteRowsEventV1FullImageNoPKNoRowMetadata(t *testing.T) {
 		hasFullMetadata: false,
 	}
 
-	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+	rowsEvent := createRowsTestEvent(1, options, [][]any{
 		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry"},
 	})
 
@@ -409,7 +409,7 @@ func TestDeleteRowsEventV1MinimalImageWithPKNoRowMetadata(t *testing.T) {
 		hasFullMetadata: false,
 	}
 
-	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+	rowsEvent := createRowsTestEvent(1, options, [][]any{
 		{int32(1), nil, nil, nil, nil},
 	})
 
@@ -427,7 +427,7 @@ func TestDeleteRowsEventV1MinimalImageNoPKNoRowMetadata(t *testing.T) {
 		hasFullMetadata: false,
 	}
 
-	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+	rowsEvent := createRowsTestEvent(1, options, [][]any{
 		{int32(1), nil, nil, nil, nil},
 	})
 
@@ -445,7 +445,7 @@ func TestUpdateRowsEventV1FullImageWithPKNoRowMetadata(t *testing.T) {
 		hasFullMetadata: false,
 	}
 
-	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+	rowsEvent := createRowsTestEvent(1, options, [][]any{
 		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry Old"},
 		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry New"},
 		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry Old"},
@@ -467,7 +467,7 @@ func TestUpdateRowsEventV1FullImageNoPKNoRowMetadata(t *testing.T) {
 		hasFullMetadata: false,
 	}
 
-	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+	rowsEvent := createRowsTestEvent(1, options, [][]any{
 		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry Old"},
 		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry New"},
 		{int32(1), "task1", "2021-05-02", "2022-05-02", "Test Entry Old"},
@@ -495,7 +495,7 @@ func TestUpdateRowsEventV1MinimalImageWithPKNoRowMetadata(t *testing.T) {
 		hasFullMetadata: false,
 	}
 
-	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+	rowsEvent := createRowsTestEvent(1, options, [][]any{
 		{int32(1), nil, nil, nil, nil},
 		{nil, nil, nil, nil, "Test Entry New"},
 	})
@@ -517,7 +517,7 @@ func TestUpdateRowsEventV1MinimalImageNoPKNoRowMetadata(t *testing.T) {
 		hasFullMetadata: false,
 	}
 
-	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+	rowsEvent := createRowsTestEvent(1, options, [][]any{
 		{int32(1), nil, nil, nil, nil},
 		{nil, nil, nil, nil, "Test Entry New"},
 	})
@@ -533,7 +533,7 @@ func TestWriteTxThenQuery(t *testing.T) {
 		nullBitmap:      []byte{28},
 		hasFullMetadata: false,
 	}
-	rowsEvent := createRowsTestEvent(1, options, [][]interface{}{
+	rowsEvent := createRowsTestEvent(1, options, [][]any{
 		{int32(1), "task1", "2021-05-02", "2022-05-02", ""},
 		{int32(2), "task1", "2021-05-02", "2022-05-02", "Test Entry"},
 		{int32(3), "task1", "2021-05-02", "2022-05-02", nil},
@@ -744,7 +744,7 @@ func execQueryEventTest(t *testing.T, mock sqlmock.Sqlmock, mariaDBStream *Maria
 	}
 }
 
-func createRowsTestEvent(version int, options testEventOptions, rows [][]interface{}) replication.RowsEvent {
+func createRowsTestEvent(version int, options testEventOptions, rows [][]any) replication.RowsEvent {
 	rowsEvent := replication.RowsEvent{
 		Version: version,
 		TableID: 1337,

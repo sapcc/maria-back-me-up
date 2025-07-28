@@ -364,7 +364,7 @@ func (m *MariaDBStream) handleRowsEvent(ctx context.Context, event *replication.
 	}
 
 	var query string
-	var args []interface{}
+	var args []any
 	var columns, updateColumns []column
 	var hasPrimaryKey bool
 
@@ -437,7 +437,7 @@ func (m *MariaDBStream) handleRowsEvent(ctx context.Context, event *replication.
 
 // createInsertQueryFromRow returns an INSERT query with placeholders for the VALUES clause.
 // Args contains the values for the placeholders.
-func (m *MariaDBStream) createInsertQueryFromRow(table *replication.TableMapEvent, columns []column) (query string, args []interface{}, err error) {
+func (m *MariaDBStream) createInsertQueryFromRow(table *replication.TableMapEvent, columns []column) (query string, args []any, err error) {
 	columnExpression := ""
 	valuePlaceholders := ""
 	for _, col := range columns {
@@ -457,7 +457,7 @@ func (m *MariaDBStream) createInsertQueryFromRow(table *replication.TableMapEven
 
 // createDeleteQueryFromRow returns an DELETE query with placeholders for the WHERE clause.
 // Args contains the values for the placeholders.
-func (m *MariaDBStream) createDeleteQueryFromRow(table *replication.TableMapEvent, columns []column, hasPrimaryKey bool) (query string, args []interface{}, err error) {
+func (m *MariaDBStream) createDeleteQueryFromRow(table *replication.TableMapEvent, columns []column, hasPrimaryKey bool) (query string, args []any, err error) {
 
 	whereCondition, args := createWhereCondition(columns, hasPrimaryKey)
 	query = fmt.Sprintf("DELETE FROM %s.%s WHERE %s;", table.Schema, table.Table, whereCondition)
@@ -466,7 +466,7 @@ func (m *MariaDBStream) createDeleteQueryFromRow(table *replication.TableMapEven
 
 // createUpdateQueryFromRow returns an UPDATE query with placeholders for SET and WHERE clause.
 // Args contains the values for the placeholders.
-func (m *MariaDBStream) createUpdateQueryFromRow(table *replication.TableMapEvent, columns []column, updateColumns []column, hasPrimaryKey bool) (query string, args []interface{}, err error) {
+func (m *MariaDBStream) createUpdateQueryFromRow(table *replication.TableMapEvent, columns []column, updateColumns []column, hasPrimaryKey bool) (query string, args []any, err error) {
 
 	setColumns := ""
 	for _, col := range updateColumns {
@@ -715,7 +715,7 @@ type metadataLockInfo struct {
 	tableSchema string
 }
 
-func (m *metadataLockInfo) Scan(src interface{}) error {
+func (m *metadataLockInfo) Scan(src any) error {
 	return nil
 }
 
@@ -778,7 +778,7 @@ func (m *MariaDBStream) determineSchema(event *replication.QueryEvent) (string, 
 	return "", errors.New("could not determine schema")
 }
 
-func newNullString(value interface{}, nullable bool) sql.NullString {
+func newNullString(value any, nullable bool) sql.NullString {
 	if value == nil && nullable {
 		return sql.NullString{
 			String: "",
@@ -812,7 +812,7 @@ func newNullString(value interface{}, nullable bool) sql.NullString {
 
 }
 
-func createWhereCondition(columns []column, hasPrimaryKey bool) (condition string, args []interface{}) {
+func createWhereCondition(columns []column, hasPrimaryKey bool) (condition string, args []any) {
 	if hasPrimaryKey {
 		for _, col := range columns {
 			if col.isKeyField {
@@ -834,7 +834,7 @@ func createWhereCondition(columns []column, hasPrimaryKey bool) (condition strin
 }
 
 // getRowColumnsTableEvent combines the values from the row with the column defintion from the TableMapEvent
-func getRowColumnsTableEvent(table *replication.TableMapEvent, row []interface{}, skipColumns []int) (columns []column, hasPrimaryKey bool) {
+func getRowColumnsTableEvent(table *replication.TableMapEvent, row []any, skipColumns []int) (columns []column, hasPrimaryKey bool) {
 	for i, col := range row {
 		if ok, nullable := table.Nullable(i); ok {
 			columns = append(columns, column{name: string(table.ColumnName[i]), value: newNullString(col, nullable), skip: false})
@@ -859,7 +859,7 @@ func getRowColumnsTableEvent(table *replication.TableMapEvent, row []interface{}
 }
 
 // getRowColumnsTableMetadata combines the values from the row with the column defintion from the TableMetadata
-func getRowColumnsTableMetadata(metadata map[int]columnDefinition, row []interface{}, skipColumns []int) (columns []column, hasPrimaryKey bool) {
+func getRowColumnsTableMetadata(metadata map[int]columnDefinition, row []any, skipColumns []int) (columns []column, hasPrimaryKey bool) {
 
 	for i, col := range row {
 		columns = append(columns, column{name: metadata[i+1].name, value: newNullString(col, metadata[i+1].isNullable), skip: false, isKeyField: metadata[i+1].isKey})
@@ -978,7 +978,7 @@ func filterMyDumperBackupDir(path string, databases []string) error {
 // myQuery holds a query and its optional arguments
 type myQuery struct {
 	query string
-	args  []interface{}
+	args  []any
 }
 
 // isDBUp tries for 90 seconds to connect back with the DB then quits
@@ -1111,7 +1111,7 @@ func (r *retryHandler) commit(ctx context.Context) (err error) {
 	return
 }
 
-func (r *retryHandler) execContext(ctx context.Context, query string, args []interface{}) (err error) {
+func (r *retryHandler) execContext(ctx context.Context, query string, args []any) (err error) {
 	if r.tx != nil {
 		r.queries = append(r.queries, myQuery{query: query, args: args})
 		_, err = r.tx.ExecContext(ctx, query, args...)
@@ -1165,7 +1165,7 @@ func (r *retryHandler) retryTx(ctx context.Context) (err error) {
 	return
 }
 
-func (r *retryHandler) retryQuery(ctx context.Context, query string, args []interface{}) (err error) {
+func (r *retryHandler) retryQuery(ctx context.Context, query string, args []any) (err error) {
 	if err = isDBUp(r.cfg.User, r.cfg.Password, r.cfg.Host, r.cfg.Port); err != nil {
 		return fmt.Errorf("db not reachable: %s", err.Error())
 	}
