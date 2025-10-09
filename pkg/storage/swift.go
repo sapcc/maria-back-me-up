@@ -30,7 +30,7 @@ import (
 	"github.com/ncw/swift"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 // Swift struct is ...
