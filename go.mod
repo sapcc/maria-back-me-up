@@ -1,6 +1,8 @@
 module github.com/sapcc/maria-back-me-up
 
-go 1.24
+go 1.24.0
+
+toolchain go1.24.11
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.0
@@ -98,4 +100,4 @@ require (
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
-replace github.com/docker/docker => github.com/docker/engine v0.0.0-20190717161051-705d9623b7c1
+replace github.com/docker/docker => github.com/docker/engine v1.13.1
