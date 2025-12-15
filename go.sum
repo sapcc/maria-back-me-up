@@ -150,8 +150,8 @@ github.com/robfig/cron/v3 v3.0.1/go.mod h1:eQICP3HwyT7UooqI/z+Ov+PtYAWygg1TEWWzG
 github.com/rogpeppe/go-internal v1.3.0/go.mod h1:M8bDsm7K2OlrFYOpmOWEs/qY81heoFRclV5y23lUDJ4=
 github.com/rogpeppe/go-internal v1.13.1 h1:KvO1DLK/DRN07sQ1LQKScxyZJuNnedQ5/wKSR38lUII=
 github.com/rogpeppe/go-internal v1.13.1/go.mod h1:uMEvuHeurkdAXX61udpOXGD/AzZDWNMNyH2VO9fmH0o=
-github.com/sapcc/go-api-declarations v1.16.0 h1:uMB6SFPBAClusbAWwmeMeUi5eHVf9FpZWWf3VwPrsIg=
-github.com/sapcc/go-api-declarations v1.16.0/go.mod h1:MWmLjmvjftgyAugNUfIhsDsHIzXH1pn32cWLZpiluKg=
+github.com/sapcc/go-api-declarations v1.18.0 h1:I73wuBKJEAeAI7nYuB4tHY9n9pydj5mgM7Zn+9fryAA=
+github.com/sapcc/go-api-declarations v1.18.0/go.mod h1:N2klk2oDNa1lsS6gUBnCDJedHy/c2vmwJ1sryckRW40=
 github.com/shopspring/decimal v1.4.0 h1:bxl37RwXBklmTi0C79JfXCEBD1cqqHt0bbgBAGFp81k=
 github.com/shopspring/decimal v1.4.0/go.mod h1:gawqmDU56v4yIKSwfBSFip1HdCCXN8/+DMd9qYNcwME=
 github.com/sirupsen/logrus v1.9.3 h1:dueUQJ1C2q9oE3F7wvmSGAaVtTmUizReu6fjN8uqzbQ=
