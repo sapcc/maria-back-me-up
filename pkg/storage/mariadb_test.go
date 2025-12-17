@@ -22,7 +22,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/go-mysql-org/go-mysql/replication"
-	"github.com/pingcap/parser"
+	"github.com/pingcap/tidb/pkg/parser"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 )
 

@@ -108,9 +108,10 @@ func InitLoggerWithWriteSyncer(cfg *Config, output, errOutput zapcore.WriteSynce
 	opts = append(cfg.buildOptions(errOutput), opts...)
 	lg := zap.New(core, opts...)
 	r := &ZapProperties{
-		Core:   core,
-		Syncer: output,
-		Level:  level,
+		Core:      core,
+		Syncer:    output,
+		ErrSyncer: errOutput,
+		Level:     level,
 	}
 	return lg, r, nil
 }
@@ -182,6 +183,16 @@ func initFileLog(cfg *FileLogConfig) (*lumberjack.Logger, error) {
 		cfg.MaxSize = defaultLogMaxSize
 	}
 
+	compress := false
+	switch cfg.Compression {
+	case "":
+		compress = false
+	case "gzip":
+		compress = true
+	default:
+		return nil, fmt.Errorf("can't set compression to `%s`", cfg.Compression)
+	}
+
 	// use lumberjack to logrotate
 	return &lumberjack.Logger{
 		Filename:   cfg.Filename,
@@ -189,6 +200,7 @@ func initFileLog(cfg *FileLogConfig) (*lumberjack.Logger, error) {
 		MaxBackups: cfg.MaxBackups,
 		MaxAge:     cfg.MaxDays,
 		LocalTime:  true,
+		Compress:   compress,
 	}, nil
 }
 

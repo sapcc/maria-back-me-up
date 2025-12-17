@@ -1,4 +1,4 @@
-FROM keppel.eu-de-1.cloud.sap/ccloud-dockerhub-mirror/library/golang:1.24-bookworm as builder
+FROM keppel.eu-de-1.cloud.sap/ccloud-dockerhub-mirror/library/golang:1.25-bookworm as builder
 WORKDIR /go/src/github.com/sapcc/maria-back-me-up
 RUN apt-get update && apt-get install -y make git
 COPY . /src
