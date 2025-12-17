@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2025 SAP SE or an SAP affiliate company
+#
+# SPDX-License-Identifier: Apache-2.0
+
 FROM keppel.eu-de-1.cloud.sap/ccloud-dockerhub-mirror/library/golang:1.25-bookworm as builder
 WORKDIR /go/src/github.com/sapcc/maria-back-me-up
 RUN apt-get update && apt-get install -y make git

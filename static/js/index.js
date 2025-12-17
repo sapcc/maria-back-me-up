@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2025 SAP SE or an SAP affiliate company
+//
+// SPDX-License-Identifier: Apache-2.0
+
 let stoppingBackup = false
 document.querySelector("#inc_backup_btn").addEventListener("click", function() {
     disableButton("inc_backup_btn", "creating backup...")
