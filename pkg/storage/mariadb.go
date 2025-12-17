@@ -34,8 +34,8 @@ import (
 	"strconv"
 
 	pcerrors "github.com/pingcap/errors"
-	"github.com/pingcap/parser"
-	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/tidb/pkg/parser"
+	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pkg/errors"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
@@ -47,7 +47,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 
 	// blank import of the mysql parser for pingcap/parser
-	_ "github.com/pingcap/parser/test_driver"
+	_ "github.com/pingcap/tidb/pkg/parser/test_driver"
 )
 
 // MariaDBStream struct is ...
