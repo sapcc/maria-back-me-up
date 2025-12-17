@@ -48,6 +48,7 @@ var (
 	backupCancel context.CancelFunc
 	binlogChan   chan error
 	logger       *logrus.Entry
+	metricsOnce  sync.Once
 )
 
 type (
@@ -94,7 +95,9 @@ func NewManager(s *storage.Manager, db database.Database, k *k8s.Database, c con
 		return
 	}
 
-	prometheus.MustRegister(NewMetricsCollector(&us))
+	metricsOnce.Do(func() {
+		prometheus.MustRegister(NewMetricsCollector(&us))
+	})
 	return &Manager{
 		Db:              db,
 		cfg:             c,
