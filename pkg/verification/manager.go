@@ -19,6 +19,7 @@ package verification
 import (
 	"context"
 	"errors"
+	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
@@ -31,7 +32,8 @@ import (
 )
 
 var (
-	logger *logrus.Entry
+	logger      *logrus.Entry
+	metricsOnce sync.Once
 )
 
 // Manager struct for the verification process
@@ -78,7 +80,9 @@ func NewManager(c config.Config) (m *Manager, err error) {
 		return nil, errors.New("no verifications created")
 	}
 
-	prometheus.MustRegister(NewMetricsCollector(sts))
+	metricsOnce.Do(func() {
+		prometheus.MustRegister(NewMetricsCollector(sts))
+	})
 	return &Manager{
 		cfg:           c,
 		verifications: verifications,
