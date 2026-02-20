@@ -8,6 +8,26 @@ SPDX-License-Identifier: Apache-2.0
 
 MariaDB backup tool
 
+## Testing
+
+### Unit Tests
+
+Run unit tests (no external dependencies required):
+
+```bash
+go test ./...
+```
+
+### Integration Tests
+
+Integration tests require running MariaDB instances. Use the provided script:
+
+```bash
+./testing/with-mariadb.sh go test -v -tags integration ./pkg/test/...
+```
+
+The script starts MariaDB containers on ports 3306 (primary) and 3307 (streaming target).
+
 ## Features
 
 List of features currently available:
