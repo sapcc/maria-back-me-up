@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/aws/aws-sdk-go/aws"                  //nolint:staticcheck // TODO: migrate to aws-sdk-go-v2
+	"github.com/aws/aws-sdk-go/aws/credentials"      //nolint:staticcheck // TODO: migrate to aws-sdk-go-v2
+	"github.com/aws/aws-sdk-go/aws/session"          //nolint:staticcheck // TODO: migrate to aws-sdk-go-v2
+	"github.com/aws/aws-sdk-go/service/s3"           //nolint:staticcheck // TODO: migrate to aws-sdk-go-v2
+	"github.com/aws/aws-sdk-go/service/s3/s3manager" //nolint:staticcheck // TODO: migrate to aws-sdk-go-v2
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
 	"github.com/sirupsen/logrus"
