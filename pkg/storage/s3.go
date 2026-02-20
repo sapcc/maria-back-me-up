@@ -130,8 +130,8 @@ func (s *S3) DownloadBackupWithLogPosition(fullBackupPath, binlog string) (backu
 		return backupPath, &NoBackupError{}
 	}
 	svc := s3.New(s.session)
-	untils := strings.Split(binlog, ".")
-	untilBinlog, err := strconv.Atoi(untils[1])
+	binlogParts := strings.Split(binlog, ".")
+	untilBinlog, err := strconv.Atoi(binlogParts[1])
 	if err != nil {
 		return backupPath, s.handleError("", err)
 	}

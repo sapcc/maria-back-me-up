@@ -62,7 +62,7 @@ func getVerifyBackupState(v storage.Backup, t time.Time, withErr bool) string {
 			if t.After(v.VerifyFail.Time) {
 				return calcVerifyState(nil, withErr)
 			}
-			// if backup is before a green verify, mark it as sucessful
+			// if backup is before a green verify, mark it as successful
 			if t.Before(v.VerifySuccess.Time) {
 				return calcVerifyState(v.VerifySuccess, withErr)
 			}

@@ -37,10 +37,10 @@ It shows a list of available full backups in S3. Any full backup contains 1 or m
 The color of an incremental backups shows the state of the backup verification:\
 
 ```text
-# backup verfication not yet executed
-- backup verfication failed
-! Backup verfication partly succeeded. A restore was successful, however the table checksum failed
-+ backup verfication successful. A restore is save to perform!
+# backup verification not yet executed
+- backup verification failed
+! Backup verification partly succeeded. A restore was successful, however the table checksum failed
++ backup verification successful. A restore is save to perform!
 ```
 
 ## Full logical backups
@@ -58,7 +58,7 @@ Therefore the binlog needs to be enabled in the MariaDB config
 
 ```text
 log-bin=bin.log      # Binlog folder and name
-binlog_format=MIXED  # Formant, described below
+binlog_format=MIXED  # Format, described below
 expire_logs_days=3   # After x days binlog files get purged. Important! Otherwise volume could be filling up fast
 server_id=1          # Unique server id. Used for replication
 ```
@@ -83,11 +83,11 @@ namespace: # k8s namespace name
 sidecar: # boolean
 backup:
   full_backup_interval_in_hours: # Interval for full MariaDB dumps in hours
-  incremental_backup_interval_in_minutes: # Interval for saving incremental backups, one continous increment if < 0
+  incremental_backup_interval_in_minutes: # Interval for saving incremental backups, one continuous increment if < 0
   purge_binlog_after_minutes: # if > 0 binlog files are kept on the primary db until they are older
   enable_init_restore: # Enables a automatic restore if one of the databases (in MariaDB.databases) are missing.
   enable_restore_on_db_failure: # Enables automatic restore if the db is unhealthy.\
-  disable_binlog_purge_on_rotate: # Boolean to disable binlog purging. Purging is enabled by detault
+  disable_binlog_purge_on_rotate: # Boolean to disable binlog purging. Purging is enabled by default
   binlog_max_reconnect_attempts: # Number of reconnect attempts by the binlog syncer, default is 10
   outh:
     enabled: # enables OAuth to access the API (openID)\

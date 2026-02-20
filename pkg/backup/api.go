@@ -57,10 +57,10 @@ func (m *Manager) Restore(p string) (err error) {
 		if m.cfg.SideCar != nil && !*m.cfg.SideCar {
 			ip, err := m.k8sDB.GetPodIP(fmt.Sprintf("app=%s-mariadb", m.cfg.ServiceName))
 			if err != nil {
-				logger.Error("Cannot set pod databse to ready")
+				logger.Error("Cannot set pod database to ready")
 			}
 			if err = sendReadinessRequest([]byte(`{"ready":true}`), ip); err != nil {
-				logger.Error("Cannot set pod databse to ready")
+				logger.Error("Cannot set pod database to ready")
 			}
 		}
 		m.Health.Lock()
@@ -80,7 +80,7 @@ func (m *Manager) Restore(p string) (err error) {
 		return
 	}
 	logger.Info("restore successful")
-	//only remove backup files when restore was succesful, so manual restore is possible!
+	//only remove backup files when restore was successful, so manual restore is possible!
 	if err := os.RemoveAll(p); err != nil {
 		logger.Warnf("failed to remove backup files: %v", err)
 	}

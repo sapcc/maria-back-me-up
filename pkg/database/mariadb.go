@@ -56,7 +56,7 @@ type (
 	}
 )
 
-// NewMariaDB creates a mariadb databse instance
+// NewMariaDB creates a mariadb database instance
 func NewMariaDB(c config.Config, sm *storage.Manager, k *k8s.Database) (Database, error) {
 	return &MariaDB{
 		cfg:               c,
@@ -163,7 +163,7 @@ func (m *MariaDB) Restore(path string) (err error) {
 // VerifyRestore runs a restore on the mariadb for verification
 func (m *MariaDB) VerifyRestore(path string) (err error) {
 	if err = m.Up(10*time.Minute, false); err != nil {
-		return errors.New("timed out waiting for verfiy mariadb to boot. Cant perform verification")
+		return errors.New("timed out waiting for verify mariadb to boot. Cant perform verification")
 	}
 	if err = m.restoreDump(path); err != nil {
 		return
@@ -362,7 +362,7 @@ func (m *MariaDB) StartIncBackup(ctx context.Context, mp LogPosition, dir string
 				continue
 			}
 		} else if ev.Header.EventType == replication.FORMAT_DESCRIPTION_EVENT {
-			// FormateDescriptionEvent is the first event in binlog, we will close old writer and create new ones
+			// FormatDescriptionEvent is the first event in binlog, we will close old writer and create new ones
 			if binlogFile != "" {
 				close(binlogChan)
 				time.Sleep(100 * time.Millisecond)
@@ -579,7 +579,7 @@ func (m *MariaDB) checkBackupDirExistsAndCreate() (p string, err error) {
 }
 */
 
-// Up checks if the mariadb is up and recieving requests
+// Up checks if the mariadb is up and receiving requests
 func (m *MariaDB) Up(timeout time.Duration, withIP bool) (err error) {
 	cf := wait.ConditionFunc(func() (bool, error) {
 		err = m.pingMariaDB(withIP)

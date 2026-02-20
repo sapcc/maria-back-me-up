@@ -68,7 +68,7 @@ func NewManager(c config.StorageService, serviceName, restoreFolder, binLog stri
 		cfg:             c,
 		storageServices: stsvc,
 	}
-	m.updateErroStatus()
+	m.updateErrorStatus()
 	return
 }
 
@@ -265,7 +265,7 @@ func (m *Manager) createChannels(count int) []chan StreamEvent {
 	return channels
 }
 
-func (m *Manager) updateErroStatus() {
+func (m *Manager) updateErrorStatus() {
 	ticker := time.NewTicker(5 * time.Minute)
 	go func() {
 		for {
