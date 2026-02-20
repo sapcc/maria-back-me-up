@@ -11,7 +11,7 @@
   ],
   "commitMessageAction": "Renovate: Update",
   "constraints": {
-    "go": "1.24"
+    "go": "1.25"
   },
   "dependencyDashboardOSVVulnerabilitySummary": "all",
   "osvVulnerabilityAlerts": true,
@@ -22,20 +22,6 @@
   "packageRules": [
     {
       "matchPackageNames": [
-        "golang"
-      ],
-      "allowedVersions": "1.24.x"
-    },
-    {
-      "matchPackageNames": [
-        "/^github\\.com\\/sapcc\\/.*/"
-      ],
-      "automerge": true,
-      "groupName": "github.com/sapcc"
-    },
-    {
-      "matchPackageNames": [
-        "!/^github\\.com\\/sapcc\\/.*/",
         "/.*/"
       ],
       "matchUpdateTypes": [
@@ -46,9 +32,37 @@
     },
     {
       "matchPackageNames": [
+        "/^github\\.com\\/sapcc\\/.*/"
+      ],
+      "automerge": true,
+      "groupName": "github.com/sapcc"
+    },
+    {
+      "matchPackageNames": [
+        "go",
+        "golang",
+        "actions/go-versions"
+      ],
+      "groupName": "golang",
+      "separateMinorPatch": true
+    },
+    {
+      "matchPackageNames": [
+        "go",
+        "golang",
+        "actions/go-versions"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "major"
+      ],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "matchPackageNames": [
         "/^k8s.io\\//"
       ],
-      "allowedVersions": "0.28.x"
+      "allowedVersions": "0.33.x"
     }
   ],
   "prHourlyLimit": 0,
