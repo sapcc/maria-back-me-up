@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # SPDX-FileCopyrightText: 2025 SAP SE or an SAP affiliate company
 #
@@ -25,13 +25,13 @@ mysql_options='--protocol=socket -uroot'
 execute() {
     statement="$1"
     if [ -n "$statement" ]; then
-        mysql -ss $mysql_options -e "$statement"
+        mysql -ss "$mysql_options" -e "$statement"
     else
-        cat /dev/stdin | mysql -ss $mysql_options
+        cat /dev/stdin | mysql -ss "$mysql_options"
     fi
 }
 
-for i in `seq 30 -1 0`; do
+for i in $(seq 30 -1 0); do
     if execute 'SELECT 1' &> /dev/null; then
         break
     fi
@@ -48,15 +48,15 @@ echo "Setting root password..."
 sudo mysql -e "SET PASSWORD FOR 'root'@'localhost' = PASSWORD('test');"
 
 echo "Creating test database..."
- 
+
 sudo mysql -e "CREATE DATABASE IF NOT EXISTS test"
- 
+
 echo "Creating service database"
- 
+
 sudo mysql -e "CREATE DATABASE IF NOT EXISTS service"
- 
+
 echo "Creating table tasks in service database"
- 
+
 sudo mysql -e "CREATE TABLE IF NOT EXISTS service.tasks ( \
     task_id INT AUTO_INCREMENT PRIMARY KEY, \
     title VARCHAR(255) NOT NULL, \
@@ -66,20 +66,20 @@ sudo mysql -e "CREATE TABLE IF NOT EXISTS service.tasks ( \
     ) ENGINE=INNODB;" \
 
 echo "Inserting data into tasks table..."
- 
- 
+
+
 insert1="INSERT INTO service.tasks (title, start_date, due_date, description) \
         VALUES('task1', '2021-05-02', '2022-05-02', 'task info 1');"
- 
- 
+
+
 insert2="INSERT INTO service.tasks (title, start_date, due_date, description) \
         VALUES('task2', '2021-05-02', '2022-05-02', 'task info 2');"
- 
- 
+
+
 insert3="INSERT INTO service.tasks (title, start_date, due_date, description) \
         VALUES('task3', '2021-05-02', '2022-05-02', 'task info 3');"
- 
- 
+
+
 insert4="INSERT INTO service.tasks (title, start_date, due_date, description) \
         VALUES('task4', '2021-05-02', '2022-05-02', 'task info 4');"
 
@@ -87,8 +87,8 @@ sudo mysql -e "$insert1"
 sudo mysql -e "$insert2"
 sudo mysql -e "$insert3"
 sudo mysql -e "$insert4"
- 
- 
+
+
 echo "Inserting dummy data into tasks table finished"
 
 echo "Starting background check to restart MariaDB if shutdown"
@@ -117,13 +117,13 @@ mysql_options='--protocol=socket -uroot -S/tmp/mysqlstream.sock'
 execute() {
     statement="$1"
     if [ -n "$statement" ]; then
-        mysql -ss $mysql_options -e "$statement"
+        mysql -ss "$mysql_options" -e "$statement"
     else
-        cat /dev/stdin | mysql -ss $mysql_options
+        cat /dev/stdin | mysql -ss "$mysql_options"
     fi
 }
 
-for i in `seq 30 -1 0`; do
+for i in $(seq 30 -1 0); do
     if execute 'SELECT 1' &> /dev/null; then
         break
     fi
@@ -137,7 +137,7 @@ fi
 
 sudo mysql -S/tmp/mysqlstream.sock -e "SET PASSWORD FOR 'root'@'localhost' = PASSWORD('streaming');"
 
-echo "Running command: $@"
+echo "Running command: $*"
 set +e
 "$@"
 EXIT_CODE=$?
