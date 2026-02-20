@@ -4,16 +4,16 @@ metadata:
   url: https://github.com/sapcc/maria-back-me-up
 
 binaries:
-  - name:        backup
+  - name: backup
     fromPackage: ./cmd/backup
-    installTo:   bin/
-  - name:        verification
+    installTo: bin/
+  - name: verification
     fromPackage: ./cmd/verification
-    installTo:   bin/
+    installTo: bin/
 
 coverageTest:
-  only: '/pkg'
-  except: '/test'
+  only: "/pkg"
+  except: "/test"
 
 dockerfile:
   enabled: false
@@ -24,6 +24,17 @@ golang:
 
 golangciLint:
   createConfig: false
+
+githubWorkflow:
+  global:
+    defaultBranch: master
+  ci:
+    enabled: true
+    ignorePaths: ["**.md"]
+  license:
+    enabled: true
+  securityChecks:
+    enabled: true
 
 renovate:
   enabled: true
