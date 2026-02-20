@@ -280,8 +280,8 @@ func (s *Swift) DownloadBackupWithLogPosition(fullBackupPath string, binlog stri
 	if fullBackupPath == "" || binlog == "" {
 		return path, &NoBackupError{}
 	}
-	untils := strings.Split(binlog, ".")
-	untilBinlog, err := strconv.Atoi(untils[1])
+	binlogParts := strings.Split(binlog, ".")
+	untilBinlog, err := strconv.Atoi(binlogParts[1])
 	if err != nil {
 		return
 	}

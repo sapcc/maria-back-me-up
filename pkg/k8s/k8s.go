@@ -135,7 +135,7 @@ func (m *Database) createService(p string, cfg any) (svc *v1.Service, err error)
 	return m.client.CoreV1().Services(m.ns).Create(context.Background(), svc, metav1.CreateOptions{})
 }
 
-// GetPodIP returns the pods actual ip based on as lable selector
+// GetPodIP returns the pods actual ip based on a label selector
 func (m *Database) GetPodIP(labelSelector string) (ip string, err error) {
 	p, err := m.client.CoreV1().Pods(m.ns).List(context.Background(), metav1.ListOptions{LabelSelector: labelSelector})
 	if err != nil {

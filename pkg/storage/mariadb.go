@@ -689,7 +689,7 @@ func cleanupLocks(db *sql.DB, cfg *config.MariaDBStream) (removedLocks int, err 
 		}
 	}
 
-	// kill all relevant connections whith locks
+	// kill all relevant connections with locks
 	for id := range locks {
 		if _, err := conn.ExecContext(ctx, fmt.Sprintf("kill connection %v;", id)); err != nil {
 			return 0, err
@@ -823,7 +823,7 @@ func createWhereCondition(columns []column, hasPrimaryKey bool) (condition strin
 	return
 }
 
-// getRowColumnsTableEvent combines the values from the row with the column defintion from the TableMapEvent
+// getRowColumnsTableEvent combines the values from the row with the column definition from the TableMapEvent
 func getRowColumnsTableEvent(table *replication.TableMapEvent, row []any, skipColumns []int) (columns []column, hasPrimaryKey bool) {
 	for i, col := range row {
 		if ok, nullable := table.Nullable(i); ok {
@@ -848,7 +848,7 @@ func getRowColumnsTableEvent(table *replication.TableMapEvent, row []any, skipCo
 	return columns, hasPrimaryKey
 }
 
-// getRowColumnsTableMetadata combines the values from the row with the column defintion from the TableMetadata
+// getRowColumnsTableMetadata combines the values from the row with the column definition from the TableMetadata
 func getRowColumnsTableMetadata(metadata map[int]columnDefinition, row []any, skipColumns []int) (columns []column, hasPrimaryKey bool) {
 
 	for i, col := range row {

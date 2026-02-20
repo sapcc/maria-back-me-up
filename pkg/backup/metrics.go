@@ -25,7 +25,7 @@ type (
 	}
 )
 
-// NewUpdateStatus returns a UpdateStatus with an intialized counter metric
+// NewUpdateStatus returns a UpdateStatus with an initialized counter metric
 func NewUpdateStatus() UpdateStatus {
 	return UpdateStatus{
 		FullBackup: make(map[string]int),

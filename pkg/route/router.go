@@ -51,7 +51,7 @@ func InitMetrics(m *backup.Manager) *echo.Echo {
 	return e
 }
 
-// InitVerificationMetrics inits the verficiation metrics routes
+// InitVerificationMetrics inits the verification metrics routes
 func InitVerificationMetrics() *echo.Echo {
 	e := echo.New()
 	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
