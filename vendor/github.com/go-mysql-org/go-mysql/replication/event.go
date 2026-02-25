@@ -101,11 +101,50 @@ func (h *EventHeader) Decode(data []byte) error {
 	return nil
 }
 
+// headerFlagsString is returning a pipe separated string with flag names
+func headerFlagsString(flags uint16) string {
+	var flagstr []string
+
+	if (flags & LOG_EVENT_BINLOG_IN_USE_F) != 0 {
+		flagstr = append(flagstr, "IN_USE")
+	}
+	if (flags & LOG_EVENT_FORCED_ROTATE_F) != 0 {
+		flagstr = append(flagstr, "ROTATE")
+	}
+	if (flags & LOG_EVENT_THREAD_SPECIFIC_F) != 0 {
+		flagstr = append(flagstr, "THREAD_SPECIFIC")
+	}
+	if (flags & LOG_EVENT_SUPPRESS_USE_F) != 0 {
+		flagstr = append(flagstr, "SUPPRESS_USE")
+	}
+	if (flags & LOG_EVENT_UPDATE_TABLE_MAP_VERSION_F) != 0 {
+		flagstr = append(flagstr, "UPDATE_TABLE_MAP_VERSION")
+	}
+	if (flags & LOG_EVENT_ARTIFICIAL_F) != 0 {
+		flagstr = append(flagstr, "ARTIFICIAL")
+	}
+	if (flags & LOG_EVENT_RELAY_LOG_F) != 0 {
+		flagstr = append(flagstr, "RELAY_LOG")
+	}
+	if (flags & LOG_EVENT_IGNORABLE_F) != 0 {
+		flagstr = append(flagstr, "IGNORABLE")
+	}
+	if (flags & LOG_EVENT_NO_FILTER_F) != 0 {
+		flagstr = append(flagstr, "NO_FILTER")
+	}
+	if (flags & LOG_EVENT_MTS_ISOLATE_F) != 0 {
+		flagstr = append(flagstr, "MTS_ISOLATE")
+	}
+
+	return strings.Join(flagstr, "|")
+}
+
 func (h *EventHeader) Dump(w io.Writer) {
 	fmt.Fprintf(w, "=== %s ===\n", h.EventType)
 	fmt.Fprintf(w, "Date: %s\n", time.Unix(int64(h.Timestamp), 0).Format(mysql.TimeFormat))
 	fmt.Fprintf(w, "Log position: %d\n", h.LogPos)
 	fmt.Fprintf(w, "Event size: %d\n", h.EventSize)
+	fmt.Fprintf(w, "Header Flags: %s\n", headerFlagsString(h.Flags))
 }
 
 var (
@@ -153,7 +192,7 @@ type FormatDescriptionEvent struct {
 	EventTypeHeaderLengths []byte
 
 	// 0 is off, 1 is for CRC32, 255 is undefined
-	ChecksumAlgorithm byte
+	ChecksumAlgorithm BinlogChecksum
 }
 
 func (e *FormatDescriptionEvent) Decode(data []byte) error {
@@ -188,7 +227,7 @@ func (e *FormatDescriptionEvent) Decode(data []byte) error {
 
 	if calcVersionProduct(e.ServerVersion) >= checksumProduct {
 		// here, the last 5 bytes is 1 byte check sum alg type and 4 byte checksum if exists
-		e.ChecksumAlgorithm = data[len(data)-5]
+		e.ChecksumAlgorithm = BinlogChecksum(data[len(data)-5])
 		e.EventTypeHeaderLengths = data[pos : len(data)-5]
 	} else {
 		e.ChecksumAlgorithm = BINLOG_CHECKSUM_ALG_UNDEF
@@ -202,7 +241,7 @@ func (e *FormatDescriptionEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Version: %d\n", e.Version)
 	fmt.Fprintf(w, "Server version: %s\n", e.ServerVersion)
 	// fmt.Fprintf(w, "Create date: %s\n", time.Unix(int64(e.CreateTimestamp), 0).Format(TimeFormat))
-	fmt.Fprintf(w, "Checksum algorithm: %d\n", e.ChecksumAlgorithm)
+	fmt.Fprintf(w, "Checksum algorithm: %s\n", e.ChecksumAlgorithm)
 	// fmt.Fprintf(w, "Event header lengths: \n%s", hex.Dump(e.EventTypeHeaderLengths))
 	fmt.Fprintln(w)
 }
@@ -254,10 +293,10 @@ func decodeSid(data []byte) (format GtidFormat, sidnr uint64) {
 		masked := make([]byte, 8)
 		copy(masked, data[1:7])
 		sidnr = binary.LittleEndian.Uint64(masked)
-		return
+		return format, sidnr
 	}
 	sidnr = binary.LittleEndian.Uint64(data[:8])
-	return
+	return format, sidnr
 }
 
 func (e *PreviousGTIDsEvent) Decode(data []byte) error {
@@ -913,7 +952,7 @@ func (e *MariadbGTIDListEvent) Decode(data []byte) error {
 
 	e.GTIDs = make([]mysql.MariadbGTID, count)
 
-	for i := uint32(0); i < count; i++ {
+	for i := range count {
 		e.GTIDs[i].DomainID = binary.LittleEndian.Uint32(data[pos:])
 		pos += 4
 		e.GTIDs[i].ServerID = binary.LittleEndian.Uint32(data[pos:])
@@ -944,4 +983,68 @@ func (i *IntVarEvent) Decode(data []byte) error {
 func (i *IntVarEvent) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Type: %d\n", i.Type)
 	fmt.Fprintf(w, "Value: %d\n", i.Value)
+}
+
+// HeartbeatEvent is a HEARTBEAT_EVENT or HEARTBEAT_LOG_EVENT_V2
+// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_replication_binlog_event.html#sect_protocol_replication_event_heartbeat
+type HeartbeatEvent struct {
+	// Event version, either 1 for HEARTBEAT_EVENT or 2 for HEARTBEAT_LOG_EVENT_V2
+	Version int
+
+	// Filename of the binary log
+	Filename string
+
+	// Offset is the offset in the binlog file
+	Offset uint64
+}
+
+// Decode is decoding a heartbeat event payload (excluding event header and checksum)
+func (h *HeartbeatEvent) Decode(data []byte) error {
+	switch h.Version {
+	case 1:
+		// Also known as HEARTBEAT_EVENT
+		h.Filename = string(data)
+	case 2:
+		// Also known as HEARTBEAT_LOG_EVENT_V2
+		//
+		// The server sends this in the binlog stream if the following is set:
+		// DumpCommandFlag: replication.USE_HEARTBEAT_EVENT_V2
+		pos := 0
+		for pos < len(data) {
+			switch data[pos] {
+			case OTW_HB_LOG_FILENAME_FIELD:
+				pos++
+				nameLength := int(data[pos])
+				pos++
+				h.Filename = string(data[pos : pos+nameLength])
+				pos += nameLength
+			case OTW_HB_LOG_POSITION_FIELD:
+				pos++
+				offsetLength := int(data[pos])
+				pos++
+				var n int
+				h.Offset, _, n = mysql.LengthEncodedInt(data[pos : pos+offsetLength])
+				if n != offsetLength {
+					return errors.New("failed to read binary log offset")
+				}
+				pos += offsetLength
+			case OTW_HB_HEADER_END_MARK:
+				pos++
+			default:
+				return errors.New("unknown heartbeatv2 field")
+			}
+		}
+	default:
+		return errors.New("unknown heartbeat version")
+	}
+
+	return nil
+}
+
+func (h *HeartbeatEvent) Dump(w io.Writer) {
+	fmt.Fprintf(w,
+		"Heartbeat Event Version: %d\nBinlog File Name: %s\nBinlog Offset: %d\n",
+		h.Version, h.Filename, h.Offset,
+	)
+	fmt.Fprintln(w)
 }
