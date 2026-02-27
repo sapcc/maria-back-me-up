@@ -15,19 +15,19 @@ fi
 cd "$(dirname "$(dirname "$(readlink -f "$0")")")"
 
 echo 'Initializing database'
-mysql_install_db --user=mysql --datadir=/var/lib/mysql --basedir=/usr
+mariadb-install-db --user=mysql --datadir=/var/lib/mysql --basedir=/usr
 #chown -R mysql: testing/mysql/
 echo 'Database initialized'
 
-mysqld_safe --skip-networking=0 --nowatch --log-bin=mysqld-bin --binlog-row-metadata=FULL
-mysql_options=(--protocol=socket -uroot)
+mariadbd-safe --skip-networking=0 --nowatch --log-bin=mysqld-bin --binlog-row-metadata=FULL
+mariadb_options=(--protocol=socket -uroot)
 
 execute() {
     statement="$1"
     if [ -n "$statement" ]; then
-        mysql -ss "${mysql_options[@]}" -e "$statement"
+        mariadb -ss "${mariadb_options[@]}" -e "$statement"
     else
-        cat /dev/stdin | mysql -ss "${mysql_options[@]}"
+        cat /dev/stdin | mariadb -ss "${mariadb_options[@]}"
     fi
 }
 
@@ -35,29 +35,29 @@ for i in $(seq 30 -1 0); do
     if execute 'SELECT 1' &> /dev/null; then
         break
     fi
-    echo 'MySQL init process in progress...'
+    echo 'MariaDB init process in progress...'
     sleep 1
 done
 if [ "$i" = 0 ]; then
-    echo >&2 'MySQL init process failed.'
+    echo >&2 'MariaDB init process failed.'
     exit 1
 fi
 
 echo "Setting root password..."
 
-sudo mysql -e "SET PASSWORD FOR 'root'@'localhost' = PASSWORD('test');"
+sudo mariadb -e "SET PASSWORD FOR 'root'@'localhost' = PASSWORD('test');"
 
 echo "Creating test database..."
 
-sudo mysql -e "CREATE DATABASE IF NOT EXISTS test"
+sudo mariadb -e "CREATE DATABASE IF NOT EXISTS test"
 
 echo "Creating service database"
 
-sudo mysql -e "CREATE DATABASE IF NOT EXISTS service"
+sudo mariadb -e "CREATE DATABASE IF NOT EXISTS service"
 
 echo "Creating table tasks in service database"
 
-sudo mysql -e "CREATE TABLE IF NOT EXISTS service.tasks ( \
+sudo mariadb -e "CREATE TABLE IF NOT EXISTS service.tasks ( \
     task_id INT AUTO_INCREMENT PRIMARY KEY, \
     title VARCHAR(255) NOT NULL, \
     start_date DATE, \
@@ -83,10 +83,10 @@ insert3="INSERT INTO service.tasks (title, start_date, due_date, description) \
 insert4="INSERT INTO service.tasks (title, start_date, due_date, description) \
         VALUES('task4', '2021-05-02', '2022-05-02', 'task info 4');"
 
-sudo mysql -e "$insert1"
-sudo mysql -e "$insert2"
-sudo mysql -e "$insert3"
-sudo mysql -e "$insert4"
+sudo mariadb -e "$insert1"
+sudo mariadb -e "$insert2"
+sudo mariadb -e "$insert3"
+sudo mariadb -e "$insert4"
 
 
 echo "Inserting dummy data into tasks table finished"
@@ -95,31 +95,31 @@ echo "Starting background check to restart MariaDB if shutdown"
 x=0
 while :
   do
-    mysqladmin -h localhost -uroot -ptest ping > /dev/null || x=1
+    mariadb-admin -h localhost -uroot -ptest ping > /dev/null || x=1
     if [ $x -eq 0 ]
     then
       sleep 5
     else
       sleep 5
       echo "mariadb is down. restarting."
-      mysqld_safe --skip-networking=0 --nowatch --log-bin=mysqld-bin --binlog-row-metadata=FULL
+      mariadbd-safe --skip-networking=0 --nowatch --log-bin=mysqld-bin --binlog-row-metadata=FULL
       sleep 10
       x=0
     fi
 done &
 
 echo "Setting up secondary mariadb for streaming tests"
-mysql_install_db --user=mysql --datadir=/var/lib/mysqlstream --basedir=/usr
-mysqld_safe --skip-networking=0 --nowatch --socket=/tmp/mysqlstream.sock --port=3307 --datadir=/var/lib/mysqlstream
+mariadb-install-db --user=mysql --datadir=/var/lib/mysqlstream --basedir=/usr
+mariadbd-safe --skip-networking=0 --nowatch --socket=/tmp/mysqlstream.sock --port=3307 --datadir=/var/lib/mysqlstream
 
-mysql_options=(--protocol=socket -uroot -S/tmp/mysqlstream.sock)
+mariadb_options=(--protocol=socket -uroot -S/tmp/mysqlstream.sock)
 
 execute() {
     statement="$1"
     if [ -n "$statement" ]; then
-        mysql -ss "${mysql_options[@]}" -e "$statement"
+        mariadb -ss "${mariadb_options[@]}" -e "$statement"
     else
-        cat /dev/stdin | mysql -ss "${mysql_options[@]}"
+        cat /dev/stdin | mariadb -ss "${mariadb_options[@]}"
     fi
 }
 
@@ -127,15 +127,15 @@ for i in $(seq 30 -1 0); do
     if execute 'SELECT 1' &> /dev/null; then
         break
     fi
-    echo 'MySQL init process in progress...'
+    echo 'MariaDB init process in progress...'
     sleep 1
 done
 if [ "$i" = 0 ]; then
-    echo >&2 'MySQL init process failed.'
+    echo >&2 'MariaDB init process failed.'
     exit 1
 fi
 
-sudo mysql -S/tmp/mysqlstream.sock -e "SET PASSWORD FOR 'root'@'localhost' = PASSWORD('streaming');"
+sudo mariadb -S/tmp/mysqlstream.sock -e "SET PASSWORD FOR 'root'@'localhost' = PASSWORD('streaming');"
 
 echo "Running command: $*"
 set +e
