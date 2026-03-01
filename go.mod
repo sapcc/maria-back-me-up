@@ -14,7 +14,7 @@ require (
 	github.com/namsral/flag v1.7.4-pre
 	github.com/ncw/swift v1.0.53
 	github.com/pingcap/errors v0.11.5-0.20250523034308-74f78ae071ee
-	github.com/pingcap/tidb/pkg/parser v0.0.0-20251217084329-03bf50c7a53d
+	github.com/pingcap/tidb/pkg/parser v0.0.0-20260301000114-cb3f4eb0e814
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/robfig/cron/v3 v3.0.1
