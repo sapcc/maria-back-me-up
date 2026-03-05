@@ -40,6 +40,8 @@ type BinlogParser struct {
 	ignoreJSONDecodeErr      bool
 	verifyChecksum           bool
 
+	payloadDecoderConcurrency int
+
 	rowsEventDecodeFunc func(*RowsEvent, []byte) error
 
 	tableMapOptionalMetaDecodeFunc func([]byte) error
@@ -215,6 +217,10 @@ func (p *BinlogParser) SetFlavor(flavor string) {
 	p.flavor = flavor
 }
 
+func (p *BinlogParser) SetPayloadDecoderConcurrency(concurrency int) {
+	p.payloadDecoderConcurrency = concurrency
+}
+
 func (p *BinlogParser) SetRowsEventDecodeFunc(rowsEventDecodeFunc func(*RowsEvent, []byte) error) {
 	p.rowsEventDecodeFunc = rowsEventDecodeFunc
 }
@@ -243,7 +249,7 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 		if p.format != nil && p.format.ChecksumAlgorithm == BINLOG_CHECKSUM_ALG_CRC32 {
 			err := p.verifyCrc32Checksum(rawData)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed checksum for %v, log pos %d: %v", h.EventType, h.LogPos, err)
 			}
 			data = data[0 : len(data)-BinlogChecksumLength]
 		}
@@ -314,6 +320,10 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 				e = &IntVarEvent{}
 			case TRANSACTION_PAYLOAD_EVENT:
 				e = p.newTransactionPayloadEvent()
+			case HEARTBEAT_EVENT:
+				e = &HeartbeatEvent{Version: 1}
+			case HEARTBEAT_LOG_EVENT_V2:
+				e = &HeartbeatEvent{Version: 2}
 			default:
 				e = &GenericEvent{}
 			}
@@ -328,6 +338,16 @@ func (p *BinlogParser) parseEvent(h *EventHeader, data []byte, rawData []byte) (
 	} else {
 		err = e.Decode(data)
 	}
+
+	if fde, ok := e.(*FormatDescriptionEvent); ok {
+		if fde.ChecksumAlgorithm == BINLOG_CHECKSUM_ALG_CRC32 {
+			err := p.verifyCrc32Checksum(rawData)
+			if err != nil {
+				return nil, fmt.Errorf("failed checksum for %v, log pos %d: %v", h.EventType, h.LogPos, err)
+			}
+		}
+	}
+
 	if err != nil {
 		return nil, &EventError{h, err.Error(), data}
 	}
@@ -456,6 +476,7 @@ func (p *BinlogParser) newRowsEvent(h *EventHeader) *RowsEvent {
 func (p *BinlogParser) newTransactionPayloadEvent() *TransactionPayloadEvent {
 	e := &TransactionPayloadEvent{}
 	e.format = *p.format
+	e.concurrency = p.payloadDecoderConcurrency
 
 	return e
 }
