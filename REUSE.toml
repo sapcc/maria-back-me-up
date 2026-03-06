@@ -35,7 +35,39 @@ SPDX-License-Identifier = "BSD-3-Clause"
 
 [[annotations]]
 path = [
-  "vendor/github.com/aws/aws-sdk-go/**",
+  "vendor/github.com/aws/aws-sdk-go-v2/**",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Other"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [
+  "vendor/github.com/aws/aws-sdk-go-v2/config/**",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Other"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [
+  "vendor/github.com/aws/aws-sdk-go-v2/credentials/**",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Other"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [
+  "vendor/github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager/**",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Other"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [
+  "vendor/github.com/aws/aws-sdk-go-v2/service/s3/**",
 ]
 precedence = "override"
 SPDX-FileCopyrightText = "Other"
@@ -232,6 +264,118 @@ path = [
 precedence = "override"
 SPDX-FileCopyrightText = "Other"
 SPDX-License-Identifier = "BSD-3-Clause"
+
+[[annotations]]
+path = [
+  "vendor/github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream/**",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Other"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [
+  "vendor/github.com/aws/aws-sdk-go-v2/feature/ec2/imds/**",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Other"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [
+  "vendor/github.com/aws/aws-sdk-go-v2/internal/configsources/**",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Other"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [
+  "vendor/github.com/aws/aws-sdk-go-v2/internal/endpoints/v2/**",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Other"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [
+  "vendor/github.com/aws/aws-sdk-go-v2/internal/v4a/**",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Other"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [
+  "vendor/github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding/**",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Other"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [
+  "vendor/github.com/aws/aws-sdk-go-v2/service/internal/checksum/**",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Other"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [
+  "vendor/github.com/aws/aws-sdk-go-v2/service/internal/presigned-url/**",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Other"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [
+  "vendor/github.com/aws/aws-sdk-go-v2/service/internal/s3shared/**",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Other"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [
+  "vendor/github.com/aws/aws-sdk-go-v2/service/signin/**",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Other"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [
+  "vendor/github.com/aws/aws-sdk-go-v2/service/sso/**",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Other"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [
+  "vendor/github.com/aws/aws-sdk-go-v2/service/ssooidc/**",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Other"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [
+  "vendor/github.com/aws/aws-sdk-go-v2/service/sts/**",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Other"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [
+  "vendor/github.com/aws/smithy-go/**",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Other"
+SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
 path = [
@@ -480,22 +624,6 @@ path = [
 precedence = "override"
 SPDX-FileCopyrightText = "Other"
 SPDX-License-Identifier = "MPL-2.0"
-
-[[annotations]]
-path = [
-  "vendor/github.com/jmespath/go-jmespath/**",
-]
-precedence = "override"
-SPDX-FileCopyrightText = "Other"
-SPDX-License-Identifier = "Apache-2.0"
-
-[[annotations]]
-path = [
-  "vendor/github.com/jmespath/go-jmespath/internal/testify/**",
-]
-precedence = "override"
-SPDX-FileCopyrightText = "Other"
-SPDX-License-Identifier = "MIT"
 
 [[annotations]]
 path = [
@@ -824,14 +952,6 @@ path = [
 precedence = "override"
 SPDX-FileCopyrightText = "Other"
 SPDX-License-Identifier = "MIT"
-
-[[annotations]]
-path = [
-  "vendor/gopkg.in/yaml.v2/**",
-]
-precedence = "override"
-SPDX-FileCopyrightText = "Other"
-SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
 path = [
