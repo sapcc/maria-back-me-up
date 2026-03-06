@@ -60,15 +60,13 @@ func (g *Group) Wait() error {
 // The first call to return a non-nil error cancels the group; its error will be
 // returned by Wait.
 func (g *Group) Go(f func() error) {
-	g.wg.Add(1)
 
-	go func() {
-		defer g.wg.Done()
+	g.wg.Go(func() {
 		if err := f(); err != nil {
 			g.errs = multierror.Append(g.errs, err)
 			if g.cancel != nil {
 				g.cancel()
 			}
 		}
-	}()
+	})
 }
