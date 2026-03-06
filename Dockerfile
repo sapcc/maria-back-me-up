@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 ARG MARIADB_VERSION=10.11
 
-FROM keppel.eu-de-1.cloud.sap/ccloud-dockerhub-mirror/library/golang:1.25-bookworm as builder
+FROM keppel.eu-de-1.cloud.sap/ccloud-dockerhub-mirror/library/golang:1.26-bookworm as builder
 WORKDIR /go/src/github.com/sapcc/maria-back-me-up
 RUN apt-get update && apt-get install -y make git
 COPY . /src

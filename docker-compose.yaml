@@ -5,7 +5,7 @@
 version: '3.5'
 services:
   db_prod:
-    image: mariadb:10.11.13
+    image: mariadb:10.11.16
     restart: on-failure
     environment:
       MYSQL_ROOT_PASSWORD: pw
@@ -16,7 +16,7 @@ services:
       - ./db_prod:/var/lib/mysql
 
   db_backup:
-    image: mariadb:10.11.13
+    image: mariadb:10.11.16
     restart: on-failure
     environment:
       MYSQL_ROOT_PASSWORD: pw
@@ -27,7 +27,7 @@ services:
       - ./db_backup:/var/lib/mysql
 
   db_test:
-    image: mariadb:10.11.13
+    image: mariadb:10.11.16
     restart: on-failure
     environment:
       MYSQL_ROOT_PASSWORD: test
@@ -38,7 +38,7 @@ services:
       - ./db_test:/var/lib/mysql
 
   db_streaming:
-    image: mariadb:10.11.13
+    image: mariadb:10.11.16
     restart: on-failure
     environment:
       MYSQL_ROOT_PASSWORD: streaming
