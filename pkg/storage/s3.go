@@ -4,6 +4,7 @@
 package storage
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -13,11 +14,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"                  //nolint:staticcheck // TODO: migrate to aws-sdk-go-v2
-	"github.com/aws/aws-sdk-go/aws/credentials"      //nolint:staticcheck // TODO: migrate to aws-sdk-go-v2
-	"github.com/aws/aws-sdk-go/aws/session"          //nolint:staticcheck // TODO: migrate to aws-sdk-go-v2
-	"github.com/aws/aws-sdk-go/service/s3"           //nolint:staticcheck // TODO: migrate to aws-sdk-go-v2
-	"github.com/aws/aws-sdk-go/service/s3/s3manager" //nolint:staticcheck // TODO: migrate to aws-sdk-go-v2
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
+	tmtypes "github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager/types"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
 	"github.com/sirupsen/logrus"
@@ -30,7 +33,9 @@ type (
 	// S3 struct is ...
 	S3 struct {
 		cfg           config.S3
-		session       *session.Session
+		client        *s3.Client
+		uploader      *transfermanager.Client
+		downloader    *transfermanager.Client
 		serviceName   string
 		restoreFolder string
 		logger        *logrus.Entry `yaml:"-"`
@@ -40,20 +45,43 @@ type (
 )
 
 // NewS3 creates a s3 storage instance
-func NewS3(c config.S3, serviceName, restoreFolder, binLog string) (s3 *S3, err error) {
-	s, err := session.NewSession(&aws.Config{
-		Endpoint:         new(c.AwsEndpoint),
-		Region:           new(c.Region),
-		Credentials:      credentials.NewStaticCredentials(c.AwsAccessKeyID, c.AwsSecretAccessKey, ""),
-		S3ForcePathStyle: c.S3ForcePathStyle,
-	})
+func NewS3(c config.S3, serviceName, restoreFolder, binLog string) (s3Storage *S3, err error) {
+	cfg, err := awsconfig.LoadDefaultConfig(context.Background(),
+		awsconfig.WithRegion(c.Region),
+		awsconfig.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(c.AwsAccessKeyID, c.AwsSecretAccessKey, ""),
+		),
+	)
 	if err != nil {
 		logger.Fatal(err)
 	}
 
+	clientOpts := []func(*s3.Options){
+		func(o *s3.Options) {
+			o.BaseEndpoint = aws.String(c.AwsEndpoint)
+		},
+	}
+	if c.S3ForcePathStyle != nil && *c.S3ForcePathStyle {
+		clientOpts = append(clientOpts, func(o *s3.Options) {
+			o.UsePathStyle = true
+		})
+	}
+	client := s3.NewFromConfig(cfg, clientOpts...)
+
+	uploader := transfermanager.New(client, func(o *transfermanager.Options) {
+		o.PartSizeBytes = 20 << 20 // 20MB
+		o.Concurrency = 5
+	})
+	downloader := transfermanager.New(client, func(o *transfermanager.Options) {
+		o.PartSizeBytes = 64 * 1024 * 1024 // 64MB per part
+		o.Concurrency = 6
+	})
+
 	return &S3{
 		cfg:           c,
-		session:       s,
+		client:        client,
+		uploader:      uploader,
+		downloader:    downloader,
 		serviceName:   serviceName,
 		restoreFolder: path.Join(restoreFolder, c.Name),
 		logger:        logger.WithField("service", serviceName),
@@ -99,25 +127,21 @@ func (s *S3) WriteFolder(p string) (err error) {
 
 // WriteStream implements interface
 func (s *S3) WriteStream(fileName, mimeType string, body io.Reader, tags map[string]string, dlo bool) error {
-	uploader := s3manager.NewUploader(s.session, func(u *s3manager.Uploader) {
-		u.PartSize = 20 << 20 // 20MB
-		u.MaxUploadParts = 10000
-	})
-	var tag string
+	var tag strings.Builder
 	for k, v := range tags {
-		tag += fmt.Sprintf("%s=%s&", k, v)
+		fmt.Fprintf(&tag, "%s=%s&", k, v)
 	}
 
-	input := s3manager.UploadInput{
-		Bucket:               new(s.cfg.BucketName),
-		Key:                  new(path.Join(s.serviceName, fileName)),
+	input := &transfermanager.UploadObjectInput{
+		Bucket:               aws.String(s.cfg.BucketName),
+		Key:                  aws.String(path.Join(s.serviceName, fileName)),
 		Body:                 body,
 		SSECustomerAlgorithm: s.cfg.SSECustomerAlgorithm,
 		SSECustomerKey:       s.cfg.SSECustomerKey,
-		Tagging:              &tag,
+		Tagging:              aws.String(tag.String()),
 	}
 
-	_, err := uploader.Upload(&input)
+	_, err := s.uploader.UploadObject(context.Background(), input)
 	if err != nil {
 		return s.handleError(fileName, err)
 	}
@@ -129,13 +153,12 @@ func (s *S3) DownloadBackupWithLogPosition(fullBackupPath, binlog string) (backu
 	if fullBackupPath == "" || binlog == "" {
 		return backupPath, &NoBackupError{}
 	}
-	svc := s3.New(s.session)
 	binlogParts := strings.Split(binlog, ".")
 	untilBinlog, err := strconv.Atoi(binlogParts[1])
 	if err != nil {
 		return backupPath, s.handleError("", err)
 	}
-	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: new(s.cfg.BucketName), Prefix: new(fullBackupPath)})
+	listRes, err := s.client.ListObjectsV2(context.Background(), &s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(fullBackupPath)})
 	if err != nil {
 		return backupPath, s.handleError("", err)
 	}
@@ -171,8 +194,7 @@ func (s *S3) DownloadBackupWithLogPosition(fullBackupPath, binlog string) (backu
 // GetTotalIncBackupsFromDump implements interface
 func (s *S3) GetTotalIncBackupsFromDump(key string) (t int, err error) {
 	t = 0
-	svc := s3.New(s.session)
-	list, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: new(s.cfg.BucketName), Prefix: new(strings.ReplaceAll(key, "dump.tar", ""))})
+	list, err := s.client.ListObjectsV2(context.Background(), &s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.ReplaceAll(key, "dump.tar", ""))})
 	if err != nil {
 		return t, s.handleError("", err)
 	}
@@ -186,21 +208,20 @@ func (s *S3) GetTotalIncBackupsFromDump(key string) (t int, err error) {
 
 // GetIncBackupsFromDump implements interface
 func (s *S3) GetIncBackupsFromDump(key string) (bl []Backup, err error) {
-	svc := s3.New(s.session)
 	b := Backup{
 		Storage: s.cfg.Name,
 		IncList: make([]IncBackup, 0),
 		Key:     key,
 	}
 
-	list, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: new(s.cfg.BucketName), Prefix: new(strings.ReplaceAll(key, "dump.tar", ""))})
+	list, err := s.client.ListObjectsV2(context.Background(), &s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.ReplaceAll(key, "dump.tar", ""))})
 	if err != nil {
 		return bl, s.handleError("", err)
 	}
 	for _, incObj := range list.Contents {
 		if strings.Contains(*incObj.Key, "verify_") {
 			v := Verify{}
-			w := aws.NewWriteAtBuffer([]byte{})
+			w := tmtypes.NewWriteAtBuffer([]byte{})
 			if err := s.downloadStream(w, incObj); err != nil {
 				return bl, s.handleError("", err)
 			}
@@ -229,8 +250,7 @@ func (s *S3) GetIncBackupsFromDump(key string) (bl []Backup, err error) {
 
 // GetFullBackups implements interface
 func (s *S3) GetFullBackups() (bl []Backup, err error) {
-	svc := s3.New(s.session)
-	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: new(s.cfg.BucketName), Prefix: new(s.serviceName + "/"), Delimiter: new("y")})
+	listRes, err := s.client.ListObjectsV2(context.Background(), &s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(s.serviceName + "/"), Delimiter: aws.String("y")})
 	if err != nil {
 		return bl, s.handleError("", err)
 	}
@@ -256,8 +276,7 @@ func (s *S3) GetFullBackups() (bl []Backup, err error) {
 
 // DownloadBackup implements interface
 func (s *S3) DownloadBackup(fullBackup Backup) (path string, err error) {
-	svc := s3.New(s.session)
-	listRes, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: new(s.cfg.BucketName), Prefix: new(strings.ReplaceAll(fullBackup.Key, "dump.tar", ""))})
+	listRes, err := s.client.ListObjectsV2(context.Background(), &s3.ListObjectsV2Input{Bucket: aws.String(s.cfg.BucketName), Prefix: aws.String(strings.ReplaceAll(fullBackup.Key, "dump.tar", ""))})
 	if err != nil {
 		return path, s.handleError("", err)
 	}
@@ -276,8 +295,7 @@ func (s *S3) DownloadBackup(fullBackup Backup) (path string, err error) {
 
 // DownloadLatestBackup implements interface
 func (s *S3) DownloadLatestBackup() (path string, err error) {
-	svc := s3.New(s.session)
-	tag, err := svc.GetObjectTagging(&s3.GetObjectTaggingInput{Bucket: new(s.cfg.BucketName), Key: new(filepath.Join(s.serviceName, LastSuccessfulBackupFile))})
+	tag, err := s.client.GetObjectTagging(context.Background(), &s3.GetObjectTaggingInput{Bucket: aws.String(s.cfg.BucketName), Key: aws.String(filepath.Join(s.serviceName, LastSuccessfulBackupFile))})
 	if err != nil {
 		return path, s.handleError("", err)
 	}
@@ -286,11 +304,11 @@ func (s *S3) DownloadLatestBackup() (path string, err error) {
 		var key string
 		var binlog string
 		for _, t := range tag.TagSet {
-			if *t.Key == "key" {
-				key = *t.Value
+			if aws.ToString(t.Key) == "key" {
+				key = aws.ToString(t.Value)
 			}
-			if *t.Key == "binlog" {
-				binlog = *t.Value
+			if aws.ToString(t.Key) == "binlog" {
+				binlog = aws.ToString(t.Value)
 			}
 		}
 
@@ -300,7 +318,7 @@ func (s *S3) DownloadLatestBackup() (path string, err error) {
 	return path, &NoBackupError{}
 }
 
-func (s *S3) downloadFile(path string, obj *s3.Object) error {
+func (s *S3) downloadFile(path string, obj types.Object) error {
 	if err := os.MkdirAll(filepath.Join(path, filepath.Dir(*obj.Key)), os.ModePerm); err != nil {
 		return s.handleError("", err)
 	}
@@ -314,15 +332,12 @@ func (s *S3) downloadFile(path string, obj *s3.Object) error {
 			logger.Warnf("failed to close file: %v", err)
 		}
 	}()
-	// Create a downloader with the session and custom options
-	downloader := s3manager.NewDownloader(s.session, func(d *s3manager.Downloader) {
-		d.PartSize = 64 * 1024 * 1024 // 64MB per part
-		d.Concurrency = 6
-	})
-	if _, err := downloader.Download(file,
-		&s3.GetObjectInput{
-			Bucket:               new(s.cfg.BucketName),
-			Key:                  new(*obj.Key),
+
+	if _, err := s.downloader.DownloadObject(context.Background(),
+		&transfermanager.DownloadObjectInput{
+			Bucket:               aws.String(s.cfg.BucketName),
+			Key:                  obj.Key,
+			WriterAt:             file,
 			SSECustomerAlgorithm: s.cfg.SSECustomerAlgorithm,
 			SSECustomerKey:       s.cfg.SSECustomerKey,
 		}); err != nil {
@@ -331,15 +346,12 @@ func (s *S3) downloadFile(path string, obj *s3.Object) error {
 	return nil
 }
 
-func (s *S3) downloadStream(w io.WriterAt, obj *s3.Object) error {
-	downloader := s3manager.NewDownloader(s.session, func(d *s3manager.Downloader) {
-		d.PartSize = 64 * 1024 * 1024 // 64MB per part
-		d.Concurrency = 6
-	})
-	if _, err := downloader.Download(w,
-		&s3.GetObjectInput{
-			Bucket:               new(s.cfg.BucketName),
-			Key:                  new(*obj.Key),
+func (s *S3) downloadStream(w io.WriterAt, obj types.Object) error {
+	if _, err := s.downloader.DownloadObject(context.Background(),
+		&transfermanager.DownloadObjectInput{
+			Bucket:               aws.String(s.cfg.BucketName),
+			Key:                  obj.Key,
+			WriterAt:             w,
 			SSECustomerAlgorithm: s.cfg.SSECustomerAlgorithm,
 			SSECustomerKey:       s.cfg.SSECustomerKey,
 		}); err != nil {
