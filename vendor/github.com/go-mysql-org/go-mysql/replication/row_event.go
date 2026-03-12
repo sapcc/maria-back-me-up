@@ -344,18 +344,18 @@ func (e *TableMapEvent) decodeIntSeq(v []byte) (ret []uint64, err error) {
 		p += n
 		ret = append(ret, i)
 	}
-	return
+	return ret, err
 }
 
 func (e *TableMapEvent) decodeDefaultCharset(v []byte) (ret []uint64, err error) {
 	ret, err = e.decodeIntSeq(v)
 	if err != nil {
-		return
+		return ret, err
 	}
 	if len(ret)%2 != 1 {
 		return nil, errors.Errorf("Expect odd item in DefaultCharset but got %d", len(ret))
 	}
-	return
+	return ret, err
 }
 
 func (e *TableMapEvent) decodeColumnNames(v []byte) error {
@@ -390,7 +390,7 @@ func (e *TableMapEvent) decodeStrValue(v []byte) (ret [][][]byte, err error) {
 		}
 		ret = append(ret, vals)
 	}
-	return
+	return ret, err
 }
 
 func (e *TableMapEvent) decodeSimplePrimaryKey(v []byte) error {
@@ -561,7 +561,7 @@ func (e *TableMapEvent) Dump(w io.Writer) {
 // i must be in range [0, ColumnCount).
 func (e *TableMapEvent) Nullable(i int) (available, nullable bool) {
 	if len(e.NullBitmap) == 0 {
-		return
+		return available, nullable
 	}
 	return true, e.NullBitmap[i/8]&(1<<uint(i%8)) != 0
 }
@@ -942,7 +942,7 @@ type RowsEvent struct {
 	ColumnBitmap2 []byte
 
 	// rows: all return types from RowsEvent.decodeValue()
-	Rows           [][]interface{}
+	Rows           [][]any
 	SkippedColumns [][]int
 
 	parseTime                bool
@@ -1082,8 +1082,7 @@ func (e *RowsEvent) DecodeData(pos int, data []byte) (err2 error) {
 	if e.compressed {
 		data, err2 = mysql.DecompressMariadbData(data[pos:])
 		if err2 != nil {
-			//nolint:nakedret
-			return
+			return err2
 		}
 		pos = 0
 	}
@@ -1107,7 +1106,7 @@ func (e *RowsEvent) DecodeData(pos int, data []byte) (err2 error) {
 		rowsLen++
 	}
 	e.SkippedColumns = make([][]int, 0, rowsLen)
-	e.Rows = make([][]interface{}, 0, rowsLen)
+	e.Rows = make([][]any, 0, rowsLen)
 
 	var rowImageType EnumRowImageType
 	switch e.eventType {
@@ -1188,7 +1187,7 @@ func (e *RowsEvent) decodeImage(data []byte, bitmap []byte, rowImageType EnumRow
 		}
 	}
 
-	row := make([]interface{}, e.ColumnCount)
+	row := make([]any, e.ColumnCount)
 
 	// refer: https://github.com/alibaba/canal/blob/c3e38e50e269adafdd38a48c63a1740cde304c67/dbsync/src/main/java/com/taobao/tddl/dbsync/binlog/event/RowsLogBuffer.java#L63
 	count := 0
@@ -1243,7 +1242,7 @@ func (e *RowsEvent) decodeImage(data []byte, bitmap []byte, rowImageType EnumRow
 	return pos, nil
 }
 
-func (e *RowsEvent) parseFracTime(t interface{}) interface{} {
+func (e *RowsEvent) parseFracTime(t any) any {
 	v, ok := t.(fracTime)
 	if !ok {
 		return t
@@ -1259,7 +1258,7 @@ func (e *RowsEvent) parseFracTime(t interface{}) interface{} {
 }
 
 // see mysql sql/log_event.cc log_event_print_value
-func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16, isPartial bool) (v interface{}, n int, err error) {
+func (e *RowsEvent) decodeValue(data []byte, tp byte, meta uint16, isPartial bool) (v any, n int, err error) {
 	length := 0
 
 	if tp == mysql.MYSQL_TYPE_STRING {
@@ -1481,7 +1480,7 @@ func decodeString(data []byte, length int) (v string, n int) {
 		v = utils.ByteSliceToString(data[2:n])
 	}
 
-	return
+	return v, n
 }
 
 // ref: https://github.com/mysql/mysql-server/blob/a9b0c712de3509d8d08d3ba385d41a4df6348775/strings/decimal.c#L137
@@ -1502,12 +1501,12 @@ func decodeDecimalDecompressValue(compIndx int, data []byte, mask uint8) (size i
 	case 4:
 		value = uint32(data[3]^mask) | uint32(data[2]^mask)<<8 | uint32(data[1]^mask)<<16 | uint32(data[0]^mask)<<24
 	}
-	return
+	return size, value
 }
 
 var zeros = [digitsPerInteger]byte{48, 48, 48, 48, 48, 48, 48, 48, 48}
 
-func decodeDecimal(data []byte, precision int, decimals int, useDecimal bool) (interface{}, int, error) {
+func decodeDecimal(data []byte, precision int, decimals int, useDecimal bool) (any, int, error) {
 	// see python mysql replication and https://github.com/jeremycole/mysql_binlog
 	integral := precision - decimals
 	uncompIntegral := integral / digitsPerInteger
@@ -1547,7 +1546,7 @@ func decodeDecimal(data []byte, precision int, decimals int, useDecimal bool) (i
 		res.WriteString(strconv.FormatUint(uint64(value), 10))
 	}
 
-	for i := 0; i < uncompIntegral; i++ {
+	for range uncompIntegral {
 		value = binary.BigEndian.Uint32(data[pos:]) ^ mask
 		pos += 4
 		if zeroLeading {
@@ -1569,7 +1568,7 @@ func decodeDecimal(data []byte, precision int, decimals int, useDecimal bool) (i
 	if pos < len(data) {
 		res.WriteString(".")
 
-		for i := 0; i < uncompFractional; i++ {
+		for range uncompFractional {
 			value = binary.BigEndian.Uint32(data[pos:]) ^ mask
 			pos += 4
 			toWrite := strconv.FormatUint(uint64(value), 10)
@@ -1625,7 +1624,7 @@ func decodeBit(data []byte, nbits int, length int) (value int64, err error) {
 			value = int64(data[0])
 		}
 	}
-	return
+	return value, err
 }
 
 func littleDecodeBit(data []byte, nbits int, length int) (value int64, err error) {
@@ -1657,10 +1656,10 @@ func littleDecodeBit(data []byte, nbits int, length int) (value int64, err error
 			value = int64(data[0])
 		}
 	}
-	return
+	return value, err
 }
 
-func decodeTimestamp2(data []byte, dec uint16, timestampStringLocation *time.Location) (interface{}, int, error) {
+func decodeTimestamp2(data []byte, dec uint16, timestampStringLocation *time.Location) (any, int, error) {
 	// get timestamp binary length
 	n := int(4 + (dec+1)/2)
 	sec := int64(binary.BigEndian.Uint32(data[0:4]))
@@ -1687,7 +1686,7 @@ func decodeTimestamp2(data []byte, dec uint16, timestampStringLocation *time.Loc
 
 const DATETIMEF_INT_OFS int64 = 0x8000000000
 
-func decodeDatetime2(data []byte, dec uint16, parseTime bool) (interface{}, int, error) {
+func decodeDatetime2(data []byte, dec uint16, parseTime bool) (any, int, error) {
 	// get datetime binary length
 	n := int(5 + (dec+1)/2)
 
@@ -1859,7 +1858,7 @@ func decodeBlob(data []byte, meta uint16) (v []byte, n int, err error) {
 		err = fmt.Errorf("invalid blob packlen = %d", meta)
 	}
 
-	return
+	return v, n, err
 }
 
 func (e *RowsEvent) Dump(w io.Writer) {
