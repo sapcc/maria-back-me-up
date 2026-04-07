@@ -73,12 +73,12 @@ func (m *MariaDB) CreateFullBackup(path string) (bp LogPosition, err error) {
 	}
 	defer func() {
 		if err = m.setSlowQueryLog(slowQueryLogON); err != nil {
-			log.Error(fmt.Errorf("error enabling slow_query_log: %s", err.Error()))
+			log.Warn("error enabling slow_query_log: ", err)
 		}
 	}()
 
 	if err = m.setSlowQueryLog(slowQueryLogOFF); err != nil {
-		log.Error(fmt.Errorf("error disabling slow_query_log: %s", err.Error()))
+		log.Warn("error disabling slow_query_log: ", err)
 		// dont stop fullbackup because of toggling slow_query_log
 	}
 
@@ -425,11 +425,11 @@ func (m *MariaDB) flushLogs(binlogFile string) {
 	defer func() {
 		m.flushTimer = nil
 		if err := m.setSlowQueryLog(slowQueryLogON); err != nil {
-			log.Error(fmt.Errorf("error enabling slow_query_log: %s", err.Error()))
+			log.Warn("error enabling slow_query_log: ", err)
 		}
 	}()
 	if err := m.setSlowQueryLog(slowQueryLogOFF); err != nil {
-		log.Error(fmt.Errorf("error disabling slow_query_log: %s", err.Error()))
+		log.Warn("error disabling slow_query_log: ", err)
 		// dont stop because of toggling slow_query_log
 	}
 	// #nosec G204
