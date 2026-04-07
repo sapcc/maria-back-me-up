@@ -5,6 +5,7 @@ package database
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -558,15 +559,19 @@ func (m *MariaDB) restoreIncBackup(p string) (err error) {
 	defer func() {
 		_ = pipe.Close()
 	}()
+	var stderrBuf bytes.Buffer
 	mysqlPipe.Stdin = pipe
-	// mysqlPipe.Stdout = os.Stdout
+	mysqlPipe.Stderr = &stderrBuf
 	if err = mysqlPipe.Start(); err != nil {
 		return
 	}
 	if err = binlogCMD.Run(); err != nil {
 		return fmt.Errorf("mariadb-binlog error: %s", err.Error())
 	}
-	return mysqlPipe.Wait()
+	if err = mysqlPipe.Wait(); err != nil {
+		return fmt.Errorf("mariadb-binlog restore error: %s: %s", err.Error(), stderrBuf.String())
+	}
+	return
 }
 
 /*
