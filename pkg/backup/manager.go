@@ -269,8 +269,8 @@ func (m *Manager) handleBackupError(err error, backup map[string]int) error {
 		return m.Db.Restore(bf)
 	}
 
-	merr, ok := err.(*multierror.Error)
-	if !ok {
+	var merr *multierror.Error
+	if !errors.As(err, &merr) {
 		return err
 	}
 
@@ -326,12 +326,8 @@ func (m *Manager) onBinlogRotation(c chan error) {
 			continue
 		}
 		stsError := make([]string, 0)
-		merr, ok := err.(*multierror.Error)
-		if merr != nil {
-			if !ok {
-				m.setUpdateStatus(m.updateSts.IncBackup, m.Storage.GetStorageServicesKeys(), false)
-				logger.Errorf("unknown error: %s", merr.Error())
-			}
+		var merr *multierror.Error
+		if errors.As(err, &merr) {
 			if len(merr.Errors) > 0 {
 				for i := 0; i < len(merr.Errors); i++ {
 					switch e := merr.Errors[i].(type) {
@@ -348,6 +344,9 @@ func (m *Manager) onBinlogRotation(c chan error) {
 				}
 			}
 			m.setUpdateStatus(m.updateSts.IncBackup, stsError, false)
+		} else {
+			m.setUpdateStatus(m.updateSts.IncBackup, m.Storage.GetStorageServicesKeys(), false)
+			logger.Errorf("unknown error: %s", err.Error())
 		}
 	}
 }

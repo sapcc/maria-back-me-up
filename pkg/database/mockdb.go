@@ -5,6 +5,7 @@ package database
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -45,6 +46,10 @@ func (m *MockDB) CreateFullBackup(path string) (bp LogPosition, err error) {
 		err = &dberror.DatabaseMissingError{}
 		return bp, err
 	}
+	// Match real CreateFullBackup behavior where err gets wrapped by errors.Join
+	defer func() {
+		err = errors.Join(err, nil)
+	}()
 	return bp, m.storage.WriteFolderAll(path)
 }
 
