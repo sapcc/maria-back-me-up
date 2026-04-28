@@ -17,7 +17,7 @@ import (
 	"github.com/ncw/swift"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
+	"go.yaml.in/yaml/v2"
 )
 
 // Swift struct is ...
