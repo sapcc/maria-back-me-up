@@ -307,7 +307,7 @@ github.com/pingcap/failpoint
 # github.com/pingcap/log v1.1.1-0.20260227082333-572e590d08f1
 ## explicit; go 1.25
 github.com/pingcap/log
-# github.com/pingcap/tidb/pkg/parser v0.0.0-20260511094024-4598d48977f7
+# github.com/pingcap/tidb/pkg/parser v0.0.0-20260515090245-e5ca0bb5353a
 ## explicit; go 1.25
 github.com/pingcap/tidb/pkg/parser
 github.com/pingcap/tidb/pkg/parser/ast
