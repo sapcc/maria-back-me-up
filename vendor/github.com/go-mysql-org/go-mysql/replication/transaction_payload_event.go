@@ -13,6 +13,8 @@ import (
 // On The Wire: Field Types
 // See also binary_log::codecs::binary::Transaction_payload::fields in MySQL
 // https://dev.mysql.com/doc/dev/mysql-server/latest/classbinary__log_1_1codecs_1_1binary_1_1Transaction__payload.html#a9fff7ac12ba064f40e9216565c53d07b
+//
+//nolint:revive // OTW_PAYLOAD_* names mirror the upstream MySQL binlog protocol
 const (
 	OTW_PAYLOAD_HEADER_END_MARK = iota
 	OTW_PAYLOAD_SIZE_FIELD
@@ -78,21 +80,20 @@ func (e *TransactionPayloadEvent) decodeFields(data []byte) error {
 		if fieldType == OTW_PAYLOAD_HEADER_END_MARK {
 			e.Payload = data[offset:]
 			break
-		} else {
-			fieldLength := mysql.FixedLengthInt(data[offset : offset+1])
-			offset++
-
-			switch fieldType {
-			case OTW_PAYLOAD_SIZE_FIELD:
-				e.Size = mysql.FixedLengthInt(data[offset : offset+fieldLength])
-			case OTW_PAYLOAD_COMPRESSION_TYPE_FIELD:
-				e.CompressionType = mysql.FixedLengthInt(data[offset : offset+fieldLength])
-			case OTW_PAYLOAD_UNCOMPRESSED_SIZE_FIELD:
-				e.UncompressedSize = mysql.FixedLengthInt(data[offset : offset+fieldLength])
-			}
-
-			offset += fieldLength
 		}
+		fieldLength := mysql.FixedLengthInt(data[offset : offset+1])
+		offset++
+
+		switch fieldType {
+		case OTW_PAYLOAD_SIZE_FIELD:
+			e.Size = mysql.FixedLengthInt(data[offset : offset+fieldLength])
+		case OTW_PAYLOAD_COMPRESSION_TYPE_FIELD:
+			e.CompressionType = mysql.FixedLengthInt(data[offset : offset+fieldLength])
+		case OTW_PAYLOAD_UNCOMPRESSED_SIZE_FIELD:
+			e.UncompressedSize = mysql.FixedLengthInt(data[offset : offset+fieldLength])
+		}
+
+		offset += fieldLength
 	}
 
 	return nil
