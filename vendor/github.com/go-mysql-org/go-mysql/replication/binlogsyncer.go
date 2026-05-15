@@ -240,9 +240,17 @@ func (b *BinlogSyncer) close() {
 	b.cancel()
 
 	if b.c != nil {
-		err := b.c.SetReadDeadline(utils.Now().Add(100 * time.Millisecond))
-		if err != nil {
-			b.cfg.Logger.Warn("could not set read deadline", slog.Any("error", err))
+		// SetReadDeadline unblocks ReadPacket so onStream notices ctx cancellation.
+		// Some transports (notably SSH tunnels) refuse deadlines with an error, in
+		// which case close the underlying connection to force ReadPacket to return.
+		// Otherwise wg.Wait below parks forever when KILL also fails to reach server
+		// (e.g. thread already reaped, "ERROR 1094 unknown thread id")
+		if err := b.c.SetReadDeadline(utils.Now().Add(100 * time.Millisecond)); err != nil {
+			b.cfg.Logger.Warn("could not set read deadline, closing connection to unblock reader",
+				slog.Any("error", err))
+			if err := b.c.Close(); err != nil {
+				b.cfg.Logger.Warn("could not close connection", slog.Any("error", err))
+			}
 		}
 	}
 
@@ -320,22 +328,22 @@ func (b *BinlogSyncer) registerSlave() error {
 
 	// for mysql 5.6+, binlog has a crc32 checksum
 	// before mysql 5.6, this will not work, don't matter.:-)
-	if r, err := b.c.Execute("SHOW GLOBAL VARIABLES LIKE 'BINLOG_CHECKSUM'"); err != nil {
+	r, err := b.c.Execute("SHOW GLOBAL VARIABLES LIKE 'BINLOG_CHECKSUM'")
+	if err != nil {
 		return errors.Trace(err)
-	} else {
-		s, _ := r.GetString(0, 1)
-		if s != "" {
-			// maybe CRC32 or NONE
+	}
+	s, _ := r.GetString(0, 1)
+	if s != "" {
+		// maybe CRC32 or NONE
 
-			// mysqlbinlog.cc use NONE, see its below comments:
-			// Make a notice to the server that this client
-			// is checksum-aware. It does not need the first fake Rotate
-			// necessary checksummed.
-			// That preference is specified below.
+		// mysqlbinlog.cc use NONE, see its below comments:
+		// Make a notice to the server that this client
+		// is checksum-aware. It does not need the first fake Rotate
+		// necessary checksummed.
+		// That preference is specified below.
 
-			if _, err = b.c.Execute(`SET @master_binlog_checksum='NONE', @source_binlog_checksum='NONE'`); err != nil {
-				return errors.Trace(err)
-			}
+		if _, err = b.c.Execute(`SET @master_binlog_checksum='NONE', @source_binlog_checksum='NONE'`); err != nil {
+			return errors.Trace(err)
 		}
 	}
 
@@ -385,18 +393,18 @@ func (b *BinlogSyncer) enableSemiSync() error {
 		return nil
 	}
 
-	if r, err := b.c.Execute("SHOW VARIABLES LIKE 'rpl_semi_sync_master_enabled';"); err != nil {
+	r, err := b.c.Execute("SHOW VARIABLES LIKE 'rpl_semi_sync_master_enabled';")
+	if err != nil {
 		return errors.Trace(err)
-	} else {
-		s, _ := r.GetString(0, 1)
-		if s != "ON" {
-			b.cfg.Logger.Error("master does not support semi synchronous replication, use no semi-sync")
-			b.cfg.SemiSyncEnabled = false
-			return nil
-		}
+	}
+	s, _ := r.GetString(0, 1)
+	if s != "ON" {
+		b.cfg.Logger.Error("master does not support semi synchronous replication, use no semi-sync")
+		b.cfg.SemiSyncEnabled = false
+		return nil
 	}
 
-	_, err := b.c.Execute(`SET @rpl_semi_sync_slave = 1;`)
+	_, err = b.c.Execute(`SET @rpl_semi_sync_slave = 1;`)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -915,7 +923,26 @@ func (b *BinlogSyncer) handleEventAndACK(s *BinlogStreamer, e *BinlogEvent, need
 			b.prevGset.(*mysql.MysqlGTIDSet).AddGTID(u, b.prevMySQLGTIDEvent.GNO)
 		}
 		b.prevMySQLGTIDEvent = event
-
+	case *GtidTaggedLogEvent:
+		if b.prevGset == nil {
+			break
+		}
+		if b.currGset == nil {
+			b.currGset = b.prevGset.Clone()
+		}
+		u, err := uuid.FromBytes(event.SID)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		b.currGset.(*mysql.MysqlGTIDSet).AddGTIDWithTag(u, event.Tag, event.GNO)
+		if b.prevMySQLGTIDEvent != nil {
+			u, err = uuid.FromBytes(b.prevMySQLGTIDEvent.SID)
+			if err != nil {
+				return errors.Trace(err)
+			}
+			b.prevGset.(*mysql.MysqlGTIDSet).AddGTIDWithTag(u, b.prevMySQLGTIDEvent.Tag, b.prevMySQLGTIDEvent.GNO)
+		}
+		b.prevMySQLGTIDEvent = &event.GTIDEvent
 	case *MariadbGTIDEvent:
 		if b.prevGset == nil {
 			break
@@ -955,7 +982,7 @@ func (b *BinlogSyncer) handleEventAndACK(s *BinlogStreamer, e *BinlogEvent, need
 		select {
 		case s.ch <- e:
 		case <-b.ctx.Done():
-			return errors.New("sync is being closed...")
+			return errors.New("sync is being closed")
 		}
 	}
 
