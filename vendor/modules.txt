@@ -298,8 +298,8 @@ github.com/namsral/flag
 # github.com/ncw/swift v1.0.53
 ## explicit
 github.com/ncw/swift
-# github.com/pingcap/errors v0.11.5-0.20260508054701-306e305bcf41
-## explicit; go 1.14
+# github.com/pingcap/errors v0.11.5-0.20260523003111-3697ad564b43
+## explicit; go 1.25
 github.com/pingcap/errors
 # github.com/pingcap/failpoint v0.0.0-20260406204437-bbc9d102c19e
 ## explicit; go 1.18
