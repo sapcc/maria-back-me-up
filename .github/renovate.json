@@ -3,8 +3,7 @@
   "extends": [
     "config:recommended",
     "default:pinDigestsDisabled",
-    "mergeConfidence:all-badges",
-    "docker:disable"
+    "mergeConfidence:all-badges"
   ],
   "assignees": [
     "stefanhipfel"
@@ -57,6 +56,17 @@
         "major"
       ],
       "dependencyDashboardApproval": true
+    },
+    {
+      "matchDepTypes": [
+        "action"
+      ],
+      "matchFileNames": [
+        ".github/workflows/checks.yaml",
+        ".github/workflows/ci.yaml",
+        ".github/workflows/codeql.yaml"
+      ],
+      "enabled": false
     },
     {
       "matchPackageNames": [
