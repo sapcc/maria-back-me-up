@@ -154,6 +154,7 @@ storages:
       container_name: # name of the container the backups should be store in
       chunk_size: # default 200mb
       slo_size: # default 600mb
+      service_type: # optional, Keystone catalog service type (default "object-store"); e.g. "object-store-ceph"
   maria_db:
     - name: # name of the storage
       host: # host of the MariaDB instance

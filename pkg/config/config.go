@@ -107,6 +107,9 @@ type Swift struct {
 	ContainerName     string `yaml:"container_name"`
 	ChunkSize         *int64 `yaml:"chunk_size"` // default 200mb
 	SloSize           *int64 `yaml:"slo_size"`   // default 600mb
+	// ServiceType overrides the Keystone catalog service type used to find
+	// the Swift endpoint (default "object-store").
+	ServiceType string `yaml:"service_type"`
 }
 
 // Disk holds info for the local backup storage

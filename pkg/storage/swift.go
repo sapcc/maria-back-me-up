@@ -6,6 +6,7 @@ package storage
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"path"
@@ -43,6 +44,14 @@ func NewSwift(c config.Swift, serviceName, restoreFolder, logBin string) (s *Swi
 		ApiKey:       c.Password,
 		Region:       c.Region,
 		Timeout:      time.Duration(5 * time.Hour),
+	}
+	if c.ServiceType != "" {
+		if c.AuthVersion != 0 && c.AuthVersion != 3 {
+			return nil, fmt.Errorf("swift %q: service_type override requires auth_version 3, got %d", c.Name, c.AuthVersion)
+		}
+		conn.Auth = &keystoneV3Auth{
+			serviceType: c.ServiceType,
+		}
 	}
 	if err = conn.Authenticate(); err != nil {
 		return
