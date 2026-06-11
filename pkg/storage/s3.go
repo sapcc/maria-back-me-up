@@ -5,6 +5,8 @@ package storage
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"os"
@@ -36,6 +38,8 @@ type (
 		client        *s3.Client
 		uploader      *transfermanager.Client
 		downloader    *transfermanager.Client
+		sseKey        *string
+		sseKeyMD5     *string
 		serviceName   string
 		restoreFolder string
 		logger        *logrus.Entry `yaml:"-"`
@@ -78,17 +82,33 @@ func NewS3(c config.S3, serviceName, restoreFolder, binLog string) (s3Storage *S
 		o.Concurrency = 6
 	})
 
+	sseKey, sseKeyMD5 := encodeSSECustomerKey(c.SSECustomerKey)
+
 	return &S3{
 		cfg:           c,
 		client:        client,
 		uploader:      uploader,
 		downloader:    downloader,
+		sseKey:        sseKey,
+		sseKeyMD5:     sseKeyMD5,
 		serviceName:   serviceName,
 		restoreFolder: path.Join(restoreFolder, c.Name),
 		logger:        logger.WithField("service", serviceName),
 		binLog:        binLog,
 		statusError:   make(map[string]string, 0),
 	}, err
+}
+
+// encodeSSECustomerKey reproduces aws-sdk-go v1's computeSSEKeys handler,
+// which has no equivalent in v2.
+func encodeSSECustomerKey(raw *string) (key, keyMD5 *string) {
+	if raw == nil || *raw == "" {
+		return nil, nil
+	}
+	encoded := base64.StdEncoding.EncodeToString([]byte(*raw))
+	digest := md5.Sum([]byte(*raw))
+	encodedMD5 := base64.StdEncoding.EncodeToString(digest[:])
+	return &encoded, &encodedMD5
 }
 
 // GetStorageServiceName implements interface
@@ -138,7 +158,8 @@ func (s *S3) WriteStream(fileName, mimeType string, body io.Reader, tags map[str
 		Key:                  aws.String(path.Join(s.serviceName, fileName)),
 		Body:                 body,
 		SSECustomerAlgorithm: s.cfg.SSECustomerAlgorithm,
-		SSECustomerKey:       s.cfg.SSECustomerKey,
+		SSECustomerKey:       s.sseKey,
+		SSECustomerKeyMD5:    s.sseKeyMD5,
 		Tagging:              aws.String(tag.String()),
 	}
 
@@ -340,7 +361,8 @@ func (s *S3) downloadFile(path string, obj types.Object) error {
 			Key:                  obj.Key,
 			WriterAt:             file,
 			SSECustomerAlgorithm: s.cfg.SSECustomerAlgorithm,
-			SSECustomerKey:       s.cfg.SSECustomerKey,
+			SSECustomerKey:       s.sseKey,
+			SSECustomerKeyMD5:    s.sseKeyMD5,
 		}); err != nil {
 		return s.handleError("", err)
 	}
@@ -354,7 +376,8 @@ func (s *S3) downloadStream(w io.WriterAt, obj types.Object) error {
 			Key:                  obj.Key,
 			WriterAt:             w,
 			SSECustomerAlgorithm: s.cfg.SSECustomerAlgorithm,
-			SSECustomerKey:       s.cfg.SSECustomerKey,
+			SSECustomerKey:       s.sseKey,
+			SSECustomerKeyMD5:    s.sseKeyMD5,
 		}); err != nil {
 		return s.handleError("", err)
 	}
