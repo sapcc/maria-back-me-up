@@ -3,6 +3,7 @@
   "extends": [
     "config:recommended",
     "default:pinDigestsDisabled",
+    "docker:pinDigests",
     "mergeConfidence:all-badges"
   ],
   "assignees": [
@@ -58,9 +59,6 @@
       "dependencyDashboardApproval": true
     },
     {
-      "matchDepTypes": [
-        "action"
-      ],
       "matchFileNames": [
         ".github/workflows/checks.yaml",
         ".github/workflows/ci.yaml",
