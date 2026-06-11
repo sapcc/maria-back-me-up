@@ -61,6 +61,7 @@ type (
 		backupCheckSums map[string]int64
 		errCh           chan error
 		cronBackup      *cron.Cron
+		mu              sync.Mutex
 	}
 )
 
@@ -99,6 +100,8 @@ func NewManager(s *storage.Manager, db database.Database, k *k8s.Database, c con
 
 // Start a backup cycle
 func (m *Manager) Start() (err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.cronBackup != nil {
 		return errors.New("backup already running")
 	}
@@ -107,36 +110,45 @@ func (m *Manager) Start() (err error) {
 	ctx, backupCancel = context.WithCancel(ctx)
 	m.errCh = make(chan error, 1)
 	go m.readErrorChannel()
-	return m.startBackup(ctx)
+	return m.startBackupLocked(ctx)
 }
 
 // Stop the backup cycle
 func (m *Manager) Stop() (ctx context.Context) {
+	m.mu.Lock()
 	backupCancel()
 	m.stopIncBackup()
 	if m.cronBackup == nil {
+		m.mu.Unlock()
 		return context.TODO()
 	}
-	close(m.errCh)
-	ctx = m.cronBackup.Stop()
-
-	<-ctx.Done()
+	c := m.cronBackup
 	m.cronBackup = nil
+	close(m.errCh)
+	m.mu.Unlock()
+
+	ctx = c.Stop()
+	<-ctx.Done()
 	return ctx
 }
 
 func (m *Manager) startBackup(ctx context.Context) (err error) {
-	_, err = checkBackupDirExistsAndCreate(m.cfg.Backup.BackupDir)
-	if err != nil {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.startBackupLocked(ctx)
+}
+
+func (m *Manager) startBackupLocked(ctx context.Context) (err error) {
+	if _, err = checkBackupDirExistsAndCreate(m.cfg.Backup.BackupDir); err != nil {
 		return
 	}
+	c := cron.New()
+	if _, err = c.AddFunc(m.cfg.Backup.FullBackupCronSchedule, func() { m.scheduleBackup(ctx) }); err != nil {
+		return
+	}
+	c.Start()
+	m.cronBackup = c
 	go m.scheduleBackup(ctx)
-	m.cronBackup = cron.New()
-	_, err = m.cronBackup.AddFunc(m.cfg.Backup.FullBackupCronSchedule, func() { m.scheduleBackup(ctx) })
-	if err != nil {
-		return
-	}
-	m.cronBackup.Start()
 	return
 }
 
