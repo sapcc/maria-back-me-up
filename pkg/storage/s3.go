@@ -444,7 +444,7 @@ type downloadPlan struct {
 // probeDownloadMode issues a HEAD without SSE-C creds. Outcomes:
 //   - 200 with cse-key metadata → CSE (or a clear error if no registry is configured)
 //   - 200 without cse-key metadata → unencrypted
-//   - 400 InvalidRequest with SSE-C configured → legacy SSE-C; otherwise propagated as-is
+//   - 400 with SSE-C configured → legacy SSE-C; otherwise propagated as-is
 //
 // We always probe on the read path: skipping it when CSE is disconfigured
 // would silently restore ciphertext as plaintext if any CSE objects remain
@@ -455,8 +455,7 @@ func (s *S3) probeDownloadMode(key string) (downloadPlan, error) {
 		Key:    aws.String(key),
 	})
 	if err != nil {
-		var ae smithy.APIError
-		if errors.As(err, &ae) && ae.ErrorCode() == "InvalidRequest" && s.sseKey != nil {
+		if isSSECProbeRejection(err) && s.sseKey != nil {
 			return downloadPlan{mode: modeSSEC}, nil
 		}
 		return downloadPlan{}, err
@@ -468,6 +467,20 @@ func (s *S3) probeDownloadMode(key string) (downloadPlan, error) {
 		return downloadPlan{mode: modeCSE, cseName: name}, nil
 	}
 	return downloadPlan{mode: modeUnencrypted}, nil
+}
+
+// isSSECProbeRejection reports whether a HeadObject error means the object
+// requires SSE-C credentials. S3 rejects a keyless HEAD of an SSE-C object
+// with HTTP 400, but HEAD error responses carry no body, so the SDK derives
+// the code "BadRequest" from the status text; implementations that do attach
+// an XML error body use "InvalidRequest" instead.
+func isSSECProbeRejection(err error) bool {
+	var ae smithy.APIError
+	if !errors.As(err, &ae) {
+		return false
+	}
+	code := ae.ErrorCode()
+	return code == "BadRequest" || code == "InvalidRequest"
 }
 
 // readCSEKeyName looks up CSEKeyMetaHeader in object metadata. The

@@ -170,6 +170,32 @@ func TestIsObjectLockNotFound(t *testing.T) {
 	}
 }
 
+func TestIsSSECProbeRejection(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		// HEAD error responses have no body, so the SDK derives the code
+		// from the HTTP status text.
+		{name: "bodyless HEAD 400", err: &smithy.GenericAPIError{Code: "BadRequest", Message: "Bad Request"}, want: true},
+		{name: "XML error body", err: &smithy.GenericAPIError{Code: "InvalidRequest", Message: "sse-c required"}, want: true},
+		{name: "wrapped by operation error", err: &smithy.OperationError{ServiceID: "S3", OperationName: "HeadObject", Err: &smithy.GenericAPIError{Code: "BadRequest"}}, want: true},
+		{name: "not found", err: &smithy.GenericAPIError{Code: "NotFound"}, want: false},
+		{name: "access denied", err: &smithy.GenericAPIError{Code: "AccessDenied"}, want: false},
+		{name: "plain error", err: fmt.Errorf("dial tcp: connection refused"), want: false},
+		{name: "nil", err: nil, want: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isSSECProbeRejection(tc.err); got != tc.want {
+				t.Errorf("isSSECProbeRejection(%v) = %v, want %v", tc.err, got, tc.want)
+			}
+		})
+	}
+}
+
 func timePtr(t time.Time) *time.Time {
 	return &t
 }
