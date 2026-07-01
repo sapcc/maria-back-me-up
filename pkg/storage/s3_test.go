@@ -196,6 +196,23 @@ func TestIsSSECProbeRejection(t *testing.T) {
 	}
 }
 
+func TestSequentialWriterAt(t *testing.T) {
+	buf := tmtypes.NewWriteAtBuffer([]byte{})
+	sw := &sequentialWriterAt{w: buf}
+	for _, chunk := range []string{"hello ", "sequential ", "world"} {
+		n, err := sw.Write([]byte(chunk))
+		if err != nil {
+			t.Fatalf("write %q: %v", chunk, err)
+		}
+		if n != len(chunk) {
+			t.Fatalf("write %q: n = %d, want %d", chunk, n, len(chunk))
+		}
+	}
+	if got, want := string(buf.Bytes()), "hello sequential world"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
 func timePtr(t time.Time) *time.Time {
 	return &t
 }

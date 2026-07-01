@@ -4,7 +4,6 @@
 package storage
 
 import (
-	"bytes"
 	"context"
 	"crypto/md5"
 	"encoding/base64"
@@ -443,8 +442,8 @@ type downloadPlan struct {
 
 // probeDownloadMode issues a HEAD without SSE-C creds. Outcomes:
 //   - 200 with cse-key metadata → CSE (or a clear error if no registry is configured)
-//   - 200 without cse-key metadata → unencrypted
 //   - 400 with SSE-C configured → legacy SSE-C; otherwise propagated as-is
+//   - 200 without cse-key metadata → unencrypted
 //
 // We always probe on the read path: skipping it when CSE is disconfigured
 // would silently restore ciphertext as plaintext if any CSE objects remain
@@ -516,13 +515,55 @@ func (s *S3) decryptObject(key, cseName string, dst io.Writer) error {
 	return nil
 }
 
-func (s *S3) downloadFile(dst string, obj types.Object) error {
-	key := aws.ToString(obj.Key)
+// fetchObject is the single body-read seam for the S3 backend: it probes the
+// object's encryption mode and streams the body to w. Every download must go
+// through it, so a new read path cannot bypass CSE detection and write
+// ciphertext out as if it were plaintext.
+func (s *S3) fetchObject(key string, w io.WriterAt) error {
 	plan, err := s.probeDownloadMode(key)
 	if err != nil {
-		return s.handleError("", err)
+		return err
 	}
 
+	if plan.mode == modeCSE {
+		// transfermanager's parallel WriterAt is incompatible with sequential
+		// AEAD; decrypt in order and emit at increasing offsets instead.
+		return s.decryptObject(key, plan.cseName, &sequentialWriterAt{w: w})
+	}
+
+	input := &transfermanager.DownloadObjectInput{
+		Bucket:   aws.String(s.cfg.BucketName),
+		Key:      aws.String(key),
+		WriterAt: w,
+	}
+	if plan.mode == modeSSEC {
+		if s.sseKey == nil {
+			return fmt.Errorf("s3: object %q requires SSE-C creds but sse_customer_key is not configured", key)
+		}
+		input.SSECustomerAlgorithm = s.cfg.SSECustomerAlgorithm
+		input.SSECustomerKey = s.sseKey
+		input.SSECustomerKeyMD5 = s.sseKeyMD5
+	}
+	_, err = s.downloader.DownloadObject(context.Background(), input)
+	return err
+}
+
+// sequentialWriterAt adapts an io.WriterAt to io.Writer by writing at
+// monotonically increasing offsets, so the streaming decrypt path can feed
+// the same destinations the transfermanager writes to.
+type sequentialWriterAt struct {
+	w   io.WriterAt
+	off int64
+}
+
+func (sw *sequentialWriterAt) Write(p []byte) (int, error) {
+	n, err := sw.w.WriteAt(p, sw.off)
+	sw.off += int64(n)
+	return n, err
+}
+
+func (s *S3) downloadFile(dst string, obj types.Object) error {
+	key := aws.ToString(obj.Key)
 	if err := os.MkdirAll(filepath.Join(dst, filepath.Dir(key)), os.ModePerm); err != nil {
 		return s.handleError("", err)
 	}
@@ -536,89 +577,17 @@ func (s *S3) downloadFile(dst string, obj types.Object) error {
 		}
 	}()
 
-	switch plan.mode {
-	case modeCSE:
-		if err := s.decryptObject(key, plan.cseName, file); err != nil {
-			return s.handleError("", err)
-		}
-		return nil
-	case modeSSEC:
-		if s.sseKey == nil {
-			return s.handleError("", fmt.Errorf("s3: object %q requires SSE-C creds but sse_customer_key is not configured", key))
-		}
-		// transfermanager's parallel WriterAt is incompatible with sequential AEAD,
-		// but legacy SSE-C objects are plain on the way out, so it works here.
-		if _, err := s.downloader.DownloadObject(context.Background(),
-			&transfermanager.DownloadObjectInput{
-				Bucket:               aws.String(s.cfg.BucketName),
-				Key:                  aws.String(key),
-				WriterAt:             file,
-				SSECustomerAlgorithm: s.cfg.SSECustomerAlgorithm,
-				SSECustomerKey:       s.sseKey,
-				SSECustomerKeyMD5:    s.sseKeyMD5,
-			}); err != nil {
-			return s.handleError("", err)
-		}
-		return nil
-	default:
-		if _, err := s.downloader.DownloadObject(context.Background(),
-			&transfermanager.DownloadObjectInput{
-				Bucket:   aws.String(s.cfg.BucketName),
-				Key:      aws.String(key),
-				WriterAt: file,
-			}); err != nil {
-			return s.handleError("", err)
-		}
-		return nil
+	if err := s.fetchObject(key, file); err != nil {
+		return s.handleError("", err)
 	}
+	return nil
 }
 
 func (s *S3) downloadStream(w io.WriterAt, obj types.Object) error {
-	key := aws.ToString(obj.Key)
-	plan, err := s.probeDownloadMode(key)
-	if err != nil {
+	if err := s.fetchObject(aws.ToString(obj.Key), w); err != nil {
 		return s.handleError("", err)
 	}
-
-	switch plan.mode {
-	case modeCSE:
-		// downloadStream is only called for small payloads (verify_*.yaml);
-		// buffering the plaintext is acceptable here.
-		var buf bytes.Buffer
-		if err := s.decryptObject(key, plan.cseName, &buf); err != nil {
-			return s.handleError("", err)
-		}
-		if _, err := w.WriteAt(buf.Bytes(), 0); err != nil {
-			return s.handleError("", err)
-		}
-		return nil
-	case modeSSEC:
-		if s.sseKey == nil {
-			return s.handleError("", fmt.Errorf("s3: object %q requires SSE-C creds but sse_customer_key is not configured", key))
-		}
-		if _, err := s.downloader.DownloadObject(context.Background(),
-			&transfermanager.DownloadObjectInput{
-				Bucket:               aws.String(s.cfg.BucketName),
-				Key:                  aws.String(key),
-				WriterAt:             w,
-				SSECustomerAlgorithm: s.cfg.SSECustomerAlgorithm,
-				SSECustomerKey:       s.sseKey,
-				SSECustomerKeyMD5:    s.sseKeyMD5,
-			}); err != nil {
-			return s.handleError("", err)
-		}
-		return nil
-	default:
-		if _, err := s.downloader.DownloadObject(context.Background(),
-			&transfermanager.DownloadObjectInput{
-				Bucket:   aws.String(s.cfg.BucketName),
-				Key:      aws.String(key),
-				WriterAt: w,
-			}); err != nil {
-			return s.handleError("", err)
-		}
-		return nil
-	}
+	return nil
 }
 
 func (s *S3) handleError(backupKey string, err error) error {
