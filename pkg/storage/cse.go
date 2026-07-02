@@ -20,12 +20,9 @@ import (
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 )
 
-// CSEKeyMetaHeader is the user-defined object metadata header maria sets on
-// objects whose body is client-side encrypted. The value is the operator-
-// chosen name of the KEK used to encrypt that object — readers look it up in
-// the registry to pick the right cipher. S3 stores this as
-// `x-amz-meta-cse-key`; lookup at read time is case-insensitive in
-// readCSEKeyName.
+// CSEKeyMetaHeader marks an object as client-side encrypted; S3 stores it as
+// `x-amz-meta-cse-key`. The value is the KEK name, kept for diagnostics only —
+// decryption picks the key by trial across the configured keyset.
 const CSEKeyMetaHeader = "cse-key"
 
 const cseSegmentSize = 1 << 20 // matches Tink AES256_GCM_HKDF_1MB
@@ -34,12 +31,11 @@ type cseCipher struct {
 	saead tink.StreamingAEAD
 }
 
-// cseRegistry holds every KEK we know how to decrypt with, plus the active
-// name used for new uploads. Construct via newCSERegistry; nil when CSE is
-// disabled.
+// cseRegistry holds one Tink keyset built from all configured KEKs: the
+// active key encrypts, decryption tries every key. Nil when CSE is disabled.
 type cseRegistry struct {
-	active  string
-	ciphers map[string]*cseCipher
+	active string
+	cipher *cseCipher
 }
 
 func newCSERegistry(activeName string, keys []config.CSEKey) (*cseRegistry, error) {
@@ -49,8 +45,10 @@ func newCSERegistry(activeName string, keys []config.CSEKey) (*cseRegistry, erro
 	if len(keys) == 0 {
 		return nil, fmt.Errorf("cse: cse_keys must list at least the active key %q", activeName)
 	}
-	ciphers := make(map[string]*cseCipher, len(keys))
+	mgr := keyset.NewManager()
 	seen := make(map[string]struct{}, len(keys))
+	var activeID uint32
+	activeFound := false
 	for _, k := range keys {
 		if k.Name == "" {
 			return nil, fmt.Errorf("cse: cse_keys entry has empty name")
@@ -66,28 +64,31 @@ func newCSERegistry(activeName string, keys []config.CSEKey) (*cseRegistry, erro
 		if err != nil {
 			return nil, err
 		}
-		c, err := newCSECipher(kek)
+		key, err := newCSEKeyFromKEK(kek)
 		if err != nil {
-			return nil, fmt.Errorf("cse: build cipher %q: %w", k.Name, err)
+			return nil, fmt.Errorf("cse: key %q: %w", k.Name, err)
 		}
-		ciphers[k.Name] = c
+		id, err := mgr.AddKey(key)
+		if err != nil {
+			return nil, fmt.Errorf("cse: add key %q: %w", k.Name, err)
+		}
+		if k.Name == activeName {
+			activeID = id
+			activeFound = true
+		}
 	}
-	if _, ok := ciphers[activeName]; !ok {
+	if !activeFound {
 		return nil, fmt.Errorf("cse: active key %q not found in cse_keys", activeName)
 	}
-	return &cseRegistry{active: activeName, ciphers: ciphers}, nil
+	cipher, err := cipherFromManager(mgr, activeID)
+	if err != nil {
+		return nil, err
+	}
+	return &cseRegistry{active: activeName, cipher: cipher}, nil
 }
 
 func (r *cseRegistry) activeCipher() (*cseCipher, string) {
-	return r.ciphers[r.active], r.active
-}
-
-func (r *cseRegistry) cipherByName(name string) (*cseCipher, error) {
-	c, ok := r.ciphers[name]
-	if !ok {
-		return nil, fmt.Errorf("cse: object encrypted with unknown key %q (not in cse_keys)", name)
-	}
-	return c, nil
+	return r.cipher, r.active
 }
 
 func loadCSEKey(path string) ([]byte, error) {
@@ -117,9 +118,9 @@ func loadCSEKey(path string) ([]byte, error) {
 	return nil, fmt.Errorf("cse: key in %q must be 32 raw bytes or base64 of 32 bytes", path)
 }
 
-// secretdata.NewBytesFromData clones kek; we zero our slice immediately so
-// the only persistent copy lives inside the Tink-owned secretdata.Bytes.
-func newCSECipher(kek []byte) (*cseCipher, error) {
+// newCSEKeyFromKEK consumes kek: it is cloned into Tink-owned secret data and
+// our copy is zeroed.
+func newCSEKeyFromKEK(kek []byte) (*aesgcmhkdf.Key, error) {
 	if len(kek) != 32 {
 		return nil, fmt.Errorf("cse: KEK must be 32 bytes, got %d", len(kek))
 	}
@@ -138,12 +139,13 @@ func newCSECipher(kek []byte) (*cseCipher, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cse: build key: %w", err)
 	}
-	mgr := keyset.NewManager()
-	id, err := mgr.AddKey(k)
-	if err != nil {
-		return nil, fmt.Errorf("cse: add key: %w", err)
-	}
-	if err := mgr.SetPrimary(id); err != nil {
+	return k, nil
+}
+
+// cipherFromManager finalizes the keyset: encrypts with the primary key,
+// trial-decrypts with any key in the set.
+func cipherFromManager(mgr *keyset.Manager, primaryID uint32) (*cseCipher, error) {
+	if err := mgr.SetPrimary(primaryID); err != nil {
 		return nil, fmt.Errorf("cse: set primary: %w", err)
 	}
 	handle, err := mgr.Handle()
@@ -155,6 +157,19 @@ func newCSECipher(kek []byte) (*cseCipher, error) {
 		return nil, fmt.Errorf("cse: build primitive: %w", err)
 	}
 	return &cseCipher{saead: saead}, nil
+}
+
+func newCSECipher(kek []byte) (*cseCipher, error) {
+	k, err := newCSEKeyFromKEK(kek)
+	if err != nil {
+		return nil, err
+	}
+	mgr := keyset.NewManager()
+	id, err := mgr.AddKey(k)
+	if err != nil {
+		return nil, fmt.Errorf("cse: add key: %w", err)
+	}
+	return cipherFromManager(mgr, id)
 }
 
 func zeroBytes(b []byte) {

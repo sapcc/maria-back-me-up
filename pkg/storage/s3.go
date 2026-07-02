@@ -207,10 +207,8 @@ func (s *S3) WriteFolder(p string) (err error) {
 // WriteStream implements interface.
 //
 // CSE: the body is encrypted under the active KEK; `x-amz-meta-cse-key`
-// records the KEK name so the download path can pick the right cipher. AAD
-// is the S3 object key, which binds the ciphertext to its path — moving a
-// blob to a different path makes decryption fail instead of silently
-// returning the wrong backup.
+// records the key name for diagnostics. AAD is the S3 object key, so a blob
+// moved to another path fails to decrypt instead of silently restoring.
 func (s *S3) WriteStream(fileName, mimeType string, body io.Reader, tags map[string]string, dlo bool) error {
 	var tag strings.Builder
 	for k, v := range tags {
@@ -489,14 +487,10 @@ func readCSEKeyName(md map[string]string) string {
 	return md[CSEKeyMetaHeader]
 }
 
-// decryptObject runs the CSE GET-and-decrypt path: looks up the cipher by
-// name, GETs the object body, and streams plaintext to dst. AAD is the
-// object's S3 key — same string used at upload time.
-func (s *S3) decryptObject(key, cseName string, dst io.Writer) error {
-	cipher, err := s.cse.cipherByName(cseName)
-	if err != nil {
-		return err
-	}
+// decryptObject GETs the object and streams plaintext to dst. The KEK is
+// picked by trial decryption; recordedKey is diagnostics only. AAD is the
+// object's S3 key, as at upload time.
+func (s *S3) decryptObject(key, recordedKey string, dst io.Writer) error {
 	out, err := s.client.GetObject(context.Background(), &s3.GetObjectInput{
 		Bucket: aws.String(s.cfg.BucketName),
 		Key:    aws.String(key),
@@ -509,8 +503,9 @@ func (s *S3) decryptObject(key, cseName string, dst io.Writer) error {
 			logger.Warnf("failed to close response body: %v", err)
 		}
 	}()
+	cipher, _ := s.cse.activeCipher()
 	if err := cipher.DecryptStream(out.Body, []byte(key), dst); err != nil {
-		return fmt.Errorf("cse: decrypt %s: %w", key, err)
+		return fmt.Errorf("cse: decrypt %s (recorded key %q): %w", key, recordedKey, err)
 	}
 	return nil
 }

@@ -260,37 +260,43 @@ func writeTempKey(t *testing.T, name string) string {
 	return p
 }
 
-func TestCSERegistry_RoutesByName(t *testing.T) {
-	old := writeTempKey(t, "old")
-	new := writeTempKey(t, "new")
-	r, err := newCSERegistry("new", []config.CSEKey{
-		{Name: "old", File: old},
-		{Name: "new", File: new},
-	})
+// An object encrypted while "old" was the only key must still decrypt after
+// "new" is added and made active; new writes must not decrypt with the old
+// single-key registry.
+func TestCSERegistry_RotationDecryptsOldObjects(t *testing.T) {
+	oldFile := writeTempKey(t, "old")
+	newFile := writeTempKey(t, "new")
+
+	before, err := newCSERegistry("old", []config.CSEKey{{Name: "old", File: oldFile}})
 	if err != nil {
-		t.Fatalf("newCSERegistry: %v", err)
-	}
-	if _, name := r.activeCipher(); name != "new" {
-		t.Fatalf("active = %q, want new", name)
+		t.Fatalf("newCSERegistry before rotation: %v", err)
 	}
 	plain := []byte("hello rotation")
-	oldC, err := r.cipherByName("old")
-	if err != nil {
-		t.Fatalf("cipherByName old: %v", err)
-	}
-	ct := encryptForTest(t, oldC, plain, testAAD)
+	oldCipher, _ := before.activeCipher()
+	ct := encryptForTest(t, oldCipher, plain, testAAD)
 
-	// Decrypting with the active cipher must fail; only the named cipher works.
-	activeC, _ := r.activeCipher()
-	if err := activeC.DecryptStream(bytes.NewReader(ct), testAAD, io.Discard); err == nil {
-		t.Fatal("expected wrong-cipher decrypt to fail")
+	after, err := newCSERegistry("new", []config.CSEKey{
+		{Name: "old", File: oldFile},
+		{Name: "new", File: newFile},
+	})
+	if err != nil {
+		t.Fatalf("newCSERegistry after rotation: %v", err)
+	}
+	cipher, name := after.activeCipher()
+	if name != "new" {
+		t.Fatalf("active = %q, want new", name)
 	}
 	var pt bytes.Buffer
-	if err := oldC.DecryptStream(bytes.NewReader(ct), testAAD, &pt); err != nil {
-		t.Fatalf("old decrypt: %v", err)
+	if err := cipher.DecryptStream(bytes.NewReader(ct), testAAD, &pt); err != nil {
+		t.Fatalf("decrypt pre-rotation object: %v", err)
 	}
 	if !bytes.Equal(plain, pt.Bytes()) {
 		t.Fatal("plaintext mismatch")
+	}
+
+	ct2 := encryptForTest(t, cipher, plain, testAAD)
+	if err := oldCipher.DecryptStream(bytes.NewReader(ct2), testAAD, io.Discard); err == nil {
+		t.Fatal("expected decrypt with pre-rotation registry to fail")
 	}
 }
 
@@ -317,13 +323,17 @@ func TestCSERegistry_RejectsBadConfig(t *testing.T) {
 	}
 }
 
-func TestCSERegistry_UnknownKeyName(t *testing.T) {
+// Ciphertext under a KEK that is not in cse_keys must fail decryption.
+func TestCSERegistry_UnknownKeyFails(t *testing.T) {
 	good := writeTempKey(t, "good")
 	r, err := newCSERegistry("k", []config.CSEKey{{Name: "k", File: good}})
 	if err != nil {
 		t.Fatalf("newCSERegistry: %v", err)
 	}
-	if _, err := r.cipherByName("missing"); err == nil {
-		t.Fatal("expected error for unknown key name")
+	stranger, _ := newTestCSE(t)
+	ct := encryptForTest(t, stranger, []byte("secret"), testAAD)
+	cipher, _ := r.activeCipher()
+	if err := cipher.DecryptStream(bytes.NewReader(ct), testAAD, io.Discard); err == nil {
+		t.Fatal("expected decrypt under unknown key to fail")
 	}
 }
