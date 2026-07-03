@@ -224,6 +224,7 @@ func (s *S3) WriteStream(fileName, mimeType string, body io.Reader, tags map[str
 	}
 	if s.cse != nil {
 		cipher, activeName := s.cse.activeCipher()
+		s.logger.Debugf("cse: encrypting %s with key %q", s3Key, activeName)
 		rc := cipher.EncryptStream(body, []byte(s3Key))
 		defer func() {
 			if err := rc.Close(); err != nil {
@@ -368,12 +369,30 @@ func (s *S3) GetFullBackups() (bl []Backup, err error) {
 				Storage: s.cfg.Name,
 				Time:    *fullObj.LastModified,
 				Key:     *fullObj.Key,
+				CSEKey:  s.lookupCSEKeyName(*fullObj.Key),
 				IncList: make([]IncBackup, 0),
 			}
 			bl = append(bl, b)
 		}
 	}
 	return
+}
+
+// lookupCSEKeyName HEADs an object and returns its recorded CSE key name, ""
+// when not client-side encrypted. Errors degrade to "" so one failed HEAD
+// cannot break the listing; an SSE-C rejection is expected and not warned.
+func (s *S3) lookupCSEKeyName(key string) string {
+	head, err := s.client.HeadObject(context.Background(), &s3.HeadObjectInput{
+		Bucket: aws.String(s.cfg.BucketName),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		if !isSSECProbeRejection(err) {
+			s.logger.Warnf("cse: probe %s for key name: %v", key, err)
+		}
+		return ""
+	}
+	return readCSEKeyName(head.Metadata)
 }
 
 // DownloadBackup implements interface
@@ -504,6 +523,7 @@ func (s *S3) decryptObject(key, recordedKey string, dst io.Writer) error {
 		}
 	}()
 	cipher, _ := s.cse.activeCipher()
+	s.logger.Debugf("cse: decrypting %s (encrypted under key %q)", key, recordedKey)
 	if err := cipher.DecryptStream(out.Body, []byte(key), dst); err != nil {
 		return fmt.Errorf("cse: decrypt %s (recorded key %q): %w", key, recordedKey, err)
 	}

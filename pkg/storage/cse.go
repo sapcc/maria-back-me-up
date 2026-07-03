@@ -47,6 +47,7 @@ func newCSERegistry(activeName string, keys []config.CSEKey) (*cseRegistry, erro
 	}
 	mgr := keyset.NewManager()
 	seen := make(map[string]struct{}, len(keys))
+	names := make([]string, 0, len(keys))
 	var activeID uint32
 	activeFound := false
 	for _, k := range keys {
@@ -60,6 +61,7 @@ func newCSERegistry(activeName string, keys []config.CSEKey) (*cseRegistry, erro
 			return nil, fmt.Errorf("cse: duplicate key name %q in cse_keys", k.Name)
 		}
 		seen[k.Name] = struct{}{}
+		names = append(names, k.Name)
 		kek, err := loadCSEKey(k.File)
 		if err != nil {
 			return nil, err
@@ -84,6 +86,7 @@ func newCSERegistry(activeName string, keys []config.CSEKey) (*cseRegistry, erro
 	if err != nil {
 		return nil, err
 	}
+	logger.Infof("cse: keyset loaded with %d key(s) %v, active (encryption) key %q", len(names), names, activeName)
 	return &cseRegistry{active: activeName, cipher: cipher}, nil
 }
 
