@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"go.yaml.in/yaml/v2"
 )
@@ -80,16 +81,19 @@ type StorageService struct {
 
 // S3 hols info for the AWS S3 storage service
 type S3 struct {
-	Name                 string  `yaml:"name"`
-	Verify               *bool   `yaml:"verify"`
-	AwsAccessKeyID       string  `yaml:"aws_access_key_id"`
-	AwsSecretAccessKey   string  `yaml:"aws_secret_access_key"`
-	AwsEndpoint          string  `yaml:"aws_endpoint"`
-	SSECustomerAlgorithm *string `yaml:"sse_customer_algorithm"`
-	S3ForcePathStyle     *bool   `yaml:"s3_force_path_style"`
-	SSECustomerKey       *string `yaml:"sse_customer_key"`
-	Region               string  `yaml:"region"`
-	BucketName           string  `yaml:"bucket_name"`
+	Name                    string  `yaml:"name"`
+	Verify                  *bool   `yaml:"verify"`
+	AwsAccessKeyID          string  `yaml:"aws_access_key_id"`
+	AwsSecretAccessKey      string  `yaml:"aws_secret_access_key"`
+	AwsEndpoint             string  `yaml:"aws_endpoint"`
+	SSECustomerAlgorithm    *string `yaml:"sse_customer_algorithm"`
+	S3ForcePathStyle        *bool   `yaml:"s3_force_path_style"`
+	SSECustomerKey          *string `yaml:"sse_customer_key"`
+	Region                  string  `yaml:"region"`
+	BucketName              string  `yaml:"bucket_name"`
+	ObjectLockEnabled       bool    `yaml:"object_lock_enabled"`
+	ObjectLockMode          string  `yaml:"object_lock_mode"`
+	ObjectLockRetentionDays int     `yaml:"object_lock_retention_days"`
 }
 
 // Swift holds info for the OS swift storage service
@@ -165,6 +169,10 @@ func GetConfig(opts Options) (cfg Config, err error) {
 
 	setDefaults(cfg)
 
+	if err = validate(cfg); err != nil {
+		return cfg, err
+	}
+
 	return cfg, nil
 }
 
@@ -179,4 +187,31 @@ func setDefaults(cfg Config) {
 			cfg.Storages.MariaDB[i].DumpFilterBufferSizeMB = 2
 		}
 	}
+
+	for i, s := range cfg.Storages.S3 {
+		if !s.ObjectLockEnabled {
+			continue
+		}
+		if s.ObjectLockMode == "" {
+			cfg.Storages.S3[i].ObjectLockMode = "COMPLIANCE"
+		} else {
+			cfg.Storages.S3[i].ObjectLockMode = strings.ToUpper(s.ObjectLockMode)
+		}
+	}
+}
+
+// validate checks config keys for invalid values
+func validate(cfg Config) error {
+	for _, s := range cfg.Storages.S3 {
+		if !s.ObjectLockEnabled {
+			continue
+		}
+		if s.ObjectLockMode != "COMPLIANCE" && s.ObjectLockMode != "GOVERNANCE" {
+			return fmt.Errorf("s3 %q: object_lock_mode must be COMPLIANCE or GOVERNANCE, got %q", s.Name, s.ObjectLockMode)
+		}
+		if s.ObjectLockRetentionDays <= 0 || s.ObjectLockRetentionDays > 36500 {
+			return fmt.Errorf("s3 %q: object_lock_retention_days must be between 1 and 36500", s.Name)
+		}
+	}
+	return nil
 }

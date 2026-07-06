@@ -38,6 +38,7 @@ List of features currently available:
   - S3
   - Swift
   - Disk
+- Immutable backups via S3 Object Lock (COMPLIANCE mode: no one, including root, can delete objects before retention expires)
 - Automatic verification of existing backups (can be run as separate service)
 - UI to see and select an available backup to restore to
 - UI shows status of backup verification
@@ -141,6 +142,9 @@ storages:
       sse_customer_key:
       region: # s3 region
       bucket_name: # bucket name to save the backup to
+      object_lock_enabled: # default false. Set S3 Object Lock on every uploaded object. Requires a bucket with Object Lock enabled; if the bucket doesn't support it, uploads continue without lock and a warning is logged
+      object_lock_mode: # COMPLIANCE (default) or GOVERNANCE
+      object_lock_retention_days: # required when enabled: per-object lock duration in days. Overrides any bucket default retention rule
   swift:
     - name: # name of the storage
       auth_version: # OpenStack auth version
