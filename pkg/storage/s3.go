@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -23,6 +24,7 @@ import (
 	tmtypes "github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	smithy "github.com/aws/smithy-go"
 	"github.com/sapcc/maria-back-me-up/pkg/config"
 	"github.com/sapcc/maria-back-me-up/pkg/log"
 	"github.com/sirupsen/logrus"
@@ -40,6 +42,7 @@ type (
 		downloader    *transfermanager.Client
 		sseKey        *string
 		sseKeyMD5     *string
+		objectLock    bool
 		serviceName   string
 		restoreFolder string
 		logger        *logrus.Entry `yaml:"-"`
@@ -84,6 +87,20 @@ func NewS3(c config.S3, serviceName, restoreFolder, binLog string) (s3Storage *S
 
 	sseKey, sseKeyMD5 := encodeSSECustomerKey(c.SSECustomerKey)
 
+	objectLock := false
+	if c.ObjectLockEnabled {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		out, lockErr := client.GetObjectLockConfiguration(ctx,
+			&s3.GetObjectLockConfigurationInput{Bucket: aws.String(c.BucketName)})
+		objectLock = objectLockUsable(out, lockErr)
+		if lockErr != nil && !isObjectLockNotFound(lockErr) {
+			logger.Warnf("s3 %q: object lock probe on bucket %q failed, uploading without lock: %v", c.Name, c.BucketName, lockErr)
+		} else if !objectLock {
+			logger.Warnf("s3 %q: bucket %q has object lock disabled, uploading without lock", c.Name, c.BucketName)
+		}
+	}
+
 	return &S3{
 		cfg:           c,
 		client:        client,
@@ -91,6 +108,7 @@ func NewS3(c config.S3, serviceName, restoreFolder, binLog string) (s3Storage *S
 		downloader:    downloader,
 		sseKey:        sseKey,
 		sseKeyMD5:     sseKeyMD5,
+		objectLock:    objectLock,
 		serviceName:   serviceName,
 		restoreFolder: path.Join(restoreFolder, c.Name),
 		logger:        logger.WithField("service", serviceName),
@@ -109,6 +127,31 @@ func encodeSSECustomerKey(raw *string) (key, keyMD5 *string) {
 	digest := md5.Sum([]byte(*raw))
 	encodedMD5 := base64.StdEncoding.EncodeToString(digest[:])
 	return &encoded, &encodedMD5
+}
+
+// isObjectLockNotFound reports whether an error means the bucket has no
+// object lock configuration.
+func isObjectLockNotFound(err error) bool {
+	var ae smithy.APIError
+	return errors.As(err, &ae) && ae.ErrorCode() == "ObjectLockConfigurationNotFoundError"
+}
+
+// objectLockUsable reports whether a GetObjectLockConfiguration result confirms
+// the bucket accepts Object Lock headers.
+func objectLockUsable(out *s3.GetObjectLockConfigurationOutput, err error) bool {
+	if err != nil || out == nil || out.ObjectLockConfiguration == nil {
+		return false
+	}
+	return out.ObjectLockConfiguration.ObjectLockEnabled == types.ObjectLockEnabledEnabled
+}
+
+// objectLockParams returns per-upload Object Lock settings, zero-valued when disabled.
+func objectLockParams(c config.S3, now time.Time) (tmtypes.ObjectLockMode, *time.Time) {
+	if !c.ObjectLockEnabled {
+		return "", nil
+	}
+	t := now.Add(time.Duration(c.ObjectLockRetentionDays) * 24 * time.Hour)
+	return tmtypes.ObjectLockMode(c.ObjectLockMode), &t
 }
 
 // GetStorageServiceName implements interface
@@ -161,6 +204,10 @@ func (s *S3) WriteStream(fileName, mimeType string, body io.Reader, tags map[str
 		SSECustomerKey:       s.sseKey,
 		SSECustomerKeyMD5:    s.sseKeyMD5,
 		Tagging:              aws.String(tag.String()),
+	}
+
+	if s.objectLock {
+		input.ObjectLockMode, input.ObjectLockRetainUntilDate = objectLockParams(s.cfg, time.Now())
 	}
 
 	_, err := s.uploader.UploadObject(context.Background(), input)

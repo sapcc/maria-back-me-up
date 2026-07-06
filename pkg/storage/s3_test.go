@@ -6,8 +6,17 @@ package storage
 import (
 	"crypto/md5"
 	"encoding/base64"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
+
+	tmtypes "github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager/types"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	smithy "github.com/aws/smithy-go"
+	"github.com/sapcc/maria-back-me-up/pkg/config"
 )
 
 func TestEncodeSSECustomerKey(t *testing.T) {
@@ -39,6 +48,123 @@ func TestEncodeSSECustomerKey(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestObjectLockParams(t *testing.T) {
+	now := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+
+	cases := []struct {
+		name      string
+		cfg       config.S3
+		wantMode  tmtypes.ObjectLockMode
+		wantUntil *time.Time
+	}{
+		{
+			name: "disabled ignores mode and days",
+			cfg:  config.S3{ObjectLockMode: "COMPLIANCE", ObjectLockRetentionDays: 30},
+		},
+		{
+			name:      "compliance 30 days",
+			cfg:       config.S3{ObjectLockEnabled: true, ObjectLockMode: "COMPLIANCE", ObjectLockRetentionDays: 30},
+			wantMode:  tmtypes.ObjectLockModeCompliance,
+			wantUntil: timePtr(now.Add(30 * 24 * time.Hour)),
+		},
+		{
+			name:      "governance 1 day",
+			cfg:       config.S3{ObjectLockEnabled: true, ObjectLockMode: "GOVERNANCE", ObjectLockRetentionDays: 1},
+			wantMode:  tmtypes.ObjectLockModeGovernance,
+			wantUntil: timePtr(now.Add(24 * time.Hour)),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotMode, gotUntil := objectLockParams(tc.cfg, now)
+			if gotMode != tc.wantMode {
+				t.Errorf("mode: got %q, want %q", gotMode, tc.wantMode)
+			}
+			if !equalTimePtr(gotUntil, tc.wantUntil) {
+				t.Errorf("retain until: got %v, want %v", gotUntil, tc.wantUntil)
+			}
+		})
+	}
+}
+
+func TestObjectLockUsable(t *testing.T) {
+	cases := []struct {
+		name string
+		out  *s3.GetObjectLockConfigurationOutput
+		err  error
+		want bool
+	}{
+		{
+			name: "enabled bucket",
+			out: &s3.GetObjectLockConfigurationOutput{
+				ObjectLockConfiguration: &types.ObjectLockConfiguration{ObjectLockEnabled: types.ObjectLockEnabledEnabled},
+			},
+			want: true,
+		},
+		{
+			name: "probe error",
+			err:  errors.New("ObjectLockConfigurationNotFoundError"),
+		},
+		{
+			name: "nil output without error",
+		},
+		{
+			name: "no lock configuration",
+			out:  &s3.GetObjectLockConfigurationOutput{},
+		},
+		{
+			name: "lock not enabled",
+			out: &s3.GetObjectLockConfigurationOutput{
+				ObjectLockConfiguration: &types.ObjectLockConfiguration{},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := objectLockUsable(tc.out, tc.err); got != tc.want {
+				t.Errorf("got %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestIsObjectLockNotFound(t *testing.T) {
+	notFound := &smithy.GenericAPIError{Code: "ObjectLockConfigurationNotFoundError"}
+
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "not found code", err: notFound, want: true},
+		{name: "wrapped not found code", err: fmt.Errorf("probe: %w", notFound), want: true},
+		{name: "other api error", err: &smithy.GenericAPIError{Code: "AccessDenied"}},
+		{name: "plain error", err: errors.New("dial tcp: timeout")},
+		{name: "nil", err: nil},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isObjectLockNotFound(tc.err); got != tc.want {
+				t.Errorf("got %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func timePtr(t time.Time) *time.Time {
+	return &t
+}
+
+func equalTimePtr(a, b *time.Time) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.Equal(*b)
 }
 
 func equalStringPtr(a, b *string) bool {
