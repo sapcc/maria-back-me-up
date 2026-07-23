@@ -83,6 +83,8 @@ func NewS3(c config.S3, serviceName, restoreFolder, binLog string) (s3Storage *S
 	downloader := transfermanager.New(client, func(o *transfermanager.Options) {
 		o.PartSizeBytes = 64 * 1024 * 1024 // 64MB per part
 		o.Concurrency = 6
+		// Ceph's partNumber= responses trip the SDK's per-chunk If-Match check; range mode avoids it.
+		o.GetObjectType = tmtypes.GetObjectRanges
 	})
 
 	sseKey, sseKeyMD5 := encodeSSECustomerKey(c.SSECustomerKey)
