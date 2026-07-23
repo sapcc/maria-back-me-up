@@ -4,6 +4,7 @@
 package storage
 
 import (
+	"bytes"
 	"crypto/md5"
 	"encoding/base64"
 	"errors"
@@ -20,10 +21,21 @@ import (
 )
 
 func TestEncodeSSECustomerKey(t *testing.T) {
-	rawKey := strings.Repeat("k", 32) // 32-byte AES256 key
-	digest := md5.Sum([]byte(rawKey))
-	wantKey := base64.StdEncoding.EncodeToString([]byte(rawKey))
-	wantMD5 := base64.StdEncoding.EncodeToString(digest[:])
+	b64Raw := bytes.Repeat([]byte{0xAA}, 32)
+	b64Input := base64.StdEncoding.EncodeToString(b64Raw)
+	b64Digest := md5.Sum(b64Raw)
+	b64WantMD5 := base64.StdEncoding.EncodeToString(b64Digest[:])
+
+	asciiInput := strings.Repeat("k", 32)
+	asciiDigest := md5.Sum([]byte(asciiInput))
+	asciiWantKey := base64.StdEncoding.EncodeToString([]byte(asciiInput))
+	asciiWantMD5 := base64.StdEncoding.EncodeToString(asciiDigest[:])
+
+	invalidInput := "not@valid@base64!"
+	invalidDigest := md5.Sum([]byte(invalidInput))
+	invalidWantKey := base64.StdEncoding.EncodeToString([]byte(invalidInput))
+	invalidWantMD5 := base64.StdEncoding.EncodeToString(invalidDigest[:])
+
 	empty := ""
 
 	cases := []struct {
@@ -32,7 +44,9 @@ func TestEncodeSSECustomerKey(t *testing.T) {
 		wantKey *string
 		wantMD5 *string
 	}{
-		{name: "raw 32-byte key", input: &rawKey, wantKey: &wantKey, wantMD5: &wantMD5},
+		{name: "base64 32-byte key", input: &b64Input, wantKey: &b64Input, wantMD5: &b64WantMD5},
+		{name: "32-byte ASCII falls back to raw", input: &asciiInput, wantKey: &asciiWantKey, wantMD5: &asciiWantMD5},
+		{name: "invalid base64 falls back to raw", input: &invalidInput, wantKey: &invalidWantKey, wantMD5: &invalidWantMD5},
 		{name: "nil", input: nil, wantKey: nil, wantMD5: nil},
 		{name: "empty string", input: &empty, wantKey: nil, wantMD5: nil},
 	}
