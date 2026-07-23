@@ -117,14 +117,17 @@ func NewS3(c config.S3, serviceName, restoreFolder, binLog string) (s3Storage *S
 	}, err
 }
 
-// encodeSSECustomerKey reproduces aws-sdk-go v1's computeSSEKeys handler,
-// which has no equivalent in v2.
+// aws-sdk-go v2 dropped v1's SSE-C middleware; accept both raw 32-byte and base64 config shapes.
 func encodeSSECustomerKey(raw *string) (key, keyMD5 *string) {
 	if raw == nil || *raw == "" {
 		return nil, nil
 	}
-	encoded := base64.StdEncoding.EncodeToString([]byte(*raw))
-	digest := md5.Sum([]byte(*raw))
+	material := []byte(*raw)
+	if dec, err := base64.StdEncoding.DecodeString(*raw); err == nil && len(dec) == 32 {
+		material = dec
+	}
+	encoded := base64.StdEncoding.EncodeToString(material)
+	digest := md5.Sum(material)
 	encodedMD5 := base64.StdEncoding.EncodeToString(digest[:])
 	return &encoded, &encodedMD5
 }
