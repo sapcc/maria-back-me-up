@@ -38,3 +38,25 @@ func TestMariaDBDumpTool(t *testing.T) {
 		t.Error("expected an error, but got nil")
 	}
 }
+
+func TestSetSlowQueryLog_SkipsWhenUnsupported(t *testing.T) {
+	// Unreachable endpoint: if the short-circuit is missing, client.Connect returns a non-nil error.
+	cfg := config.Config{
+		Database: config.DatabaseConfig{
+			Host: "127.0.0.1",
+			Port: 1,
+		},
+	}
+
+	mdb, err := NewMariaDB(cfg, nil, nil)
+	if err != nil {
+		t.Fatalf("expected mariadb instance, got error: %s", err.Error())
+	}
+	m := mdb.(*MariaDB)
+	m.slowQueryLogProbeDone = true
+	m.slowQueryLogToggleSupported = false
+
+	if err := m.setSlowQueryLog(slowQueryLogOFF); err != nil {
+		t.Fatalf("expected nil (short-circuit), got %v", err)
+	}
+}
