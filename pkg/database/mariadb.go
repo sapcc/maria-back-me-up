@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-mysql-org/go-mysql/client"
@@ -46,6 +47,10 @@ type (
 		logPosition       LogPosition
 		flushTimer        *time.Timer
 		slowQueryLogState slowQueryLogState
+
+		slowQueryLogMu              sync.Mutex
+		slowQueryLogProbeDone       bool
+		slowQueryLogToggleSupported bool
 	}
 	metadata struct {
 		Status binlog `yaml:"SHOW MASTER STATUS"`
@@ -707,6 +712,13 @@ func (m *MariaDB) restartMariaDB() (err error) {
 }
 
 func (m *MariaDB) setSlowQueryLog(state slowQueryLogState) (err error) {
+	m.slowQueryLogMu.Lock()
+	if m.slowQueryLogProbeDone && !m.slowQueryLogToggleSupported {
+		m.slowQueryLogMu.Unlock()
+		return nil
+	}
+	m.slowQueryLogMu.Unlock()
+
 	conn, err := client.Connect(fmt.Sprintf("%s:%s", m.cfg.Database.Host, strconv.Itoa(m.cfg.Database.Port)), m.cfg.Database.User, m.cfg.Database.Password, "")
 	if err != nil {
 		return
@@ -716,13 +728,33 @@ func (m *MariaDB) setSlowQueryLog(state slowQueryLogState) (err error) {
 			log.Error(fmt.Errorf("failed to close connection: %v", err))
 		}
 	}()
-	if m.slowQueryLogState != state {
-		_, err = conn.Execute(fmt.Sprintf("set global slow_query_log = '%s'", state))
-		if err == nil {
-			m.slowQueryLogState = state
-		}
+	if m.slowQueryLogState == state {
+		return nil
 	}
-	return
+	_, err = conn.Execute(fmt.Sprintf("set global slow_query_log = '%s'", state))
+	if err != nil {
+		if isAccessDenied(err) {
+			m.slowQueryLogMu.Lock()
+			m.slowQueryLogProbeDone = true
+			m.slowQueryLogToggleSupported = false
+			m.slowQueryLogMu.Unlock()
+			log.Warn("MariaDB user lacks SUPER privilege; slow_query_log toggling will be skipped for this process")
+			return nil
+		}
+		return
+	}
+	m.slowQueryLogState = state
+	m.slowQueryLogMu.Lock()
+	m.slowQueryLogProbeDone = true
+	m.slowQueryLogToggleSupported = true
+	m.slowQueryLogMu.Unlock()
+	return nil
+}
+
+// isAccessDenied reports whether err is a MariaDB "SUPER privilege required" (1227) error.
+func isAccessDenied(err error) bool {
+	var myErr *mysql.MyError
+	return errors.As(err, &myErr) && myErr.Code == mysql.ER_SPECIFIC_ACCESS_DENIED_ERROR
 }
 
 func getMyDumpBinlog(p string) (mp mysql.Position, err error) {
