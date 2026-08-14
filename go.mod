@@ -17,7 +17,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/labstack/echo v3.3.10+incompatible
 	github.com/namsral/flag v1.7.4-pre
-	github.com/ncw/swift v1.0.53
+	github.com/ncw/swift/v2 v2.0.5
 	github.com/pingcap/errors v0.11.5-0.20260523003111-3697ad564b43
 	github.com/pingcap/tidb/pkg/parser v0.0.0-20260812090132-d5f9ca5690c0
 	github.com/pkg/errors v0.9.1
