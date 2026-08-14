@@ -81,19 +81,31 @@ type StorageService struct {
 
 // S3 hols info for the AWS S3 storage service
 type S3 struct {
-	Name                    string  `yaml:"name"`
-	Verify                  *bool   `yaml:"verify"`
-	AwsAccessKeyID          string  `yaml:"aws_access_key_id"`
-	AwsSecretAccessKey      string  `yaml:"aws_secret_access_key"`
-	AwsEndpoint             string  `yaml:"aws_endpoint"`
-	SSECustomerAlgorithm    *string `yaml:"sse_customer_algorithm"`
-	S3ForcePathStyle        *bool   `yaml:"s3_force_path_style"`
-	SSECustomerKey          *string `yaml:"sse_customer_key"`
-	Region                  string  `yaml:"region"`
-	BucketName              string  `yaml:"bucket_name"`
-	ObjectLockEnabled       bool    `yaml:"object_lock_enabled"`
-	ObjectLockMode          string  `yaml:"object_lock_mode"`
-	ObjectLockRetentionDays int     `yaml:"object_lock_retention_days"`
+	Name                    string   `yaml:"name"`
+	Verify                  *bool    `yaml:"verify"`
+	AwsAccessKeyID          string   `yaml:"aws_access_key_id"`
+	AwsSecretAccessKey      string   `yaml:"aws_secret_access_key"`
+	AwsEndpoint             string   `yaml:"aws_endpoint"`
+	SSECustomerAlgorithm    *string  `yaml:"sse_customer_algorithm"`
+	S3ForcePathStyle        *bool    `yaml:"s3_force_path_style"`
+	SSECustomerKey          *string  `yaml:"sse_customer_key"`
+	CSEActiveKey            string   `yaml:"cse_active_key"`
+	CSEKeys                 []CSEKey `yaml:"cse_keys"`
+	Region                  string   `yaml:"region"`
+	BucketName              string   `yaml:"bucket_name"`
+	ObjectLockEnabled       bool     `yaml:"object_lock_enabled"`
+	ObjectLockMode          string   `yaml:"object_lock_mode"`
+	ObjectLockRetentionDays int      `yaml:"object_lock_retention_days"`
+}
+
+// CSEKey names a client-side encryption KEK and the file holding it. Multiple
+// entries are allowed; the one whose Name matches S3.CSEActiveKey is used for
+// new uploads, the rest are kept available so existing backups stay readable
+// across rotations. Drop an entry only after retention has aged out the last
+// object encrypted with it.
+type CSEKey struct {
+	Name string `yaml:"name"`
+	File string `yaml:"file"`
 }
 
 // Swift holds info for the OS swift storage service

@@ -367,6 +367,47 @@ github.com/sirupsen/logrus
 # github.com/spf13/pflag v1.0.10
 ## explicit; go 1.12
 github.com/spf13/pflag
+# github.com/tink-crypto/tink-go/v2 v2.7.0
+## explicit; go 1.24.0
+github.com/tink-crypto/tink-go/v2/aead/aesgcm
+github.com/tink-crypto/tink-go/v2/aead/subtle
+github.com/tink-crypto/tink-go/v2/core/registry
+github.com/tink-crypto/tink-go/v2/insecuresecretdataaccess
+github.com/tink-crypto/tink-go/v2/internal
+github.com/tink-crypto/tink-go/v2/internal/aead
+github.com/tink-crypto/tink-go/v2/internal/config
+github.com/tink-crypto/tink-go/v2/internal/factoryutil
+github.com/tink-crypto/tink-go/v2/internal/internalapi
+github.com/tink-crypto/tink-go/v2/internal/internalregistry
+github.com/tink-crypto/tink-go/v2/internal/keygenregistry
+github.com/tink-crypto/tink-go/v2/internal/legacykeymanager
+github.com/tink-crypto/tink-go/v2/internal/monitoringutil
+github.com/tink-crypto/tink-go/v2/internal/outputprefix
+github.com/tink-crypto/tink-go/v2/internal/primitiveregistry
+github.com/tink-crypto/tink-go/v2/internal/protoserialization
+github.com/tink-crypto/tink-go/v2/internal/random
+github.com/tink-crypto/tink-go/v2/internal/registryconfig
+github.com/tink-crypto/tink-go/v2/internal/registryconfig/legacyprimitive
+github.com/tink-crypto/tink-go/v2/internal/syncmap
+github.com/tink-crypto/tink-go/v2/internal/tinkerror
+github.com/tink-crypto/tink-go/v2/key
+github.com/tink-crypto/tink-go/v2/keyset
+github.com/tink-crypto/tink-go/v2/monitoring
+github.com/tink-crypto/tink-go/v2/proto/aes_ctr_hmac_streaming_go_proto
+github.com/tink-crypto/tink-go/v2/proto/aes_gcm_go_proto
+github.com/tink-crypto/tink-go/v2/proto/aes_gcm_hkdf_streaming_go_proto
+github.com/tink-crypto/tink-go/v2/proto/common_go_proto
+github.com/tink-crypto/tink-go/v2/proto/hmac_go_proto
+github.com/tink-crypto/tink-go/v2/proto/tink_go_proto
+github.com/tink-crypto/tink-go/v2/secretdata
+github.com/tink-crypto/tink-go/v2/streamingaead
+github.com/tink-crypto/tink-go/v2/streamingaead/aesctrhmac
+github.com/tink-crypto/tink-go/v2/streamingaead/aesgcmhkdf
+github.com/tink-crypto/tink-go/v2/streamingaead/subtle
+github.com/tink-crypto/tink-go/v2/streamingaead/subtle/noncebased
+github.com/tink-crypto/tink-go/v2/subtle
+github.com/tink-crypto/tink-go/v2/subtle/random
+github.com/tink-crypto/tink-go/v2/tink
 # github.com/valyala/bytebufferpool v1.0.0
 ## explicit
 github.com/valyala/bytebufferpool
@@ -405,7 +446,13 @@ go.yaml.in/yaml/v3
 ## explicit; go 1.25.0
 golang.org/x/crypto/acme
 golang.org/x/crypto/acme/autocert
+golang.org/x/crypto/chacha20
+golang.org/x/crypto/chacha20poly1305
+golang.org/x/crypto/curve25519
 golang.org/x/crypto/ed25519
+golang.org/x/crypto/hkdf
+golang.org/x/crypto/internal/alias
+golang.org/x/crypto/internal/poly1305
 golang.org/x/crypto/pbkdf2
 # golang.org/x/net v0.58.0
 ## explicit; go 1.25.0
@@ -425,6 +472,7 @@ golang.org/x/oauth2/internal
 golang.org/x/sync/errgroup
 # golang.org/x/sys v0.47.0
 ## explicit; go 1.25.0
+golang.org/x/sys/cpu
 golang.org/x/sys/plan9
 golang.org/x/sys/unix
 golang.org/x/sys/windows
@@ -454,6 +502,7 @@ golang.org/x/time/rate
 # google.golang.org/protobuf v1.36.11
 ## explicit; go 1.23
 google.golang.org/protobuf/encoding/protodelim
+google.golang.org/protobuf/encoding/protojson
 google.golang.org/protobuf/encoding/prototext
 google.golang.org/protobuf/encoding/protowire
 google.golang.org/protobuf/internal/descfmt
@@ -461,6 +510,7 @@ google.golang.org/protobuf/internal/descopts
 google.golang.org/protobuf/internal/detrand
 google.golang.org/protobuf/internal/editiondefaults
 google.golang.org/protobuf/internal/encoding/defval
+google.golang.org/protobuf/internal/encoding/json
 google.golang.org/protobuf/internal/encoding/messageset
 google.golang.org/protobuf/internal/encoding/tag
 google.golang.org/protobuf/internal/encoding/text

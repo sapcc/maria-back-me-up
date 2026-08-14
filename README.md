@@ -140,6 +140,10 @@ storages:
       sse_customer_algorithm:
       s3_force_path_style:
       sse_customer_key:
+      cse_active_key: # name of the entry in cse_keys to use for new uploads (empty disables CSE)
+      cse_keys: # list of KEKs maria-back-me-up can decrypt with; the active one encrypts. Drop an entry only after retention has aged out the last object that used it.
+        - name:  # operator-chosen identifier; recorded in object metadata
+          file:  # path to file holding the 32-byte KEK, raw or base64
       region: # s3 region
       bucket_name: # bucket name to save the backup to
       object_lock_enabled: # default false. Set S3 Object Lock on every uploaded object. Requires a bucket with Object Lock enabled; if the bucket doesn't support it, uploads continue without lock and a warning is logged
@@ -175,3 +179,47 @@ storages:
 verification:
   interval_in_minutes: # how often are the backups verified
 ```
+
+## Client-side encryption (CSE) for S3
+
+The S3 backend supports two encryption modes:
+
+- **SSE-C** (`sse_customer_key`) — server-side; the key transits the wire on every PUT/GET.
+- **CSE** (`cse_active_key` + `cse_keys`) — client-side via Tink streaming AEAD (`AES256_GCM_HKDF_1MB`). KEKs never leave the host.
+
+Each CSE object carries an `x-amz-meta-cse-key` header naming the KEK it was encrypted with; downloads look that name up in `cse_keys` to pick the right cipher. The metadata marker keeps S3 keys canonical, lets a bucket mix legacy SSE-C and CSE objects, and supports KEK rotation: add a new entry to `cse_keys`, point `cse_active_key` at it, and the old entry stays readable until retention ages out the last object that used it.
+
+### Migration from SSE-C to CSE
+
+The two modes coexist: keep `sse_customer_key` set while CSE is on so legacy objects stay readable.
+
+1. Generate a 32-byte KEK into your secret store, e.g. `vault kv put secret/maria-backup/cse value="$(openssl rand -base64 32)"`.
+2. Mount it at a known path and add to each `storages.s3[]` entry:
+
+   ```yaml
+   cse_active_key: 2026-q3
+   cse_keys:
+     - name: 2026-q3
+       file: /etc/maria-backup/kek-2026-q3
+   sse_customer_key: ... # keep during migration
+   ```
+
+3. Roll the change. New objects land at canonical S3 keys with an `x-amz-meta-cse-key: 2026-q3` header; legacy SSE-C objects remain readable. Each download starts with a `HeadObject` to choose between the CSE GET and the legacy SSE-C path.
+4. Once retention has aged out the last non-CSE object, drop `sse_customer_key`.
+
+### Rotating KEKs
+
+Bring up the new KEK alongside the old one, then promote it:
+
+```yaml
+cse_active_key: 2026-q4
+cse_keys:
+  - name: 2026-q4
+    file: /etc/maria-backup/kek-2026-q4
+  - name: 2026-q3   # keep until retention ages out the last 2026-q3 object
+    file: /etc/maria-backup/kek-2026-q3
+```
+
+Old objects continue to decrypt under their original KEK; new uploads use `2026-q4`. Drop the `2026-q3` entry once no live backup still references it.
+
+KEKs are the operational secret of record. Losing the active KEK makes new backups unrecoverable; losing an older KEK makes any backup still encrypted under it unrecoverable.
