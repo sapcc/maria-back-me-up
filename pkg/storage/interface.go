@@ -62,6 +62,7 @@ type Backup struct {
 	Storage       string
 	Time          time.Time
 	Key           string
+	CSEKey        string // KEK name when client-side encrypted, "" otherwise
 	IncList       []IncBackup
 	VerifySuccess *Verify
 	VerifyFail    *Verify

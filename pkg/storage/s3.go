@@ -43,6 +43,7 @@ type (
 		sseKey        *string
 		sseKeyMD5     *string
 		objectLock    bool
+		cse           *cseRegistry
 		serviceName   string
 		restoreFolder string
 		logger        *logrus.Entry `yaml:"-"`
@@ -103,6 +104,14 @@ func NewS3(c config.S3, serviceName, restoreFolder, binLog string) (s3Storage *S
 		}
 	}
 
+	var cse *cseRegistry
+	if c.CSEActiveKey != "" || len(c.CSEKeys) > 0 {
+		cse, err = newCSERegistry(c.CSEActiveKey, c.CSEKeys)
+		if err != nil {
+			return nil, fmt.Errorf("s3 %q: %w", c.Name, err)
+		}
+	}
+
 	return &S3{
 		cfg:           c,
 		client:        client,
@@ -111,6 +120,7 @@ func NewS3(c config.S3, serviceName, restoreFolder, binLog string) (s3Storage *S
 		sseKey:        sseKey,
 		sseKeyMD5:     sseKeyMD5,
 		objectLock:    objectLock,
+		cse:           cse,
 		serviceName:   serviceName,
 		restoreFolder: path.Join(restoreFolder, c.Name),
 		logger:        logger.WithField("service", serviceName),
@@ -194,21 +204,40 @@ func (s *S3) WriteFolder(p string) (err error) {
 	return s.WriteStream(path.Join(filepath.Base(p), "dump.tar"), "zip", r, nil, false)
 }
 
-// WriteStream implements interface
+// WriteStream implements interface.
+//
+// CSE: the body is encrypted under the active KEK; `x-amz-meta-cse-key`
+// records the key name for diagnostics. AAD is the S3 object key, so a blob
+// moved to another path fails to decrypt instead of silently restoring.
 func (s *S3) WriteStream(fileName, mimeType string, body io.Reader, tags map[string]string, dlo bool) error {
 	var tag strings.Builder
 	for k, v := range tags {
 		fmt.Fprintf(&tag, "%s=%s&", k, v)
 	}
 
+	s3Key := path.Join(s.serviceName, fileName)
+
 	input := &transfermanager.UploadObjectInput{
-		Bucket:               aws.String(s.cfg.BucketName),
-		Key:                  aws.String(path.Join(s.serviceName, fileName)),
-		Body:                 body,
-		SSECustomerAlgorithm: s.cfg.SSECustomerAlgorithm,
-		SSECustomerKey:       s.sseKey,
-		SSECustomerKeyMD5:    s.sseKeyMD5,
-		Tagging:              aws.String(tag.String()),
+		Bucket:  aws.String(s.cfg.BucketName),
+		Key:     aws.String(s3Key),
+		Tagging: aws.String(tag.String()),
+	}
+	if s.cse != nil {
+		cipher, activeName := s.cse.activeCipher()
+		s.logger.Debugf("cse: encrypting %s with key %q", s3Key, activeName)
+		rc := cipher.EncryptStream(body, []byte(s3Key))
+		defer func() {
+			if err := rc.Close(); err != nil {
+				logger.Warnf("cse: close encrypt pipe: %v", err)
+			}
+		}()
+		input.Body = rc
+		input.Metadata = map[string]string{CSEKeyMetaHeader: activeName}
+	} else {
+		input.Body = body
+		input.SSECustomerAlgorithm = s.cfg.SSECustomerAlgorithm
+		input.SSECustomerKey = s.sseKey
+		input.SSECustomerKeyMD5 = s.sseKeyMD5
 	}
 
 	if s.objectLock {
@@ -340,12 +369,30 @@ func (s *S3) GetFullBackups() (bl []Backup, err error) {
 				Storage: s.cfg.Name,
 				Time:    *fullObj.LastModified,
 				Key:     *fullObj.Key,
+				CSEKey:  s.lookupCSEKeyName(*fullObj.Key),
 				IncList: make([]IncBackup, 0),
 			}
 			bl = append(bl, b)
 		}
 	}
 	return
+}
+
+// lookupCSEKeyName HEADs an object and returns its recorded CSE key name, ""
+// when not client-side encrypted. Errors degrade to "" so one failed HEAD
+// cannot break the listing; an SSE-C rejection is expected and not warned.
+func (s *S3) lookupCSEKeyName(key string) string {
+	head, err := s.client.HeadObject(context.Background(), &s3.HeadObjectInput{
+		Bucket: aws.String(s.cfg.BucketName),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		if !isSSECProbeRejection(err) {
+			s.logger.Warnf("cse: probe %s for key name: %v", key, err)
+		}
+		return ""
+	}
+	return readCSEKeyName(head.Metadata)
 }
 
 // DownloadBackup implements interface
@@ -392,45 +439,167 @@ func (s *S3) DownloadLatestBackup() (path string, err error) {
 	return path, &NoBackupError{}
 }
 
-func (s *S3) downloadFile(path string, obj types.Object) error {
-	if err := os.MkdirAll(filepath.Join(path, filepath.Dir(*obj.Key)), os.ModePerm); err != nil {
+// downloadMode describes which read path to use for a given object, decided
+// by a HEAD probe before any body GET. The metadata header `x-amz-meta-cse-
+// key` is invisible until after a successful HEAD/GET, so we pay one extra
+// round trip per CSE-mode read instead of letting the suffix scheme leak
+// into list/key handling.
+type downloadMode int
+
+const (
+	modeUnencrypted downloadMode = iota // no SSE-C, no CSE — plain transfermanager
+	modeSSEC                            // legacy SSE-C — transfermanager with SSE-C creds
+	modeCSE                             // client-side encrypted — direct GET + decrypt
+)
+
+type downloadPlan struct {
+	mode    downloadMode
+	cseName string // populated when mode == modeCSE
+}
+
+// probeDownloadMode issues a HEAD without SSE-C creds. Outcomes:
+//   - 200 with cse-key metadata → CSE (or a clear error if no registry is configured)
+//   - 400 with SSE-C configured → legacy SSE-C; otherwise propagated as-is
+//   - 200 without cse-key metadata → unencrypted
+//
+// We always probe on the read path: skipping it when CSE is disconfigured
+// would silently restore ciphertext as plaintext if any CSE objects remain
+// on the bucket.
+func (s *S3) probeDownloadMode(key string) (downloadPlan, error) {
+	head, err := s.client.HeadObject(context.Background(), &s3.HeadObjectInput{
+		Bucket: aws.String(s.cfg.BucketName),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		if isSSECProbeRejection(err) && s.sseKey != nil {
+			return downloadPlan{mode: modeSSEC}, nil
+		}
+		return downloadPlan{}, err
+	}
+	if name := readCSEKeyName(head.Metadata); name != "" {
+		if s.cse == nil {
+			return downloadPlan{}, fmt.Errorf("cse: object %q is encrypted with key %q but no cse_keys are configured", key, name)
+		}
+		return downloadPlan{mode: modeCSE, cseName: name}, nil
+	}
+	return downloadPlan{mode: modeUnencrypted}, nil
+}
+
+// isSSECProbeRejection reports whether a HeadObject error means the object
+// requires SSE-C credentials. S3 rejects a keyless HEAD of an SSE-C object
+// with HTTP 400, but HEAD error responses carry no body, so the SDK derives
+// the code "BadRequest" from the status text; implementations that do attach
+// an XML error body use "InvalidRequest" instead.
+func isSSECProbeRejection(err error) bool {
+	var ae smithy.APIError
+	if !errors.As(err, &ae) {
+		return false
+	}
+	code := ae.ErrorCode()
+	return code == "BadRequest" || code == "InvalidRequest"
+}
+
+// readCSEKeyName looks up CSEKeyMetaHeader in object metadata. The
+// aws-sdk-go-v2 deserializer lower-cases user-metadata keys, and the header
+// constant is already lowercase, so a direct map lookup is sufficient.
+func readCSEKeyName(md map[string]string) string {
+	return md[CSEKeyMetaHeader]
+}
+
+// decryptObject GETs the object and streams plaintext to dst. The KEK is
+// picked by trial decryption; recordedKey is diagnostics only. AAD is the
+// object's S3 key, as at upload time.
+func (s *S3) decryptObject(key, recordedKey string, dst io.Writer) error {
+	out, err := s.client.GetObject(context.Background(), &s3.GetObjectInput{
+		Bucket: aws.String(s.cfg.BucketName),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := out.Body.Close(); err != nil {
+			logger.Warnf("failed to close response body: %v", err)
+		}
+	}()
+	cipher, _ := s.cse.activeCipher()
+	s.logger.Debugf("cse: decrypting %s (encrypted under key %q)", key, recordedKey)
+	if err := cipher.DecryptStream(out.Body, []byte(key), dst); err != nil {
+		return fmt.Errorf("cse: decrypt %s (recorded key %q): %w", key, recordedKey, err)
+	}
+	return nil
+}
+
+// fetchObject is the single body-read seam for the S3 backend: it probes the
+// object's encryption mode and streams the body to w. Every download must go
+// through it, so a new read path cannot bypass CSE detection and write
+// ciphertext out as if it were plaintext.
+func (s *S3) fetchObject(key string, w io.WriterAt) error {
+	plan, err := s.probeDownloadMode(key)
+	if err != nil {
+		return err
+	}
+
+	if plan.mode == modeCSE {
+		// transfermanager's parallel WriterAt is incompatible with sequential
+		// AEAD; decrypt in order and emit at increasing offsets instead.
+		return s.decryptObject(key, plan.cseName, &sequentialWriterAt{w: w})
+	}
+
+	input := &transfermanager.DownloadObjectInput{
+		Bucket:   aws.String(s.cfg.BucketName),
+		Key:      aws.String(key),
+		WriterAt: w,
+	}
+	if plan.mode == modeSSEC {
+		if s.sseKey == nil {
+			return fmt.Errorf("s3: object %q requires SSE-C creds but sse_customer_key is not configured", key)
+		}
+		input.SSECustomerAlgorithm = s.cfg.SSECustomerAlgorithm
+		input.SSECustomerKey = s.sseKey
+		input.SSECustomerKeyMD5 = s.sseKeyMD5
+	}
+	_, err = s.downloader.DownloadObject(context.Background(), input)
+	return err
+}
+
+// sequentialWriterAt adapts an io.WriterAt to io.Writer by writing at
+// monotonically increasing offsets, so the streaming decrypt path can feed
+// the same destinations the transfermanager writes to.
+type sequentialWriterAt struct {
+	w   io.WriterAt
+	off int64
+}
+
+func (sw *sequentialWriterAt) Write(p []byte) (int, error) {
+	n, err := sw.w.WriteAt(p, sw.off)
+	sw.off += int64(n)
+	return n, err
+}
+
+func (s *S3) downloadFile(dst string, obj types.Object) error {
+	key := aws.ToString(obj.Key)
+	if err := os.MkdirAll(filepath.Join(dst, filepath.Dir(key)), os.ModePerm); err != nil {
 		return s.handleError("", err)
 	}
-	file, err := os.Create(filepath.Join(path, *obj.Key))
+	file, err := os.Create(filepath.Join(dst, key))
 	if err != nil {
 		return s.handleError("", err)
 	}
-
 	defer func() {
 		if err := file.Close(); err != nil {
 			logger.Warnf("failed to close file: %v", err)
 		}
 	}()
 
-	if _, err := s.downloader.DownloadObject(context.Background(),
-		&transfermanager.DownloadObjectInput{
-			Bucket:               aws.String(s.cfg.BucketName),
-			Key:                  obj.Key,
-			WriterAt:             file,
-			SSECustomerAlgorithm: s.cfg.SSECustomerAlgorithm,
-			SSECustomerKey:       s.sseKey,
-			SSECustomerKeyMD5:    s.sseKeyMD5,
-		}); err != nil {
+	if err := s.fetchObject(key, file); err != nil {
 		return s.handleError("", err)
 	}
 	return nil
 }
 
 func (s *S3) downloadStream(w io.WriterAt, obj types.Object) error {
-	if _, err := s.downloader.DownloadObject(context.Background(),
-		&transfermanager.DownloadObjectInput{
-			Bucket:               aws.String(s.cfg.BucketName),
-			Key:                  obj.Key,
-			WriterAt:             w,
-			SSECustomerAlgorithm: s.cfg.SSECustomerAlgorithm,
-			SSECustomerKey:       s.sseKey,
-			SSECustomerKeyMD5:    s.sseKeyMD5,
-		}); err != nil {
+	if err := s.fetchObject(aws.ToString(obj.Key), w); err != nil {
 		return s.handleError("", err)
 	}
 	return nil

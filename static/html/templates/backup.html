@@ -26,6 +26,9 @@ SPDX-License-Identifier: Apache-2.0
                 {{ range $index, $backup := .backups }}
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                     <a href="/restore?key={{ $backup.Key }}&storage={{ $backup.Storage }}" class="list-group-item list-group-item-action" style="border: 0px">{{ $backup.Time }}</a>
+                    {{ if $backup.CSEKey }}
+                    <span class="badge badge-info badge-pill" title="client-side encrypted">&#128274; {{ $backup.CSEKey }}</span>
+                    {{ end }}
                     <span class="badge badge-primary badge-pill" style="color:black; background-color: transparent;"> > </span>
                 </li>
                 {{ end }}

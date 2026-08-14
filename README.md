@@ -32,13 +32,14 @@ The script starts MariaDB containers on ports 3306 (primary) and 3307 (streaming
 
 List of features currently available:
 
-- Full dump via MyDumper or mysqldump (invertal can be configured)
-- Incremental backups via binlog (invertal can be configured)
+- Full dump via MyDumper or mysqldump (interval can be configured)
+- Incremental backups via binlog (interval can be configured)
 - Supported backup storage
   - S3
   - Swift
   - Disk
 - Immutable backups via S3 Object Lock (COMPLIANCE mode: no one, including root, can delete objects before retention expires)
+- Client-side encryption of S3 backups (Tink streaming AEAD) with KEK rotation
 - Automatic verification of existing backups (can be run as separate service)
 - UI to see and select an available backup to restore to
 - UI shows status of backup verification
@@ -55,13 +56,14 @@ List of features currently available:
 
 The UI is available via localhost:8081/
 It shows a list of available full backups in S3. Any full backup contains 1 or more incremental backups, which can be selected to perform a complete restore!\
+Full backups that are client-side encrypted carry a 🔒 badge with the name of the KEK they were encrypted with.\
 The color of an incremental backups shows the state of the backup verification:\
 
 ```text
 # backup verification not yet executed
 - backup verification failed
 ! Backup verification partly succeeded. A restore was successful, however the table checksum failed
-+ backup verification successful. A restore is save to perform!
++ backup verification successful. A restore is safe to perform!
 ```
 
 ## Full logical backups
@@ -92,7 +94,7 @@ If no changes have been detected, no incremental backup will be created and save
 ## Binlog Format
 
 By default MariaDB will use the MIXED format (since 10.2.4). It is a mix of ROW and STATEMENT.\
-ROW will capture the actual change made to a table. The binlog files therefor can get very large.\
+ROW will capture the actual change made to a table. The binlog files therefore can get very large.\
 e.g. an update to a table column of 1000 rows will create 1000 row changes.
 With STATEMENT only the update statement will be recorded in the binlog.
 
@@ -110,7 +112,7 @@ backup:
   enable_restore_on_db_failure: # Enables automatic restore if the db is unhealthy.\
   disable_binlog_purge_on_rotate: # Boolean to disable binlog purging. Purging is enabled by default
   binlog_max_reconnect_attempts: # Number of reconnect attempts by the binlog syncer, default is 10
-  outh:
+  oauth:
     enabled: # enables OAuth to access the API (openID)\
     provider_url: # Url of the openID provider (e.g. Dex)\
     redirect_url: # OAuth redirect url (this is the url of your mariabackup service)\
@@ -140,6 +142,10 @@ storages:
       sse_customer_algorithm:
       s3_force_path_style:
       sse_customer_key:
+      cse_active_key: # name of the entry in cse_keys to use for new uploads (empty disables CSE)
+      cse_keys: # list of KEKs maria-back-me-up can decrypt with; the active one encrypts. Drop an entry only after retention has aged out the last object that used it.
+        - name:  # operator-chosen identifier; recorded in object metadata
+          file:  # path to file holding the 32-byte KEK, raw or base64
       region: # s3 region
       bucket_name: # bucket name to save the backup to
       object_lock_enabled: # default false. Set S3 Object Lock on every uploaded object. Requires a bucket with Object Lock enabled; if the bucket doesn't support it, uploads continue without lock and a warning is logged
@@ -175,3 +181,61 @@ storages:
 verification:
   interval_in_minutes: # how often are the backups verified
 ```
+
+## Client-side encryption (CSE) for S3
+
+The S3 backend supports two encryption modes:
+
+- **SSE-C** (`sse_customer_key`) — server-side; the key transits the wire on every PUT/GET.
+- **CSE** (`cse_active_key` + `cse_keys`) — client-side via Tink streaming AEAD (`AES256_GCM_HKDF_1MB`). KEKs never leave the host.
+
+All `cse_keys` entries are folded into one Tink keyset: the `cse_active_key` entry encrypts new uploads, and downloads decrypt by trying every key in the set (trial decryption). Each CSE object carries an `x-amz-meta-cse-key` header naming the KEK that encrypted it — kept for diagnostics and the UI badge, not for routing. The metadata marker keeps S3 keys canonical, lets a bucket mix legacy SSE-C and CSE objects, and supports KEK rotation: add a new entry to `cse_keys`, point `cse_active_key` at it, and the old entry stays readable until retention ages out the last object that used it.
+
+Ciphertext is bound to its S3 object key (used as AAD), so manually moving or renaming an object in the bucket makes it undecryptable — the restore fails instead of returning data from the wrong path.
+
+### Migration from SSE-C to CSE
+
+The two modes coexist: keep `sse_customer_key` set while CSE is on so legacy objects stay readable.
+
+1. Generate a 32-byte KEK into your secret store, e.g. `vault kv put secret/maria-backup/cse value="$(openssl rand -base64 32)"`.
+2. Mount it at a known path and add to each `storages.s3[]` entry:
+
+   ```yaml
+   cse_active_key: 2026-q3
+   cse_keys:
+     - name: 2026-q3
+       file: /etc/maria-backup/kek-2026-q3
+   sse_customer_key: ... # keep during migration
+   ```
+
+3. Roll the change. New objects land at canonical S3 keys with an `x-amz-meta-cse-key: 2026-q3` header; legacy SSE-C objects remain readable. Each download starts with a `HeadObject` to choose between the CSE GET and the legacy SSE-C path.
+4. Once retention has aged out the last non-CSE object, drop `sse_customer_key`.
+
+### Rotating KEKs
+
+Bring up the new KEK alongside the old one, then promote it:
+
+```yaml
+cse_active_key: 2026-q4
+cse_keys:
+  - name: 2026-q4
+    file: /etc/maria-backup/kek-2026-q4
+  - name: 2026-q3   # keep until retention ages out the last 2026-q3 object
+    file: /etc/maria-backup/kek-2026-q3
+```
+
+Old objects continue to decrypt under their original KEK; new uploads use `2026-q4`. Drop the `2026-q3` entry once no live backup still references it.
+
+With several replicas or services sharing a bucket, roll the rotation out in two phases: first add the new entry to `cse_keys` everywhere, then flip `cse_active_key` — that way every reader can already decrypt whatever any writer produces mid-rollout.
+
+Dropping an entry is fail-closed: a backup encrypted under a removed key fails to restore with `no matching key found`, and both the error and the UI badge name the recorded key.
+
+KEKs are the operational secret of record. Losing the active KEK makes new backups unrecoverable; losing an older KEK makes any backup still encrypted under it unrecoverable.
+
+### Logging and the UI
+
+- On startup the S3 backend logs the keyset composition and the active key, e.g. `cse: keyset loaded with 2 key(s) [2026-q4 2026-q3], active (encryption) key "2026-q4"` — the line to check after a rotation rollout.
+- Every CSE upload and download logs at debug level the object and the key name involved, .
+- The UI backup list badges encrypted full backups with the KEK name from object metadata. A badge naming a key that is no longer in `cse_keys` means that backup cannot currently be restored.
+
+No CSE-specific Prometheus metrics are exposed yet.
