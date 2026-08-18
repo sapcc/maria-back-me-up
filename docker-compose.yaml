@@ -5,7 +5,7 @@
 version: '3.5'
 services:
   db_prod:
-    image: mariadb:10.11.18@sha256:be981e4113326ada8d6004174dd09eeaefc03094037f811182a52d4f2e737350
+    image: mariadb:10.11.18@sha256:8020e05c4c498d06c87f0a1db010eb79bd6f8fb30e9b763d4690c34ce1e61008
     restart: on-failure
     environment:
       MYSQL_ROOT_PASSWORD: pw
@@ -16,7 +16,7 @@ services:
       - ./db_prod:/var/lib/mysql
 
   db_backup:
-    image: mariadb:10.11.18@sha256:be981e4113326ada8d6004174dd09eeaefc03094037f811182a52d4f2e737350
+    image: mariadb:10.11.18@sha256:8020e05c4c498d06c87f0a1db010eb79bd6f8fb30e9b763d4690c34ce1e61008
     restart: on-failure
     environment:
       MYSQL_ROOT_PASSWORD: pw
@@ -27,7 +27,7 @@ services:
       - ./db_backup:/var/lib/mysql
 
   db_test:
-    image: mariadb:10.11.18@sha256:be981e4113326ada8d6004174dd09eeaefc03094037f811182a52d4f2e737350
+    image: mariadb:10.11.18@sha256:8020e05c4c498d06c87f0a1db010eb79bd6f8fb30e9b763d4690c34ce1e61008
     restart: on-failure
     environment:
       MYSQL_ROOT_PASSWORD: test
@@ -38,7 +38,7 @@ services:
       - ./db_test:/var/lib/mysql
 
   db_streaming:
-    image: mariadb:10.11.18@sha256:be981e4113326ada8d6004174dd09eeaefc03094037f811182a52d4f2e737350
+    image: mariadb:10.11.18@sha256:8020e05c4c498d06c87f0a1db010eb79bd6f8fb30e9b763d4690c34ce1e61008
     restart: on-failure
     environment:
       MYSQL_ROOT_PASSWORD: streaming
