@@ -310,8 +310,8 @@ github.com/pingcap/failpoint
 # github.com/pingcap/log v1.1.1-0.20260227082333-572e590d08f1
 ## explicit; go 1.25
 github.com/pingcap/log
-# github.com/pingcap/tidb/pkg/parser v0.0.0-20260824040251-6eff5759c9b9
-## explicit; go 1.25
+# github.com/pingcap/tidb/pkg/parser v0.0.0-20260926012342-8936d7bdcb13
+## explicit; go 1.25.14
 github.com/pingcap/tidb/pkg/parser
 github.com/pingcap/tidb/pkg/parser/ast
 github.com/pingcap/tidb/pkg/parser/auth
