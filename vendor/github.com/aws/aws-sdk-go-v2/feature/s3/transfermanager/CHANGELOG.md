@@ -1,3 +1,73 @@
+# v0.4.13 (2026-10-01)
+
+* No change notes available for this release.
+
+# v0.4.12 (2026-09-30)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v0.4.11 (2026-09-28)
+
+* **Bug Fix**: Add reassembly check for GetObject parts mode so mismatch between response part range and calculated position will throw error
+
+# v0.4.10 (2026-09-24)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v0.4.9 (2026-09-23)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v0.4.8 (2026-09-21)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v0.4.7 (2026-09-14)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v0.4.6 (2026-09-11)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v0.4.5 (2026-09-09)
+
+* **Bug Fix**: Fix potential deadlock in GetObject calls.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v0.4.4 (2026-09-08)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v0.4.3 (2026-09-04)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v0.4.2 (2026-08-31.2)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v0.4.1 (2026-08-28)
+
+* **Bug Fix**: Fix DownloadObject bug so parts can be read to correct offset regardless of parts sizes change
+* **Bug Fix**: Fix GetObject bug so object parts can be read to correct offset regardless of parts sizes change
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v0.4.0 (2026-08-27)
+
+* **Feature**: Support connection read timeouts in the SDK. This is currently available on an opt-in basis by setting env `AWS_ENABLE_DEFAULT_SOCKET_TIMEOUT_2026=true`.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v0.3.17 (2026-08-26)
+
+* **Dependency Update**: Update to smithy-go v1.28.0.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v0.3.16 (2026-08-25)
+
+* **Dependency Update**: Update to smithy-go v1.27.10.
+* **Dependency Update**: Updated to the latest SDK module versions
+
 # v0.3.15 (2026-08-20)
 
 * **Dependency Update**: Updated to the latest SDK module versions
