@@ -26,8 +26,8 @@ import (
 	"github.com/sapcc/maria-back-me-up/pkg/log"
 	"github.com/sapcc/maria-back-me-up/pkg/storage"
 	"github.com/sirupsen/logrus"
+	"go.yaml.in/yaml/v3"
 	"golang.org/x/sync/errgroup"
-	"go.yaml.in/yaml/v2"
 )
 
 var (
