@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/sapcc/maria-back-me-up/pkg/config"
-	"go.yaml.in/yaml/v2"
+	"go.yaml.in/yaml/v3"
 )
 
 func TestWriteFolder(t *testing.T) {
