@@ -143,8 +143,8 @@ github.com/namsral/flag v1.7.4-pre h1:b2ScHhoCUkbsq0d2C15Mv+VU8bl8hAXV8arnWiOHNZ
 github.com/namsral/flag v1.7.4-pre/go.mod h1:OXldTctbM6SWH1K899kPZcf65KxJiD7MsceFUpB5yDo=
 github.com/ncw/swift v1.0.53 h1:luHjjTNtekIEvHg5KdAFIBaH7bWfNkefwFnpDffSIks=
 github.com/ncw/swift v1.0.53/go.mod h1:23YIA4yWVnGwv2dQlN4bB7egfYX6YLn0Yo/S6zZO/ZM=
-github.com/pingcap/errors v0.11.5-0.20260523003111-3697ad564b43 h1:2uP7qf+HuE9S5uPJ3R47//gDBSnK+t9N5ItrXmFyx4I=
-github.com/pingcap/errors v0.11.5-0.20260523003111-3697ad564b43/go.mod h1:tVRzr+4mfl9tTf5ej2+EzV8xmrYWamB0iNZ5d2i2QsQ=
+github.com/pingcap/errors v0.11.5-0.20261026075545-a34ae5ed13c8 h1:M5kd6jdlBmatjxAQcKaW5SayO3hL+geA4xIBh0xIDLk=
+github.com/pingcap/errors v0.11.5-0.20261026075545-a34ae5ed13c8/go.mod h1:tVRzr+4mfl9tTf5ej2+EzV8xmrYWamB0iNZ5d2i2QsQ=
 github.com/pingcap/failpoint v0.0.0-20260811232634-55ac33a48e3b h1:5qoDlNwsxDoWUkY0sMmsCcxs/Oi+UNCAI6x4ls9r2nA=
 github.com/pingcap/failpoint v0.0.0-20260811232634-55ac33a48e3b/go.mod h1:jimwlLpI/XtwQdlZML15HS+j4rirvwZM0GLY07wwgOo=
 github.com/pingcap/log v1.1.1-0.20260227082333-572e590d08f1 h1:A2bEfgSb7hLwR9mxDszgGKweF+xY9YoTDG+8RjdFjDE=

@@ -18,7 +18,7 @@ require (
 	github.com/labstack/echo v3.3.10+incompatible
 	github.com/namsral/flag v1.7.4-pre
 	github.com/ncw/swift v1.0.53
-	github.com/pingcap/errors v0.11.5-0.20260523003111-3697ad564b43
+	github.com/pingcap/errors v0.11.5-0.20261026075545-a34ae5ed13c8
 	github.com/pingcap/tidb/pkg/parser v0.0.0-20261006075207-5b7e1eb8f5f8
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.25.0
