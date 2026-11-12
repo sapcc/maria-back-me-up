@@ -16,12 +16,14 @@ package errors
 import (
 	"fmt"
 	"runtime"
+	"slices"
 	"strconv"
 
 	"go.uber.org/atomic"
 )
 
 var _ fmt.Formatter = (*redactFormatter)(nil)
+var _ fmt.Formatter = redactedArg{}
 
 // RedactLogEnabled defines whether the arguments of Error need to be redacted.
 var RedactLogEnabled atomic.String
@@ -52,6 +54,15 @@ type HackedStr interface {
 }
 
 // Error is the 'prototype' of a type of errors.
+//
+// The Gen* and FastGen* methods copy the argument slice, but do not deep-copy its
+// values. Argument values and any data they reference must remain immutable for
+// the lifetime of the generated error, since message formatting is deferred.
+// This includes byte buffers, strings created with unsafe conversions, and the
+// state used by error, fmt.Stringer, and fmt.Formatter implementations. Callers
+// must copy mutable data before passing it as an argument, or use HackedStr for
+// ephemeral string sources.
+//
 // Use DefineError to make a *Error:
 // var ErrUnavailable = errors.Normalize("Region %d is unavailable", errors.RFCCodeText("Unavailable"))
 //
@@ -173,19 +184,12 @@ func (e *Error) GetMsg() string {
 }
 
 func freezeHackedStringArgs(args []any) []any {
-	// This helper intentionally mutates the input slice in place.
-	// It is only used inside error-construction paths where args are internal and should
-	// not be reused by callers after passing into Gen*/FastGen* APIs.
+	// Redaction and freezing must not modify the caller's backing array.
+	args = slices.Clone(args)
 	for i := range args {
-		hackedArg, ok := args[i].(HackedStr)
-		if !ok {
-			continue
+		if arg, ok := args[i].(HackedStr); ok {
+			args[i] = arg.FreezeStr()
 		}
-		// TiDB may pass unsafe zero-copy strings (for example from chunk buffers) as error args.
-		// Error message rendering is deferred until GetMsg/Error, so without freezing here we may
-		// observe later writes and print a different value than the one used when creating the error.
-		// Freezing in this central path keeps the copy cost only on error construction.
-		args[i] = hackedArg.FreezeStr()
 	}
 	return args
 }
@@ -208,19 +212,19 @@ func (e *Error) fillLineAndFile(skip int) {
 
 // GenWithStack generates a new *Error with the same class and code, and a new formatted message.
 func (e *Error) GenWithStack(format string, args ...any) error {
-	// TODO: RedactErrorArg
 	err := *e
 	err.message = format
 	err.args = freezeHackedStringArgs(args)
+	RedactErrorArg(err.args, e.redactArgsPos)
 	err.fillLineAndFile(1)
 	return AddStack(&err)
 }
 
 // GenWithStackByArgs generates a new *Error with the same class and code, and new arguments.
 func (e *Error) GenWithStackByArgs(args ...any) error {
-	RedactErrorArg(args, e.redactArgsPos)
 	err := *e
 	err.args = freezeHackedStringArgs(args)
+	RedactErrorArg(err.args, e.redactArgsPos)
 	err.fillLineAndFile(1)
 	return AddStack(&err)
 }
@@ -228,19 +232,19 @@ func (e *Error) GenWithStackByArgs(args ...any) error {
 // FastGen generates a new *Error with the same class and code, and a new formatted message.
 // This will not call runtime.Caller to get file and line.
 func (e *Error) FastGen(format string, args ...any) error {
-	// TODO: RedactErrorArg
 	err := *e
 	err.message = format
 	err.args = freezeHackedStringArgs(args)
+	RedactErrorArg(err.args, e.redactArgsPos)
 	return SuspendStack(&err)
 }
 
 // FastGen generates a new *Error with the same class and code, and a new arguments.
 // This will not call runtime.Caller to get file and line.
 func (e *Error) FastGenByArgs(args ...any) error {
-	RedactErrorArg(args, e.redactArgsPos)
 	err := *e
 	err.args = freezeHackedStringArgs(args)
+	RedactErrorArg(err.args, e.redactArgsPos)
 	return SuspendStack(&err)
 }
 
@@ -272,7 +276,7 @@ func RedactErrorArg(args []any, position []int) {
 	case RedactLogEnable:
 		for _, pos := range position {
 			if len(args) > pos {
-				args[pos] = "?"
+				args[pos] = redactedArg{}
 			}
 		}
 	case RedactLogMarker:
@@ -362,6 +366,7 @@ func (e *Error) FastGenWithCause(args ...any) error {
 		err.message = e.cause.Error()
 	}
 	err.args = freezeHackedStringArgs(args)
+	RedactErrorArg(err.args, e.redactArgsPos)
 	return SuspendStack(&err)
 }
 
@@ -371,6 +376,7 @@ func (e *Error) GenWithStackByCause(args ...any) error {
 		err.message = e.cause.Error()
 	}
 	err.args = freezeHackedStringArgs(args)
+	RedactErrorArg(err.args, e.redactArgsPos)
 	err.fillLineAndFile(1)
 	return AddStack(&err)
 }
@@ -406,6 +412,12 @@ func Normalize(message string, opts ...NormalizeOption) *Error {
 		opt(e)
 	}
 	return e
+}
+
+type redactedArg struct{}
+
+func (redactedArg) Format(f fmt.State, _ rune) {
+	fmt.Fprint(f, "?")
 }
 
 type redactFormatter struct {
