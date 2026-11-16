@@ -25,7 +25,7 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/sapcc/go-api-declarations v1.25.1
 	github.com/sirupsen/logrus v1.10.2
-	go.yaml.in/yaml/v2 v2.4.5
+	go.yaml.in/yaml/v4 v4.0.0
 	golang.org/x/net v0.62.0
 	golang.org/x/oauth2 v0.38.0
 	golang.org/x/sync v0.25.0
