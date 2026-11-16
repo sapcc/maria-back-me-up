@@ -11,10 +11,13 @@
     "stefanhipfel"
   ],
   "commitMessageAction": "Renovate: Update",
+  "minimumReleaseAge": "3 days",
   "constraints": {
     "go": "1.27"
   },
-  "dependencyDashboardOSVVulnerabilitySummary": "all",
+  "dependencyDashboard": {
+    "osvVulnerabilitySummary": "all"
+  },
   "osvVulnerabilityAlerts": true,
   "postUpdateOptions": [
     "gomodTidy",
@@ -73,7 +76,8 @@
       "matchFileNames": [
         ".github/workflows/checks.yaml",
         ".github/workflows/ci.yaml",
-        ".github/workflows/codeql.yaml"
+        ".github/workflows/codeql.yaml",
+        ".github/workflows/run-go-makefile-maker.yaml"
       ],
       "enabled": false
     }
