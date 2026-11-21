@@ -45,7 +45,8 @@ func NewSwift(c config.Swift, serviceName, restoreFolder, logBin string) (s *Swi
 		Timeout:      time.Duration(5 * time.Hour),
 	}
 	if err = conn.Authenticate(); err != nil {
-		return
+		logger.Warnf("swift storage %q could not authenticate at startup and will retry on first use: %s", c.Name, err.Error())
+		err = nil
 	}
 
 	return &Swift{
